@@ -6,7 +6,7 @@
      API_URL=ваш_API_URL
      API_KEY=ваш_API_ключ
    - Пример содержимого файла .env:
-     API_URL=https://api.example.com
+     API_URL=https://www.chroniquex.ru:16040/
      API_KEY=abc123def456
 
 2. Настройка брандмауэра:
