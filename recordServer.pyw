@@ -47,34 +47,46 @@ def format_date_russian(date_obj):
 
 def _add_context_menu_to_text_widget(text_widget):
     """Add a context menu to a text widget with common text editing commands"""
-    # Enable undo/redo functionality
-    text_widget.config(undo=True, maxundo=20)
+    # Enable undo/redo functionality only for Text widgets (Entry widgets don't support undo)
+    if isinstance(text_widget, tk.Text):
+        text_widget.config(undo=True, maxundo=20)
 
     # Create the context menu
     context_menu = tk.Menu(text_widget, tearoff=0)
 
     # Add commands to the context menu
     context_menu.add_command(label="Выделить всё", command=lambda: _select_all(text_widget))
-    context_menu.add_command(label="Найти", command=lambda: _find_text(text_widget))
-    context_menu.add_separator()
+    # Only add "Найти" for Text widgets since Entry widgets are single-line
+    if isinstance(text_widget, tk.Text):
+        context_menu.add_command(label="Найти", command=lambda: _find_text(text_widget))
+        context_menu.add_separator()
     context_menu.add_command(label="Вырезать", command=lambda: _cut_text(text_widget))
     context_menu.add_command(label="Копировать", command=lambda: _copy_text(text_widget))
     context_menu.add_command(label="Вставить", command=lambda: _paste_text(text_widget))
-    context_menu.add_separator()
-    context_menu.add_command(label="Закомментировать", command=lambda: _comment_lines(text_widget))
-    context_menu.add_command(label="Раскомментировать", command=lambda: _uncomment_lines(text_widget))
-    context_menu.add_separator()
-    context_menu.add_command(label="Отменить", command=lambda: _undo_text(text_widget))
-    context_menu.add_command(label="Повторить", command=lambda: _redo_text(text_widget))
-    context_menu.add_separator()
-    context_menu.add_command(label="Очистить", command=lambda: _clear_text_widget(text_widget))
+    
+    # Only add comment/uncomment options for Text widgets
+    if isinstance(text_widget, tk.Text):
+        context_menu.add_separator()
+        context_menu.add_command(label="Закомментировать", command=lambda: _comment_lines(text_widget))
+        context_menu.add_command(label="Раскомментировать", command=lambda: _uncomment_lines(text_widget))
+        context_menu.add_separator()
+        context_menu.add_command(label="Отменить", command=lambda: _undo_text(text_widget))
+        context_menu.add_command(label="Повторить", command=lambda: _redo_text(text_widget))
+        context_menu.add_separator()
+        context_menu.add_command(label="Очистить", command=lambda: _clear_text_widget(text_widget))
+    else:
+        # For Entry widgets, add a separator and clear option only
+        context_menu.add_separator()
+        context_menu.add_command(label="Очистить", command=lambda: _clear_text_widget(text_widget))
 
     # Bind keyboard shortcuts for common operations (language-independent)
     # Using a universal key handler that checks keycodes to ensure cross-layout compatibility
     def universal_key_handler(event):
         # Check if Control key is pressed (state & 0x4 means Ctrl is pressed)
         ctrl_pressed = event.state & 0x4
-        
+        # Check if Shift key is pressed (state & 0x1 means Shift is pressed)
+        shift_pressed = event.state & 0x1
+
         if ctrl_pressed:
             # Using keysym_num to identify physical keys regardless of layout
             if event.keycode == 88:  # Physical X key (for Cut)
@@ -92,15 +104,20 @@ def _add_context_menu_to_text_widget(text_widget):
             elif event.keycode == 19:  # Physical Semicolon key (for Comment/Uncomment - ; is near L on QWERTY)
                 # We'll use Ctrl+; for comment/uncomment
                 # Check if Shift is also pressed to determine comment vs uncomment
-                shift_pressed = event.state & 0x1
                 if shift_pressed:
                     return (_uncomment_lines(text_widget), "break")[1]
                 else:
                     return (_comment_lines(text_widget), "break")[1]
-        
+            elif event.keycode == 69:  # Physical Insert key (for Copy - Ctrl+Insert)
+                return (_copy_text(text_widget), "break")[1]
+
+        # Check for Shift+Insert separately (Shift + Insert)
+        elif shift_pressed and event.keycode == 69:  # Physical Insert key (for Paste - Shift+Insert)
+            return (_paste_text(text_widget), "break")[1]
+
         # Return None to allow default handling for other keys
         return None
-    
+
     text_widget.bind("<Control-KeyPress>", universal_key_handler)
 
     # Bind right-click event to show context menu
@@ -125,112 +142,122 @@ def _add_context_menu_to_text_widget(text_widget):
 
 def _undo_text(text_widget):
     """Undo the last action"""
-    try:
-        text_widget.edit_undo()
-    except tk.TclError:
-        # No more actions to undo
-        pass
+    if isinstance(text_widget, tk.Text):
+        try:
+            text_widget.edit_undo()
+        except tk.TclError:
+            # No more actions to undo
+            pass
 
 
 def _redo_text(text_widget):
     """Redo the last undone action"""
-    try:
-        text_widget.edit_redo()
-    except tk.TclError:
-        # No more actions to redo
-        pass
+    if isinstance(text_widget, tk.Text):
+        try:
+            text_widget.edit_redo()
+        except tk.TclError:
+            # No more actions to redo
+            pass
 
 
 def _comment_lines(text_widget):
     """Comment selected lines by adding // at the beginning"""
-    try:
-        # Store the original selection
-        start_pos = text_widget.index("sel.first")
-        end_pos = text_widget.index("sel.last")
-        
-        # Get the line numbers of the selection
-        start_line = int(start_pos.split('.')[0])
-        end_line = int(end_pos.split('.')[0])
-        
-        # Adjust end_line if the selection ends at the beginning of a line
-        end_col = int(end_pos.split('.')[1])
-        if end_col == 0 and start_line != end_line:
-            end_line -= 1
-        
-        # Process each line in the selection
-        for line_num in range(start_line, end_line + 1):
-            line_start = f"{line_num}.0"
-            line_end = f"{line_num}.end"
+    if isinstance(text_widget, tk.Text):
+        try:
+            # Store the original selection
+            start_pos = text_widget.index("sel.first")
+            end_pos = text_widget.index("sel.last")
+
+            # Get the line numbers of the selection
+            start_line = int(start_pos.split('.')[0])
+            end_line = int(end_pos.split('.')[0])
+
+            # Adjust end_line if the selection ends at the beginning of a line
+            end_col = int(end_pos.split('.')[1])
+            if end_col == 0 and start_line != end_line:
+                end_line -= 1
+
+            # Process each line in the selection
+            for line_num in range(start_line, end_line + 1):
+                line_start = f"{line_num}.0"
+                line_end = f"{line_num}.end"
+                line_content = text_widget.get(line_start, line_end)
+
+                # Insert // at the beginning of the line
+                text_widget.delete(line_start, line_end)
+                text_widget.insert(line_start, "//" + line_content)
+
+            # Restore the selection
+            text_widget.tag_remove("sel", "1.0", "end")
+            text_widget.tag_add("sel", f"{start_line}.0", f"{end_line + 1}.0")
+
+        except tk.TclError:
+            # No selection, just add comment at current line
+            current_line = text_widget.index("insert").split('.')[0]
+            line_start = f"{current_line}.0"
+            line_end = f"{current_line}.end"
             line_content = text_widget.get(line_start, line_end)
-            
-            # Insert // at the beginning of the line
+
             text_widget.delete(line_start, line_end)
             text_widget.insert(line_start, "//" + line_content)
-        
-        # Restore the selection
-        text_widget.tag_remove("sel", "1.0", "end")
-        text_widget.tag_add("sel", f"{start_line}.0", f"{end_line + 1}.0")
-        
-    except tk.TclError:
-        # No selection, just add comment at current line
-        current_line = text_widget.index("insert").split('.')[0]
-        line_start = f"{current_line}.0"
-        line_end = f"{current_line}.end"
-        line_content = text_widget.get(line_start, line_end)
-        
-        text_widget.delete(line_start, line_end)
-        text_widget.insert(line_start, "//" + line_content)
 
 
 def _uncomment_lines(text_widget):
     """Uncomment selected lines by removing // at the beginning if present"""
-    try:
-        # Store the original selection
-        start_pos = text_widget.index("sel.first")
-        end_pos = text_widget.index("sel.last")
-        
-        # Get the line numbers of the selection
-        start_line = int(start_pos.split('.')[0])
-        end_line = int(end_pos.split('.')[0])
-        
-        # Adjust end_line if the selection ends at the beginning of a line
-        end_col = int(end_pos.split('.')[1])
-        if end_col == 0 and start_line != end_line:
-            end_line -= 1
-        
-        # Process each line in the selection
-        for line_num in range(start_line, end_line + 1):
-            line_start = f"{line_num}.0"
-            line_end = f"{line_num}.end"
+    if isinstance(text_widget, tk.Text):
+        try:
+            # Store the original selection
+            start_pos = text_widget.index("sel.first")
+            end_pos = text_widget.index("sel.last")
+
+            # Get the line numbers of the selection
+            start_line = int(start_pos.split('.')[0])
+            end_line = int(end_pos.split('.')[0])
+
+            # Adjust end_line if the selection ends at the beginning of a line
+            end_col = int(end_pos.split('.')[1])
+            if end_col == 0 and start_line != end_line:
+                end_line -= 1
+
+            # Process each line in the selection
+            for line_num in range(start_line, end_line + 1):
+                line_start = f"{line_num}.0"
+                line_end = f"{line_num}.end"
+                line_content = text_widget.get(line_start, line_end)
+
+                # Remove // from the beginning of the line if present
+                if line_content.startswith("//"):
+                    text_widget.delete(line_start, line_end)
+                    text_widget.insert(line_start, line_content[2:])
+
+            # Restore the selection
+            text_widget.tag_remove("sel", "1.0", "end")
+            text_widget.tag_add("sel", f"{start_line}.0", f"{end_line + 1}.0")
+
+        except tk.TclError:
+            # No selection, just uncomment current line
+            current_line = text_widget.index("insert").split('.')[0]
+            line_start = f"{current_line}.0"
+            line_end = f"{current_line}.end"
             line_content = text_widget.get(line_start, line_end)
-            
+
             # Remove // from the beginning of the line if present
             if line_content.startswith("//"):
                 text_widget.delete(line_start, line_end)
                 text_widget.insert(line_start, line_content[2:])
-        
-        # Restore the selection
-        text_widget.tag_remove("sel", "1.0", "end")
-        text_widget.tag_add("sel", f"{start_line}.0", f"{end_line + 1}.0")
-        
-    except tk.TclError:
-        # No selection, just uncomment current line
-        current_line = text_widget.index("insert").split('.')[0]
-        line_start = f"{current_line}.0"
-        line_end = f"{current_line}.end"
-        line_content = text_widget.get(line_start, line_end)
-        
-        # Remove // from the beginning of the line if present
-        if line_content.startswith("//"):
-            text_widget.delete(line_start, line_end)
-            text_widget.insert(line_start, line_content[2:])
 
 
 def _select_all(text_widget):
     """Select all text in the widget"""
-    text_widget.tag_add("sel", "1.0", "end")
-    text_widget.mark_set("insert", "end")
-    text_widget.see("insert")
+    if isinstance(text_widget, tk.Text):
+        # For Text widgets
+        text_widget.tag_add("sel", "1.0", "end")
+        text_widget.mark_set("insert", "end")
+        text_widget.see("insert")
+    elif isinstance(text_widget, tk.Entry):
+        # For Entry widgets
+        text_widget.select_range(0, tk.END)
+        text_widget.icursor(tk.END)  # Move cursor to end
 
 
 def _find_text(text_widget):
@@ -302,18 +329,42 @@ def _find_text(text_widget):
 
 def _cut_text(text_widget):
     """Cut selected text to clipboard"""
-    if text_widget.tag_ranges("sel"):
-        text_widget.clipboard_clear()
-        text_widget.clipboard_append(text_widget.get("sel.first", "sel.last"))
-        text_widget.delete("sel.first", "sel.last")
+    if isinstance(text_widget, tk.Text):
+        # For Text widgets
+        if text_widget.tag_ranges("sel"):
+            text_widget.clipboard_clear()
+            text_widget.clipboard_append(text_widget.get("sel.first", "sel.last"))
+            text_widget.delete("sel.first", "sel.last")
+    elif isinstance(text_widget, tk.Entry):
+        # For Entry widgets
+        try:
+            text_widget.clipboard_clear()
+            selected_text = text_widget.selection_get()
+            text_widget.clipboard_append(selected_text)
+            text_widget.delete("sel.first", "sel.last")
+        except tk.TclError:
+            # No selection
+            pass
     return "break"  # Prevent default handling
 
 
 def _copy_text(text_widget):
     """Copy selected text to clipboard"""
-    if text_widget.tag_ranges("sel"):
-        text_widget.clipboard_clear()
-        text_widget.clipboard_append(text_widget.get("sel.first", "sel.last"))
+    if isinstance(text_widget, tk.Text):
+        # For Text widgets
+        if text_widget.tag_ranges("sel"):
+            text_widget.clipboard_clear()
+            text_widget.clipboard_append(text_widget.get("sel.first", "sel.last"))
+    elif isinstance(text_widget, tk.Entry):
+        # For Entry widgets
+        try:
+            text_widget.clipboard_clear()
+            selected_text = text_widget.selection_get()
+            text_widget.clipboard_append(selected_text)
+        except tk.TclError:
+            # No selection, copy all text
+            text_widget.clipboard_clear()
+            text_widget.clipboard_append(text_widget.get())
     return "break"  # Prevent default handling
 
 
@@ -322,10 +373,21 @@ def _paste_text(text_widget):
     try:
         clipboard_content = text_widget.clipboard_get()
         if clipboard_content:
-            # Delete selected text if any
-            if text_widget.tag_ranges("sel"):
-                text_widget.delete("sel.first", "sel.last")
-            text_widget.insert("insert", clipboard_content)
+            if isinstance(text_widget, tk.Text):
+                # For Text widgets
+                # Delete selected text if any
+                if text_widget.tag_ranges("sel"):
+                    text_widget.delete("sel.first", "sel.last")
+                text_widget.insert("insert", clipboard_content)
+            elif isinstance(text_widget, tk.Entry):
+                # For Entry widgets
+                # Delete selected text if any
+                try:
+                    text_widget.delete("sel.first", "sel.last")
+                except tk.TclError:
+                    # No selection, just insert at cursor
+                    pass
+                text_widget.insert("insert", clipboard_content)
     except tk.TclError:
         # Clipboard is empty or unavailable
         pass
@@ -337,8 +399,13 @@ def _clear_text_widget(text_widget):
     # Enable the widget temporarily to allow editing
     state_before = text_widget.cget("state")
     text_widget.config(state="normal")
-    
-    text_widget.delete(1.0, tk.END)
+
+    if isinstance(text_widget, tk.Text):
+        # For Text widgets
+        text_widget.delete(1.0, tk.END)
+    elif isinstance(text_widget, tk.Entry):
+        # For Entry widgets
+        text_widget.delete(0, tk.END)
 
     # Restore the original state
     text_widget.config(state=state_before)
@@ -894,7 +961,9 @@ def open_main_window(icon=None, item=None):
     port_var.trace_add("write", on_port_change)
 
     tk.Label(frame, text="Порт:").grid(row=0, column=0, sticky="w", pady=5)
-    tk.Entry(frame, textvariable=port_var).grid(row=0, column=1, sticky="ew")
+    port_edit = tk.Entry(frame, textvariable=port_var)
+    port_edit.grid(row=0, column=1, sticky="ew")
+    _add_context_menu_to_text_widget(port_edit)
     tk.Checkbutton(frame, text="Сервер запущен", variable=server_enabled_var).grid(row=1, columnspan=2, sticky="w")
     tk.Checkbutton(frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=2, columnspan=2, sticky="w")
 
