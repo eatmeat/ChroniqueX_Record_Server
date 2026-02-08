@@ -1,0 +1,8 @@
+pyaudio
+pyaudiowpatch
+requests
+flask
+pydub
+pystray
+pillow
+python-dotenv
