@@ -1,0 +1,1 @@
+python -m PyInstaller --onefile --windowed --add-data "templates;templates" recordServer.pyw

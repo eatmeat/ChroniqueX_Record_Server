@@ -3,6 +3,7 @@ import json
 import wave
 import time
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from threading import Thread, Event
@@ -20,6 +21,16 @@ from tkinter import messagebox
 from pystray import Icon, Menu, MenuItem as item
 from PIL import Image, ImageDraw
 from PIL import ImageTk
+
+def get_application_path():
+    """Get the path where the application is located, whether running as script or executable"""
+    if getattr(sys, 'frozen', False):
+        # Running as compiled executable
+        application_path = os.path.dirname(sys.executable)
+    else:
+        # Running as script
+        application_path = os.path.dirname(os.path.abspath(__file__))
+    return application_path
 
 
 def format_date_russian(date_obj):
@@ -338,7 +349,7 @@ def _clear_text_widget(text_widget):
 
 
 # --- Settings Management ---
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'record_server_settings.json')
+SETTINGS_FILE = os.path.join(get_application_path(), 'record_server_settings.json')
 DEFAULT_SETTINGS = {
     "port": 8288,
     "server_enabled": True,
@@ -377,9 +388,8 @@ def save_settings(new_settings):
         json.dump(settings, f, indent=4)
     print("Settings saved.")
 
-
 # --- Load Environment Variables ---
-dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.env')
+dotenv_path = os.path.join(get_application_path(), '.env')
 load_dotenv(dotenv_path)
 API_URL = os.getenv("API_URL")
 API_KEY = os.getenv("API_KEY")
@@ -1091,8 +1101,8 @@ def recreate_transcription(date, filename):
     # Re-load environment variables
     API_URL = os.getenv("API_URL")
     API_KEY = os.getenv("API_KEY")
-    
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+
+    rec_dir = os.path.join(get_application_path(), 'rec')
     file_path = os.path.join(rec_dir, date, filename)
     
     if not os.path.exists(file_path):
@@ -1124,7 +1134,7 @@ def recreate_transcription(date, filename):
         try:
             task_id = post_task(file_path, "transcribe")
             if task_id:
-                txt_output_path = os.path.join(rec_dir, date, name + ".txt")
+                txt_output_path = os.path.join(get_application_path(), 'rec', date, name + ".txt")
                 poll_and_save_result(task_id, txt_output_path)
             else:
                 print(f"Failed to submit transcription task for {file_path}")
@@ -1145,7 +1155,7 @@ def recreate_transcription(date, filename):
 @app.route('/compress_to_mp3/<date>/<filename>')
 def compress_to_mp3(date, filename):
     """Compress WAV file to MP3 format"""
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+    rec_dir = os.path.join(get_application_path(), 'rec')
     file_path = os.path.join(rec_dir, date, filename)
     
     if not os.path.exists(file_path):
@@ -1158,7 +1168,7 @@ def compress_to_mp3(date, filename):
     
     # Create MP3 file path
     mp3_filename = name + ".mp3"
-    mp3_path = os.path.join(rec_dir, date, mp3_filename)
+    mp3_path = os.path.join(get_application_path(), 'rec', date, mp3_filename)
     
     def run_manual_compression():
         global is_post_processing, post_process_file_path, post_process_stage
@@ -1205,8 +1215,8 @@ def recreate_protocol(date, filename):
     # Re-load environment variables
     API_URL = os.getenv("API_URL")
     API_KEY = os.getenv("API_KEY")
-    
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+
+    rec_dir = os.path.join(get_application_path(), 'rec')
     file_path = os.path.join(rec_dir, date, filename)
     
     if not os.path.exists(file_path):
@@ -1237,7 +1247,7 @@ def recreate_protocol(date, filename):
         
         try:
             # Check if transcription exists, if not, create it first
-            txt_file_path = os.path.join(rec_dir, date, name + ".txt")
+            txt_file_path = os.path.join(get_application_path(), 'rec', date, name + ".txt")
             if not os.path.exists(txt_file_path):
                 # Submit transcription task first
                 task_id = post_task(file_path, "transcribe")
@@ -1270,7 +1280,7 @@ def recreate_protocol(date, filename):
 
             task_id = post_task(txt_file_path, "protocol", prompt_addition=filtered_prompt_addition)
             if task_id:
-                protocol_output_path = os.path.join(rec_dir, date, name + "_protocol.pdf")
+                protocol_output_path = os.path.join(get_application_path(), 'rec', date, name + "_protocol.pdf")
                 poll_and_save_result(task_id, protocol_output_path)
         except Exception as e:
             print(f"Error during protocol recreation for {file_path}: {e}")
@@ -1289,7 +1299,7 @@ def recreate_protocol(date, filename):
 def index():
     # Get all recordings from the 'rec' directory
     date_groups = []
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+    rec_dir = os.path.join(get_application_path(), 'rec')
     
     if os.path.exists(rec_dir):
         # Get all date directories
@@ -1420,7 +1430,7 @@ def index():
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')
 def serve_recorded_file(filepath):
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+    rec_dir = os.path.join(get_application_path(), 'rec')
     file_path = os.path.join(rec_dir, filepath)
     
     # Security check to prevent directory traversal
@@ -1680,7 +1690,7 @@ def start_recording_from_tray(icon, item):
 def stop_recording():
     """Stops the current recording session"""
     global is_recording, start_time, recording_thread, frames, is_paused, pause_start_time, total_pause_duration
-    
+
     stop_event.set()
     recording_thread.join()
     end_time = datetime.now()
@@ -1688,8 +1698,8 @@ def stop_recording():
     is_paused = False  # Reset pause state
     pause_start_time = None  # Reset pause start time
     total_pause_duration = 0  # Reset total pause duration
-    
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    script_dir = get_application_path()
     day_dir = os.path.join(script_dir, 'rec', start_time.strftime('%Y-%m-%d'))
     os.makedirs(day_dir, exist_ok=True)
     
@@ -1781,7 +1791,7 @@ def resume_recording_from_tray(icon, item):
     print("Запись возобновлена.")
 
 def open_rec_folder(icon, item):
-    rec_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'rec')
+    rec_dir = os.path.join(get_application_path(), 'rec')
     os.makedirs(rec_dir, exist_ok=True)
     os.startfile(rec_dir)
 
