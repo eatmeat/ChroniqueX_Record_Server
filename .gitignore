@@ -3,3 +3,4 @@ dist/recordServer/_internal/rec
 build/
 .env
 record_server_settings.json
+pushall.bat
