@@ -1024,7 +1024,7 @@ def open_main_window(icon=None, item=None):
 
     frame = tk.Frame(main_frame, padx=10, pady=10)
     frame.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
-    frame.grid_columnconfigure(1, weight=1)
+    frame.grid_columnconfigure(3, weight=1) # Let the last column expand
 
     # Endpoints info frame
     endpoints_frame = tk.Frame(main_frame)
@@ -1118,15 +1118,15 @@ def open_main_window(icon=None, item=None):
     
     port_var.trace_add("write", on_port_change)
 
-    tk.Label(frame, text="Порт:").grid(row=0, column=0, sticky="w", pady=5)
+    tk.Label(frame, text="Порт:").grid(row=0, column=0, sticky="w", pady=5, padx=(0, 5))
     port_edit = tk.Entry(frame, textvariable=port_var)
-    port_edit.grid(row=0, column=1, sticky="ew")
+    port_edit.grid(row=0, column=1, sticky="w", padx=5)
     _add_context_menu_to_text_widget(port_edit)
-    tk.Checkbutton(frame, text="Сервер запущен", variable=server_enabled_var).grid(row=1, columnspan=2, sticky="w")
-    tk.Checkbutton(frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=2, columnspan=2, sticky="w")
+    tk.Checkbutton(frame, text="Сервер запущен", variable=server_enabled_var).grid(row=0, column=2, sticky="w", padx=5)
+    tk.Checkbutton(frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=0, column=3, sticky="w", padx=5)
 
     button_frame = tk.Frame(frame)
-    button_frame.grid(row=3, columnspan=2, pady=10)
+    button_frame.grid(row=1, columnspan=4, pady=10)
     save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
     save_button.pack(side="left", padx=5)
     tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
