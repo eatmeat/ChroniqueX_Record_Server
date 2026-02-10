@@ -37,6 +37,7 @@ from tkinter import messagebox
 from pystray import Icon, Menu, MenuItem as item
 from PIL import Image, ImageDraw
 from PIL import ImageTk
+import io
 
 def get_application_path():
     """Get the path where the application is located, whether running as script or executable"""
@@ -883,9 +884,11 @@ def open_main_window(icon=None, item=None):
         update_toolbar_buttons()
         # Schedule next update, referencing the function via the window to prevent garbage collection
         if win.winfo_exists():
-            job_id = win.after(1000, win.schedule_toolbar_update)  # Update every 1000ms (1 second)
+            job_id = win.after(1000, win.update_post_process_status)  # Update every second
             win._after_jobs.append(job_id)
     
+    # Start the status update loop
+    win.update_post_process_status = update_post_process_status
     win.schedule_toolbar_update = schedule_toolbar_update
     win.schedule_toolbar_update()
     
@@ -1597,6 +1600,55 @@ def status():
 
     return jsonify(recording_status)
 
+@app.route('/favicon.ico')
+def favicon():
+    """Отдает favicon в зависимости от статуса записи."""
+    if is_recording and not is_paused:
+        # Запись
+        icon_bytes = FAVICON_REC_BYTES
+    elif is_recording and is_paused:
+        # Пауза
+        icon_bytes = FAVICON_PAUSE_BYTES
+    else:
+        # Остановлено
+        icon_bytes = FAVICON_STOP_BYTES
+    
+    return Response(icon_bytes, mimetype='image/vnd.microsoft.icon')
+
+# --- Favicon Generation ---
+def create_favicon(shape, color, size=(32, 32)):
+    """Создает иконку для favicon и возвращает ее в виде байтов."""
+    image = Image.new('RGBA', size, (0, 0, 0, 0))
+    dc = ImageDraw.Draw(image)
+    width, height = size
+    
+    if shape == 'circle': 
+        dc.ellipse((4, 4, width-5, height-5), fill=color)
+    elif shape == 'pause':
+        bar_width = 8
+        dc.rectangle([(4, 4), (4 + bar_width, height-4)], fill=color)
+        dc.rectangle([(width - 4 - bar_width, 4), (width-4, height-4)], fill=color)
+    else: # square
+        dc.rectangle((4, 4, width-5, height-5), fill=color)
+    
+    # Сохраняем в байтовый поток в формате ICO
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='ICO', sizes=[(32,32)])
+    return img_byte_arr.getvalue()
+
+# --- Глобальные переменные для иконок ---
+FAVICON_REC_BYTES = None
+FAVICON_PAUSE_BYTES = None
+FAVICON_STOP_BYTES = None
+
+def generate_favicons():
+    """Генерирует все favicon'ы при старте."""
+    global FAVICON_REC_BYTES, FAVICON_PAUSE_BYTES, FAVICON_STOP_BYTES
+    FAVICON_REC_BYTES = create_favicon('circle', 'red')
+    FAVICON_PAUSE_BYTES = create_favicon('pause', 'orange')
+    FAVICON_STOP_BYTES = create_favicon('square', 'gray')
+    print("Favicons generated.")
+
 # --- Основная часть ---
 def run_flask():
     flask_thread = None
@@ -2093,6 +2145,7 @@ def make_hyperlink(widget):
 
 if __name__ == '__main__':
     load_settings()
+    generate_favicons()
 
     stop_icon = create_icon('square', 'gray')
     main_icon = Icon('recordServer', stop_icon, 'recordServer')

@@ -561,6 +561,7 @@
 
     </style>
 </head>
+<link id="favicon" rel="icon" href="/favicon.ico" type="image/x-icon">
 <body>
     <div class="container">
         <div class="recorder-container">
@@ -811,6 +812,11 @@
                     postProcessDiv.style.backgroundColor = '#ecf0f1';
                 }
                 
+                // Динамическое обновление favicon
+                const favicon = document.getElementById('favicon');
+                // Добавляем временную метку, чтобы обойти кэширование браузером
+                favicon.href = `/favicon.ico?t=${new Date().getTime()}`;
+
                 // Don't automatically refresh on status change to avoid infinite loop
                 // Recordings will be refreshed manually or after specific operations
             } catch (error) {
