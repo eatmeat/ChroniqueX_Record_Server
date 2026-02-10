@@ -17,6 +17,12 @@ except ImportError:
     # WasapiSettings may not be available in all versions of sounddevice
     WasapiSettings = None
 import pyaudiowpatch as pyaudio
+# Импортируем PaWasapiStreamInfo напрямую из оригинального pyaudio,
+# так как в некоторых версиях pyaudiowpatch он может отсутствовать.
+try:
+    from pyaudio import PaWasapiStreamInfo
+except ImportError:
+    PaWasapiStreamInfo = None
 import requests
 from dotenv import load_dotenv
 
@@ -1213,29 +1219,33 @@ def recorder_sys(stop_event, audio_queue):
 
             print(f"Recording from: ({default_speakers['index']}){default_speakers['name']}")
 
+            channels = default_speakers["maxInputChannels"]
+
             def callback(in_data, frame_count, time_info, status):
                 if not is_paused:
-                    # Convert byte data to numpy array and put into the queue
-                    numpy_data = np.frombuffer(in_data, dtype=np.int16)
-                    # Reshape to (n_frames, n_channels)
-                    channels = default_speakers["maxInputChannels"]
-                    if channels > 0:
-                        audio_queue.put(numpy_data.reshape(-1, channels))
+                    # Преобразуем байты в numpy массив и сразу добавляем в очередь
+                    # Это немного быстрее, чем создавать промежуточные переменные
+                    audio_queue.put(np.frombuffer(in_data, dtype=np.int16).reshape(-1, channels))
                 return (in_data, pyaudio.paContinue)
 
             stream = p.open(format=pyaudio.paInt16,
-                            channels=default_speakers["maxInputChannels"],
-                            rate=RATE,  # Use the global RATE to ensure consistency
+                            channels=channels,
+                            rate=RATE,
                             input=True,
                             input_device_index=default_speakers["index"],
-                            stream_callback=callback)
+                            stream_callback=callback,
+                            # Используем флаг для повышения приоритета потока обработки аудио, если PaWasapiStreamInfo доступен.
+                            # Это помогает обеспечить более стабильный поток данных и избежать "рваной" записи.
+                            input_host_api_specific_stream_info=PaWasapiStreamInfo(flags=pyaudio.paWinWasapiThreadPriority)
+                                if PaWasapiStreamInfo else None
+                            )
 
             stream.start_stream()
             print("System audio recording started.")
-            stop_event.wait()
+            while not stop_event.is_set():
+                time.sleep(0.001) # Prevent busy-waiting and allow other threads to run
             stream.stop_stream()
             stream.close()
-
     except Exception as e:
         print(f"Error during system audio recording: {e}", file=sys.stderr)
     finally:
@@ -1647,7 +1657,7 @@ def start_recording():
 
     # 5. Start mixer thread
     # This thread will take data from mic and system queues, mix it, and write to a single WAV file.
-    mixer_thread = Thread(target=audio_mixer, args=(stop_event, mixed_temp_file, mic_queue, sys_queue))
+    mixer_thread = Thread(target=audio_mixer, args=(stop_event, mixed_temp_file, mic_queue, sys_queue, mic_temp_file, sys_temp_file))
     recording_threads.append(mixer_thread)
     mixer_thread.start()
 
@@ -1745,10 +1755,10 @@ def stop_recording():
     final_audio.export(wav_filename, format='wav')
     print(f"Final audio saved to: {wav_filename}")
 
-    # Clean up temp files
-    if os.path.exists(mic_temp_file): os.remove(mic_temp_file)
-    if os.path.exists(sys_temp_file): os.remove(sys_temp_file)
-    if os.path.exists(mixed_temp_file): os.remove(mixed_temp_file)
+    # Move temp files to final destination instead of deleting
+    if os.path.exists(mic_temp_file): os.rename(mic_temp_file, os.path.join(day_dir, f"{timestamp}_mic.wav"))
+    if os.path.exists(sys_temp_file): os.rename(sys_temp_file, os.path.join(day_dir, f"{timestamp}_sys.wav"))
+    if os.path.exists(mixed_temp_file): os.rename(mixed_temp_file, os.path.join(day_dir, f"{timestamp}_mixed.wav"))
 
     # --- Post-processing ---
     mp3_filename = wav_filename.replace('.wav', '.mp3')
@@ -1830,13 +1840,24 @@ def resume_recording_from_tray(icon, item):
 
 # The safe_open_stream function is no longer needed with the new sounddevice implementation
 
-def audio_mixer(stop_event, output_filename, mic_queue, sys_queue):
+def audio_mixer(stop_event, output_filename, mic_queue, sys_queue, mic_temp_file, sys_temp_file):
     """Mixes audio from queues and writes to a single WAV file."""
     print("Audio mixer started.")
-    with wave.open(output_filename, 'wb') as wf:
-        wf.setnchannels(CHANNELS)
-        wf.setsampwidth(2)  # 16-bit
-        wf.setframerate(RATE)
+    with wave.open(output_filename, 'wb') as wf_mixed, \
+         wave.open(mic_temp_file, 'wb') as wf_mic, \
+         wave.open(sys_temp_file, 'wb') as wf_sys:
+
+        wf_mixed.setnchannels(CHANNELS)
+        wf_mixed.setsampwidth(2)  # 16-bit
+        wf_mixed.setframerate(RATE)
+
+        wf_mic.setnchannels(1) # Mono
+        wf_mic.setsampwidth(2)
+        wf_mic.setframerate(RATE)
+
+        wf_sys.setnchannels(CHANNELS)
+        wf_sys.setsampwidth(2)
+        wf_sys.setframerate(RATE)
 
         mic_buffer = np.array([], dtype=np.int16)
         sys_buffer = np.array([], dtype=np.int16)
@@ -1888,10 +1909,14 @@ def audio_mixer(stop_event, output_filename, mic_queue, sys_queue):
 
                 mic_stereo = np.repeat(mic_chunk, CHANNELS, axis=1)
 
+                # Write individual streams
+                wf_mic.writeframes(mic_chunk.tobytes())
+                wf_sys.writeframes(sys_chunk.tobytes())
+
                 mixed_data_32 = mic_stereo.astype(np.int32) + sys_chunk.astype(np.int32)
                 mixed_data = np.clip(mixed_data_32, -32768, 32767).astype(np.int16)
 
-                wf.writeframes(mixed_data.tobytes())
+                wf_mixed.writeframes(mixed_data.tobytes())
 
             except Exception as e: # pragma: no cover
                 if "empty" not in str(e).lower():
@@ -1899,6 +1924,10 @@ def audio_mixer(stop_event, output_filename, mic_queue, sys_queue):
                 time.sleep(0.01)
 
     print("Audio mixer finished.")
+    # Ensure temp files are not empty before moving
+    if os.path.getsize(mic_temp_file) <= 44: os.remove(mic_temp_file)
+    if os.path.getsize(sys_temp_file) <= 44: os.remove(sys_temp_file)
+
 
 
 def open_rec_folder(icon, item):
