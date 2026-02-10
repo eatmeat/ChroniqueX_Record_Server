@@ -443,7 +443,7 @@ DEFAULT_SETTINGS = {
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None,
-    "main_window_y": None,
+    "main_window_y": None, 
     "mic_volume_adjustment": -3,  # Volume adjustment for microphone in dB
     "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
 }
@@ -922,20 +922,32 @@ def open_main_window(icon=None, item=None):
     volume_frame.pack(anchor="w", fill="x", pady=(10, 0))
 
     # Microphone volume control
+    def update_mic_label(value):
+        val = float(value)
+        mic_volume_label_var.set(f"Громкость микрофона ({'+' if val > 0 else ''}{int(val)} dB):")
+
     mic_volume_frame = tk.Frame(volume_frame)
     mic_volume_frame.pack(fill="x")
-    tk.Label(mic_volume_frame, text="Громкость микрофона (dB):").pack(side="left")
+    mic_volume_label_var = tk.StringVar()
+    tk.Label(mic_volume_frame, textvariable=mic_volume_label_var).pack(side="left")
     mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
-    mic_volume_scale = tk.Scale(mic_volume_frame, from_=-20, to=10, resolution=1, orient="horizontal", variable=mic_volume_var)
+    mic_volume_scale = tk.Scale(mic_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
     mic_volume_scale.pack(side="right", fill="x", expand=True)
+    update_mic_label(mic_volume_var.get()) # Initial update
 
     # System audio volume control
+    def update_sys_label(value):
+        val = float(value)
+        sys_audio_label_var.set(f"Громкость системного аудио ({'+' if val > 0 else ''}{int(val)} dB):")
+
     sys_audio_volume_frame = tk.Frame(volume_frame)
     sys_audio_volume_frame.pack(fill="x")
-    tk.Label(sys_audio_volume_frame, text="Громкость системного аудио (dB):").pack(side="left")
+    sys_audio_label_var = tk.StringVar()
+    tk.Label(sys_audio_volume_frame, textvariable=sys_audio_label_var).pack(side="left")
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
-    sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=10, resolution=1, orient="horizontal", variable=sys_audio_volume_var)
+    sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
     sys_audio_volume_scale.pack(side="right", fill="x", expand=True)
+    update_sys_label(sys_audio_volume_var.get()) # Initial update
 
     # Create a text widget with scrollbar
     text_frame = tk.Frame(main_frame)
@@ -1437,7 +1449,9 @@ def index():
                            date_groups=date_groups,
                            use_custom_prompt=settings.get("use_custom_prompt", False),
                            include_html_files=settings.get("include_html_files", True),
-                           prompt_addition=settings.get("prompt_addition", "")
+                           prompt_addition=settings.get("prompt_addition", ""),
+                           mic_volume_adjustment=settings.get("mic_volume_adjustment", -3),
+                           system_audio_volume_adjustment=settings.get("system_audio_volume_adjustment", 0)
                            )
 
 # Route to serve recorded files
@@ -1503,6 +1517,8 @@ def save_web_settings():
         settings['use_custom_prompt'] = data.get('use_custom_prompt', settings.get('use_custom_prompt'))
         settings['include_html_files'] = data.get('include_html_files', settings.get('include_html_files'))
         settings['prompt_addition'] = data.get('prompt_addition', settings.get('prompt_addition'))
+        settings['mic_volume_adjustment'] = data.get('mic_volume_adjustment', settings.get('mic_volume_adjustment'))
+        settings['system_audio_volume_adjustment'] = data.get('system_audio_volume_adjustment', settings.get('system_audio_volume_adjustment'))
 
         save_settings(settings) # Save all settings
         return jsonify({"status": "ok", "message": "Настройки успешно сохранены!"})

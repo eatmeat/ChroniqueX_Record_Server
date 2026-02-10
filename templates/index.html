@@ -307,7 +307,7 @@
         }
 
         .settings-container h2 {
-            margin-top: 0;
+            margin-top: 0; 
             font-weight: 700;
             color: #2c3e50;
             font-size: 1.3rem;
@@ -337,6 +337,27 @@
             font-family: 'Roboto', sans-serif;
             font-size: 14px;
         }
+        .volume-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 10px;
+        }
+        .volume-control label {
+            flex-basis: 220px; /* Fixed width for labels */
+            flex-shrink: 0;
+        }
+        .volume-control input[type="range"] {
+            flex-grow: 1;
+            margin: 0;
+        }
+        .volume-control span {
+            min-width: 45px; /* Space for dB value */
+            text-align: right;
+            font-weight: bold;
+            color: #3498db;
+        }
+
         #saveSettingsButton {
             background-color: #3498db;
             color: white;
@@ -560,7 +581,7 @@
         </div>
 
         <div class="settings-container">
-            <h2>Настройки постобработки</h2>
+            <h2>Настройки</h2>
             <div class="setting-item">
                 <div class="checkbox-group">
                     <input type="checkbox" id="useCustomPrompt" name="use_custom_prompt" {% if use_custom_prompt %}checked{% endif %}>
@@ -572,6 +593,20 @@
             <div class="setting-item">
                 <label for="promptAddition">Дополнение к промпту:</label>
                 <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
+            </div>
+            <div class="setting-item">
+                <div class="volume-control">
+                    <label for="micVolume">Громкость микрофона (dB):</label>
+                    <input type="range" id="micVolume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="{{ mic_volume_adjustment }}">
+                    <span id="micVolumeValue">{% if mic_volume_adjustment > 0 %}+{% endif %}{{ mic_volume_adjustment }} dB</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <div class="volume-control">
+                    <label for="sysAudioVolume">Громкость системного аудио (dB):</label>
+                    <input type="range" id="sysAudioVolume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="{{ system_audio_volume_adjustment }}">
+                    <span id="sysAudioVolumeValue">{% if system_audio_volume_adjustment > 0 %}+{% endif %}{{ system_audio_volume_adjustment }} dB</span>
+                </div>
             </div>
             <div class="settings-actions">
                 <button id="saveSettingsButton">Применить настройки</button>
@@ -695,6 +730,10 @@
         const includeHtmlFilesCheckbox = document.getElementById('includeHtmlFiles');
         const promptAdditionTextarea = document.getElementById('promptAddition');
         const saveStatusDiv = document.getElementById('saveStatus');
+        const micVolumeSlider = document.getElementById('micVolume');
+        const micVolumeValue = document.getElementById('micVolumeValue');
+        const sysAudioVolumeSlider = document.getElementById('sysAudioVolume');
+        const sysAudioVolumeValue = document.getElementById('sysAudioVolumeValue');
         const contextMenu = document.getElementById('textareaContextMenu');
 
 
@@ -841,7 +880,9 @@
             const settings = {
                 use_custom_prompt: useCustomPromptCheckbox.checked,
                 include_html_files: includeHtmlFilesCheckbox.checked,
-                prompt_addition: promptAdditionTextarea.value
+                prompt_addition: promptAdditionTextarea.value,
+                mic_volume_adjustment: parseInt(micVolumeSlider.value, 10),
+                system_audio_volume_adjustment: parseInt(sysAudioVolumeSlider.value, 10)
             };
 
             try {
@@ -869,6 +910,23 @@
                 console.error('Ошибка сохранения настроек:', error);
                 alert('Произошла ошибка при сохранении настроек.');
             }
+        });
+
+        // Update dB values when sliders are moved
+        function formatDbValue(value) {
+            const num = parseInt(value, 10);
+            if (num > 0) {
+                return `+${num} dB`;
+            }
+            return `${num} dB`;
+        }
+
+        micVolumeSlider.addEventListener('input', () => {
+            micVolumeValue.textContent = formatDbValue(micVolumeSlider.value);
+        });
+
+        sysAudioVolumeSlider.addEventListener('input', () => {
+            sysAudioVolumeValue.textContent = formatDbValue(sysAudioVolumeSlider.value);
         });
 
         // Function to toggle group visibility
