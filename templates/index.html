@@ -622,8 +622,9 @@
                     </div>
                 </div>
                 <div class="settings-actions">
-                    <button id="saveSettingsButton">Применить настройки</button>
-                    <div id="saveStatus"></div>
+                    <button id="saveSettingsButton">Применить настройки</button> 
+                    <span id="unsavedChangesIndicator" style="display: none; margin-left: 10px; color: #f39c12; font-style: italic;">* есть несохраненные изменения</span>
+                    <div id="saveStatus"></div> 
                 </div>
             </div>
         </div>
@@ -749,6 +750,7 @@
         const sysAudioVolumeSlider = document.getElementById('sysAudioVolume');
         const sysAudioVolumeValue = document.getElementById('sysAudioVolumeValue');
         const contextMenu = document.getElementById('textareaContextMenu');
+        const unsavedChangesIndicator = document.getElementById('unsavedChangesIndicator');
 
 
         let statusInterval;
@@ -922,6 +924,9 @@
                     saveStatusDiv.style.color = 'red';
                     saveStatusDiv.style.backgroundColor = '#fce4e4';
                 }
+            // Hide unsaved changes indicator on save
+            unsavedChangesIndicator.style.display = 'none';
+
                 saveStatusDiv.style.display = 'block';
                 setTimeout(() => { saveStatusDiv.style.display = 'none'; }, 5000);
 
@@ -929,6 +934,22 @@
                 console.error('Ошибка сохранения настроек:', error);
                 alert('Произошла ошибка при сохранении настроек.');
             }
+        });
+
+        // --- Unsaved Changes Indicator Logic ---
+        function showUnsavedChanges() {
+            unsavedChangesIndicator.style.display = 'inline';
+        }
+
+        // Add event listeners to all settings controls
+        [
+            useCustomPromptCheckbox,
+            includeHtmlFilesCheckbox,
+            promptAdditionTextarea,
+            micVolumeSlider,
+            sysAudioVolumeSlider
+        ].forEach(element => {
+            element.addEventListener('input', showUnsavedChanges);
         });
 
         // Update dB values when sliders are moved

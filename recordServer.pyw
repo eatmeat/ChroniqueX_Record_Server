@@ -613,6 +613,31 @@ def open_main_window(icon=None, item=None):
     main_window_instance = None
 
     old_settings = settings.copy()
+    
+    # --- Unsaved Changes Logic ---
+    original_settings = {}
+    settings_changed = tk.BooleanVar(value=False)
+
+    def mark_as_changed(*args):
+        """Marks settings as changed and updates UI."""
+        settings_changed.set(True)
+
+    def mark_as_saved():
+        """Marks settings as saved and updates UI."""
+        settings_changed.set(False)
+        # Store the new state as the original state for future comparisons
+        capture_original_settings()
+
+    def update_ui_for_changes(*args):
+        """Updates window title and save button text based on change status."""
+        if settings_changed.get():
+            win.title("ChroniqueX - Настройки *")
+            save_button.config(text="Сохранить *")
+        else:
+            win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
+            save_button.config(text="Сохранить")
+
+
     def on_save():
         try:
             new_port = int(port_var.get())
@@ -652,11 +677,13 @@ def open_main_window(icon=None, item=None):
             if restart_needed:
                 messagebox.showinfo("Применение", "Настройки сохранены. Сервер будет перезапущен.", parent=win)
                 restart_server(old_settings)
+                mark_as_saved()
                 # Don't close the window, just update the tray menu
                 update_tray_menu()
             else:
                 messagebox.showinfo("Сохранено", "Настройки сохранены.", parent=win)
-                # Don't close the window, just update the tray menu
+                mark_as_saved()
+                # Update the tray menu if needed
                 update_tray_menu()
 
         except ValueError as e:
@@ -692,7 +719,7 @@ def open_main_window(icon=None, item=None):
         
     
     win = tk.Tk()
-    win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
+    win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы") # Title will be updated if changes are made
 
     # Set window size and position from settings
     width = settings.get("main_window_width", 700)
@@ -951,6 +978,21 @@ def open_main_window(icon=None, item=None):
     sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
     sys_audio_volume_scale.pack(side="right", fill="x", expand=True)
     update_sys_label(sys_audio_volume_var.get()) # Initial update
+    
+    # --- Unsaved Changes Logic (continued) ---
+    def capture_original_settings():
+        original_settings['port'] = port_var.get()
+        original_settings['server_enabled'] = server_enabled_var.get()
+        original_settings['lan_accessible'] = lan_accessible_var.get()
+        original_settings['use_custom_prompt'] = use_custom_prompt_var.get()
+        original_settings['include_html_files'] = include_html_files_var.get()
+        original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
+        original_settings['mic_volume_adjustment'] = mic_volume_var.get()
+        original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
+
+    # Listen for changes
+    settings_changed.trace_add("write", update_ui_for_changes)
+
 
     # Create a text widget with scrollbar
     text_frame = tk.Frame(main_frame)
@@ -1081,8 +1123,22 @@ def open_main_window(icon=None, item=None):
 
     button_frame = tk.Frame(frame)
     button_frame.grid(row=3, columnspan=2, pady=10)
-    tk.Button(button_frame, text="Сохранить", command=on_save).pack(side="left", padx=5)
+    save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
+    save_button.pack(side="left", padx=5)
     tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
+
+    # --- Unsaved Changes Logic (final part) ---
+    # Capture initial state
+    capture_original_settings()
+    # Trace changes on all variable-based widgets
+    port_var.trace_add("write", mark_as_changed)
+    server_enabled_var.trace_add("write", mark_as_changed)
+    lan_accessible_var.trace_add("write", mark_as_changed)
+    use_custom_prompt_var.trace_add("write", mark_as_changed)
+    include_html_files_var.trace_add("write", mark_as_changed)
+    mic_volume_var.trace_add("write", mark_as_changed)
+    sys_audio_volume_var.trace_add("write", mark_as_changed)
+    prompt_addition_text.bind("<<Modified>>", lambda e: (mark_as_changed(), prompt_addition_text.edit_modified(False)))
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
