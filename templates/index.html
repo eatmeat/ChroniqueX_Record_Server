@@ -290,6 +290,83 @@
             background-color: #138496;
         }
 
+        .audio-devices-container {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 20px;
+        }
+
+        .audio-device {
+            padding: 8px;
+            border-bottom: 1px solid #eee;
+            font-size: 14px;
+        }
+
+        .audio-device:last-child {
+            border-bottom: none;
+        }
+
+        .device-name {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .device-info {
+            color: #7f8c8d;
+            font-size: 12px;
+        }
+
+        .device-type {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+
+        .input-device {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .output-device {
+            background-color: #2ecc71;
+            color: white;
+        }
+
+        .audio-devices-container .group-header {
+            background-color: #f8f9fa;
+            padding: 12px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            border-radius: 8px 8px 0 0;
+            margin-bottom: 0;
+        }
+
+        .audio-devices-container .group-header:hover {
+            background-color: #e9ecef;
+        }
+
+        .audio-devices-container .group-header h3 {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 16px;
+        }
+
+        .audio-devices-container .group-header.expanded {
+            border-radius: 8px 8px 0 0;
+        }
+
         /* Mobile responsiveness */
         @media screen and (max-width: 768px) {
             .container {
@@ -440,6 +517,20 @@
                 <button id="startButton">Старт</button>
                 <button id="pauseButton" disabled>Пауза</button>
                 <button id="stopButton" disabled>Стоп</button>
+            </div>
+        </div>
+
+        <div class="audio-devices-container">
+            <div class="group-header" onclick="toggleAudioDevices()">
+                <h3>
+                    <span class="expand-icon" id="audio-devices-expand-icon">▶</span>
+                    Доступные аудиоустройства
+                </h3>
+            </div>
+            <div id="audio-devices-content" style="display: none;">
+                <div id="audio-devices-info">
+                    <p>Загрузка информации об аудиоустройствах...</p>
+                </div>
             </div>
         </div>
 
@@ -852,10 +943,91 @@
             }
         }
 
+        // Function to toggle audio devices section visibility
+        function toggleAudioDevices() {
+            const content = document.getElementById('audio-devices-content');
+            const icon = document.getElementById('audio-devices-expand-icon');
+            const header = document.querySelector('.audio-devices-container .group-header');
+
+            if (content.style.display === 'none' || content.style.display === '') {
+                content.style.display = 'block';
+                icon.textContent = '▼'; // Change to down arrow when expanded
+                header.classList.add('expanded');
+                // Load audio devices when expanding the section
+                loadAudioDevices();
+            } else {
+                content.style.display = 'none';
+                icon.textContent = '▶'; // Change back to right arrow when collapsed
+                header.classList.remove('expanded');
+            }
+        }
+
+        // Function to load and display audio devices information
+        async function loadAudioDevices() {
+            try {
+                const response = await fetch('/audio_devices');
+                const data = await response.json();
+
+                if (data.error) {
+                    document.getElementById('audio-devices-info').innerHTML = `<p>Ошибка при получении информации об устройствах: ${data.error}</p>`;
+                    return;
+                }
+
+                let html = '<div class="devices-list">';
+
+                // Display input devices
+                if (data.input_devices && data.input_devices.length > 0) {
+                    html += '<div class="device-category"><h3>Устройства ввода (микрофоны)</h3>';
+                    data.input_devices.forEach(device => {
+                        html += `
+                            <div class="audio-device">
+                                <span class="device-name">${device.name}</span>
+                                <span class="device-type input-device">INPUT</span><br>
+                                <span class="device-info">ID: ${device.id}, Каналы: ${device.max_input_channels}, Частота: ${device.default_samplerate} Гц</span>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                // Display output devices
+                if (data.output_devices && data.output_devices.length > 0) {
+                    html += '<div class="device-category"><h3>Устройства вывода (для системного аудио)</h3>';
+                    data.output_devices.forEach(device => {
+                        // Check if this is likely a system audio device
+                        const isSystemAudio = device.max_input_channels === 0; // Output-only devices are typically used for system audio via WASAPI loopback
+                        html += `
+                            <div class="audio-device">
+                                <span class="device-name">${device.name}</span>
+                                <span class="device-type ${isSystemAudio ? 'output-device' : 'input-device'}">${isSystemAudio ? 'OUTPUT (SYSTEM AUDIO)' : 'OUTPUT'}</span><br>
+                                <span class="device-info">ID: ${device.id}, Входные каналы: ${device.max_input_channels}, Выходные каналы: ${device.max_output_channels}, Частота: ${device.default_samplerate} Гц</span>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                }
+
+                if (data.input_devices.length === 0 && data.output_devices.length === 0) {
+                    html += '<p>Не найдено аудиоустройств.</p>';
+                }
+
+                html += '</div>';
+
+                document.getElementById('audio-devices-info').innerHTML = html;
+            } catch (error) {
+                console.error('Ошибка при загрузке информации об аудиоустройствах:', error);
+                document.getElementById('audio-devices-info').innerHTML = '<p>Ошибка при загрузке информации об аудиоустройствах.</p>';
+            }
+        }
+
         // Initial status check
         updateStatus();
+        // Load audio devices info
+        loadAudioDevices();
         // Fallback polling to sync state if things get out of sync
         setInterval(updateStatus, 5000);
+        // Refresh audio devices info periodically
+        setInterval(loadAudioDevices, 30000); // Refresh audio devices every 30 seconds
         // Periodically refresh recordings list to show updates
         setInterval(refreshRecordings, 10000); // Refresh recordings every 10 seconds
     </script>

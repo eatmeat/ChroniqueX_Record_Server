@@ -4,14 +4,23 @@ import wave
 import time
 import re
 import sys
+import platform
 from datetime import datetime
 from pathlib import Path
 from threading import Thread, Event
 
+import sounddevice as sd
+import numpy as np
+try:
+    from sounddevice import WasapiSettings
+except ImportError:
+    # WasapiSettings may not be available in all versions of sounddevice
+    WasapiSettings = None
 import pyaudiowpatch as pyaudio
 import requests
 from dotenv import load_dotenv
 
+from queue import Queue
 from flask import Flask, jsonify, render_template, request
 from pydub import AudioSegment
 from werkzeug.serving import make_server
@@ -427,7 +436,9 @@ DEFAULT_SETTINGS = {
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None,
-    "main_window_y": None
+    "main_window_y": None,
+    "mic_volume_adjustment": -3,  # Volume adjustment for microphone in dB
+    "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
 }
 settings = {}
 main_icon = None # Global reference to the pystray icon
@@ -467,20 +478,27 @@ is_recording = False
 is_paused = False  # Track pause state
 start_time = None
 pause_start_time = None  # Track when pause started
-total_pause_duration = 0  # Total duration of pauses
-recording_thread = None
+total_pause_duration = 0.0  # Total duration of pauses
+recording_threads = []
 stop_event = Event()
 frames = {}
-RATE = 44100
+temp_buffers = {}  # Temporary buffers for real-time mixing
+RATE = 44100  # Default, will be updated dynamically
 CHANNELS = 2
-FORMAT = pyaudio.paInt16
+FORMAT = pyaudio.paInt16  # Keep for compatibility, though we're using sounddevice now
+
+audio_queue = Queue()
+recording_thread = None
+
 flask_thread = None
 http_server = None
+
+# Variable to store available audio devices
 
 # Variables for post-processing status
 is_post_processing = False  # Track if post-processing is happening
 post_process_file_path = ""  # Track the file being processed
-post_process_stage = ""  # Track the current stage (transcribe, protocol)
+post_process_stage = ""  # Track the current stage (transcribe, protocol, etc.)
 
 # --- Server Lifecycle Management ---
 def start_server():
@@ -580,6 +598,8 @@ def open_main_window(icon=None, item=None):
                 "use_custom_prompt": use_custom_prompt_var.get(),
                 "prompt_addition": prompt_addition_text.get("1.0", tk.END).strip(),
                 "include_html_files": include_html_files_var.get(),
+                "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
+                "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
                 "main_window_width": width,
                 "main_window_height": height,
                 "main_window_x": x,
@@ -839,6 +859,26 @@ def open_main_window(icon=None, item=None):
     # Checkbox for including HTML files
     include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
     include_html_check.pack(anchor="w")
+
+    # Audio volume controls frame
+    volume_frame = tk.LabelFrame(prompt_addition_frame, text="Настройки громкости", padx=5, pady=5)
+    volume_frame.pack(anchor="w", fill="x", pady=(10, 0))
+
+    # Microphone volume control
+    mic_volume_frame = tk.Frame(volume_frame)
+    mic_volume_frame.pack(fill="x")
+    tk.Label(mic_volume_frame, text="Громкость микрофона (dB):").pack(side="left")
+    mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
+    mic_volume_scale = tk.Scale(mic_volume_frame, from_=-20, to=10, resolution=1, orient="horizontal", variable=mic_volume_var)
+    mic_volume_scale.pack(side="right", fill="x", expand=True)
+
+    # System audio volume control
+    sys_audio_volume_frame = tk.Frame(volume_frame)
+    sys_audio_volume_frame.pack(fill="x")
+    tk.Label(sys_audio_volume_frame, text="Громкость системного аудио (dB):").pack(side="left")
+    sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
+    sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=10, resolution=1, orient="horizontal", variable=sys_audio_volume_var)
+    sys_audio_volume_scale.pack(side="right", fill="x", expand=True)
 
     # Create a text widget with scrollbar
     text_frame = tk.Frame(main_frame)
@@ -1136,233 +1176,70 @@ def process_recording_tasks(file_path):
 
     print(f"--- Завершение постобработки для файла: {file_path} ---")
 
-def recorder(device_indices):
-    global frames, RATE, CHANNELS, FORMAT
-    CHUNK = 1024; COMMON_RATES = [48000, 44100, 32000]
-    audio = pyaudio.PyAudio()
-    supported_rate = 44100 # Default
-    # Simplified rate detection
-    RATE = supported_rate
-    def cb(in_data, frame_count, time_info, status):
-        # Only append frames if not paused
+def recorder_mic(device_index, stop_event, audio_queue):
+    """Records audio from microphone using sounddevice."""
+    def callback(indata, frames, time, status):
+        if status:
+            print(status, file=sys.stderr)
         if not is_paused:
-            frames[0].append(in_data)
-        return (None, pyaudio.paContinue)
-    frames[0] = []
-    stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True, frames_per_buffer=CHUNK, input_device_index=device_indices[0], stream_callback=cb)
-    stream.start_stream()
-    stop_event.wait()
-    stream.stop_stream(); stream.close(); audio.terminate()
+            # Put audio data into the shared queue for the mixer
+            audio_queue.put(indata.copy())
 
-import os
-from datetime import datetime
-from flask import send_file
-from flask import Response
+    try:
+        with sd.InputStream(samplerate=RATE, device=device_index, channels=1, dtype='int16', callback=callback):
+            print(f"Recording started for mic device {device_index}.")
+            # Keep the stream open while the stop event is not set
+            stop_event.wait()
+    except Exception as e:
+        print(f"Error during mic recording: {e}", file=sys.stderr)
+    finally:
+        print(f"Mic recording process finished for device {device_index}.")
 
-# --- Конечные точки API ---
+def recorder_sys(stop_event, audio_queue):
+    """Records system audio using pyaudiowpatch."""
+    try:
+        with pyaudio.PyAudio() as p:
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
 
-# Endpoint to recreate transcription
-@app.route('/recreate_transcription/<date>/<filename>')
-def recreate_transcription(date, filename):
-    # Reload settings to ensure API credentials are fresh
-    load_settings()
-    global API_URL, API_KEY
-    # Re-load environment variables
-    API_URL = os.getenv("API_URL")
-    API_KEY = os.getenv("API_KEY")
-
-    rec_dir = os.path.join(get_application_path(), 'rec')
-    file_path = os.path.join(rec_dir, date, filename)
-    
-    if not os.path.exists(file_path):
-        return "File not found", 404
-    
-    # Check if it's an audio file
-    name, ext = os.path.splitext(filename)
-    if ext.lower() not in ['.wav', '.mp3']:
-        return "Not an audio file", 400
-    
-    # Check if API is configured
-    if not API_URL or not API_KEY:
-        return "API not configured. Please set API_URL and API_KEY in .env file", 500
-    
-    # Submit transcription task in a separate thread
-    def run_transcription_task():
-        global is_post_processing, post_process_file_path, post_process_stage
-        # Reload settings in the thread to ensure API credentials are fresh
-        load_settings()
-        global API_URL, API_KEY
-        # Re-load environment variables in the thread
-        API_URL = os.getenv("API_URL")
-        API_KEY = os.getenv("API_KEY")
-        
-        is_post_processing = True
-        post_process_file_path = file_path
-        post_process_stage = "transcribe"
-        
-        try:
-            task_id = post_task(file_path, "transcribe")
-            if task_id:
-                txt_output_path = os.path.join(get_application_path(), 'rec', date, name + ".txt")
-                poll_and_save_result(task_id, txt_output_path)
-            else:
-                print(f"Failed to submit transcription task for {file_path}")
-        except Exception as e:
-            print(f"Error during transcription recreation for {file_path}: {e}")
-        
-        # Reset post-processing status
-        is_post_processing = False
-        post_process_file_path = ""
-        post_process_stage = ""
-    
-    thread = Thread(target=run_transcription_task, daemon=True)
-    thread.start()
-    
-    return "Transcription recreation started", 200
-
-# Endpoint to recreate protocol
-@app.route('/compress_to_mp3/<date>/<filename>')
-def compress_to_mp3(date, filename):
-    """Compress WAV file to MP3 format"""
-    rec_dir = os.path.join(get_application_path(), 'rec')
-    file_path = os.path.join(rec_dir, date, filename)
-    
-    if not os.path.exists(file_path):
-        return "File not found", 404
-    
-    # Check if it's a WAV file
-    name, ext = os.path.splitext(filename)
-    if ext.lower() != '.wav':
-        return "Not a WAV file", 400
-    
-    # Create MP3 file path
-    mp3_filename = name + ".mp3"
-    mp3_path = os.path.join(get_application_path(), 'rec', date, mp3_filename)
-    
-    def run_manual_compression():
-        global is_post_processing, post_process_file_path, post_process_stage
-        try:
-            # Update post-processing status to compression
-            is_post_processing = True
-            post_process_file_path = file_path
-            post_process_stage = "compression"
-            
-            # Load the WAV file and export as MP3
-            audio = AudioSegment.from_file(file_path)
-            audio.export(mp3_path, format="mp3", parameters=["-y", "-loglevel", "quiet"])
-            
-            # Delete the original WAV file after successful compression
-            try:
-                os.remove(file_path)
-                print(f"Original WAV file deleted after compression: {file_path}")
-            except OSError as e:
-                print(f"Error deleting original WAV file {file_path}: {e}")
-            
-            print(f"Manual compression completed: {mp3_path}")
-            
-            # Reset post-processing status
-            is_post_processing = False
-            post_process_file_path = ""
-            post_process_stage = ""
-        except Exception as e:
-            print(f"Error compressing file {file_path} to MP3: {e}")
-            # Reset post-processing status in case of error
-            is_post_processing = False
-            post_process_file_path = ""
-            post_process_stage = ""
-    
-    # Run compression in a separate thread
-    Thread(target=run_manual_compression, daemon=True).start()
-    
-    return f"Compression started for {filename}", 200
-
-@app.route('/recreate_protocol/<date>/<filename>')
-def recreate_protocol(date, filename):
-    # Reload settings to ensure API credentials are fresh
-    load_settings()
-    global API_URL, API_KEY
-    # Re-load environment variables
-    API_URL = os.getenv("API_URL")
-    API_KEY = os.getenv("API_KEY")
-
-    rec_dir = os.path.join(get_application_path(), 'rec')
-    file_path = os.path.join(rec_dir, date, filename)
-    
-    if not os.path.exists(file_path):
-        return "File not found", 404
-    
-    # Check if it's an audio file
-    name, ext = os.path.splitext(filename)
-    if ext.lower() not in ['.wav', '.mp3']:
-        return "Not an audio file", 400
-    
-    # Check if API is configured
-    if not API_URL or not API_KEY:
-        return "API not configured. Please set API_URL and API_KEY in .env file", 500
-    
-    # Submit protocol task in a separate thread
-    def run_protocol_task():
-        global is_post_processing, post_process_file_path, post_process_stage
-        # Reload settings in the thread to ensure API credentials are fresh
-        load_settings()
-        global API_URL, API_KEY
-        # Re-load environment variables in the thread
-        API_URL = os.getenv("API_URL")
-        API_KEY = os.getenv("API_KEY")
-        
-        is_post_processing = True
-        post_process_file_path = file_path
-        post_process_stage = "protocol"
-        
-        try:
-            # Check if transcription exists, if not, create it first
-            txt_file_path = os.path.join(get_application_path(), 'rec', date, name + ".txt")
-            if not os.path.exists(txt_file_path):
-                # Submit transcription task first
-                task_id = post_task(file_path, "transcribe")
-                if task_id:
-                    poll_and_save_result(task_id, txt_file_path)
+            if not default_speakers["isLoopbackDevice"]:
+                for loopback in p.get_loopback_device_info_generator():
+                    if default_speakers["name"] in loopback["name"]:
+                        default_speakers = loopback
+                        break
                 else:
-                    print("Failed to submit transcription task for protocol")
-                    # Reset post-processing status
-                    is_post_processing = False
-                    post_process_file_path = ""
-                    post_process_stage = ""
+                    print("Не удалось найти loopback-устройство для системного звука.", file=sys.stderr)
                     return
-            
-            # Now create the protocol from the transcription
-            # Check for custom prompt addition from settings
-            if settings.get("use_custom_prompt", False):
-                prompt_addition = settings.get("prompt_addition", "")
-            else:
-                prompt_addition = ""
 
-            # Replace {current_date} placeholder with current date in 'DD MMMMM YYYY' format
-            current_date_formatted = format_date_russian(datetime.now())
-            prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
+            print(f"Recording from: ({default_speakers['index']}){default_speakers['name']}")
 
-            # Filter out lines that start with "//" from prompt_addition
-            filtered_prompt_addition = "\n".join([
-                line for line in prompt_addition.splitlines()
-                if not line.strip().startswith("//")
-            ])
+            def callback(in_data, frame_count, time_info, status):
+                if not is_paused:
+                    # Convert byte data to numpy array and put into the queue
+                    numpy_data = np.frombuffer(in_data, dtype=np.int16)
+                    # Reshape to (n_frames, n_channels)
+                    channels = default_speakers["maxInputChannels"]
+                    if channels > 0:
+                        audio_queue.put(numpy_data.reshape(-1, channels))
+                return (in_data, pyaudio.paContinue)
 
-            task_id = post_task(txt_file_path, "protocol", prompt_addition=filtered_prompt_addition)
-            if task_id:
-                protocol_output_path = os.path.join(get_application_path(), 'rec', date, name + "_protocol.pdf")
-                poll_and_save_result(task_id, protocol_output_path)
-        except Exception as e:
-            print(f"Error during protocol recreation for {file_path}: {e}")
-        
-        # Reset post-processing status
-        is_post_processing = False
-        post_process_file_path = ""
-        post_process_stage = ""
-    
-    thread = Thread(target=run_protocol_task, daemon=True)
-    thread.start()
-    
-    return "Protocol recreation started", 200
+            stream = p.open(format=pyaudio.paInt16,
+                            channels=default_speakers["maxInputChannels"],
+                            rate=RATE,  # Use the global RATE to ensure consistency
+                            input=True,
+                            input_device_index=default_speakers["index"],
+                            stream_callback=callback)
+
+            stream.start_stream()
+            print("System audio recording started.")
+            stop_event.wait()
+            stream.stop_stream()
+            stream.close()
+
+    except Exception as e:
+        print(f"Error during system audio recording: {e}", file=sys.stderr)
+    finally:
+        print("System audio recording process finished.")
 
 @app.route('/')
 def index():
@@ -1606,6 +1483,9 @@ def resume():
 
 @app.route('/status', methods=['GET'])
 def status():
+    # Update device list more frequently during recording
+    # check_and_update_devices_if_needed() # Disabled for simplicity
+    
     if is_recording:
         if is_paused:
             recording_status = {"status": "paused", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))}
@@ -1613,7 +1493,7 @@ def status():
             recording_status = {"status": "rec", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))}
     else:
         recording_status = {"status": "stop", "time": "00:00:00"}
-    
+
     # Add post-processing information
     if is_post_processing:
         if post_process_stage == "transcribe":
@@ -1624,13 +1504,13 @@ def status():
             post_process_info = f"Постобработка: {os.path.basename(post_process_file_path)}"
     else:
         post_process_info = "Постобработка не выполняется"
-    
+
     recording_status["post_processing"] = {
         "active": is_post_processing,
         "info": post_process_info,
         "stage": post_process_stage if is_post_processing else None
     }
-    
+
     return jsonify(recording_status)
 
 # --- Основная часть ---
@@ -1700,36 +1580,86 @@ def update_icon(icon):
         
         time.sleep(0.1)
 
-def start_new_recording():
+def start_recording():
     """Starts a new recording session"""
-    global is_recording, start_time, recording_thread, frames, stop_event, is_paused, pause_start_time, total_pause_duration
-    
-    # Start new recording
+    global is_recording, start_time, stop_event, is_paused, total_pause_duration, recording_threads, RATE
+
+    # 1. Find devices
+    mic_device_index = None
+    try:
+        mic_device_index = sd.default.device[0]
+        print(f"Default microphone found: {sd.query_devices(mic_device_index)['name']}")
+    except (ValueError, sd.PortAudioError) as e:
+        print(f"Could not find a default microphone: {e}")
+
+    # Dynamically determine the best sample rate from the system's output device
+    try:
+        with pyaudio.PyAudio() as p:
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+            RATE = int(default_speakers['defaultSampleRate'])
+            print(f"System audio sample rate detected: {RATE} Hz. Using this for all recordings.")
+    except Exception as e:
+        RATE = 44100 # Fallback to default
+        print(f"Could not detect system sample rate, falling back to {RATE} Hz. Error: {e}")
+
+    # System audio is handled by pyaudiowpatch, no need to find device index here
+    if mic_device_index is None and platform.system() != "Windows":
+        print("FATAL: No recording devices found. Aborting.")
+        messagebox.showerror("Ошибка записи", "Не найдено ни одного устройства для записи (микрофон или системный звук).")
+        return
+
+    # 2. Reset state and start recording
     is_recording = True
-    is_paused = False  # Reset pause state
-    pause_start_time = None  # Reset pause start time
-    # Don't reset total_pause_duration here as it's cumulative across pauses
+    is_paused = False
+    total_pause_duration = 0.0
     start_time = datetime.now()
-    frames = {}
     stop_event.clear()
 
-    # Simplified device selection for stability
-    audio = pyaudio.PyAudio()
-    device_index = audio.get_default_input_device_info()['index']
-    audio.terminate()
+    # 3. Create temporary file paths
+    # We will now write to a single temporary file, mixing audio in real-time.
+    # This avoids synchronization issues with pydub.overlay.
+    # The separate recorder functions will now write to shared queues.
 
-    recording_thread = Thread(target=recorder, args=([device_index],))
-    recording_thread.start()
+    script_dir = get_application_path()
+    temp_dir = os.path.join(script_dir, 'rec', 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
 
+    timestamp = start_time.strftime('%Y%m%d_%H%M%S')
+    mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
+    sys_temp_file = os.path.join(temp_dir, f"{timestamp}_sys.wav")
+    mixed_temp_file = os.path.join(temp_dir, f"{timestamp}_mixed.wav")
+
+    # 4. Start recording threads
+    recording_threads = []
+    mic_queue = Queue()
+    sys_queue = Queue()
+
+    if mic_device_index is not None:
+        mic_thread = Thread(target=recorder_mic, args=(mic_device_index, stop_event, mic_queue))
+        recording_threads.append(mic_thread)
+        mic_thread.start()
+
+    if platform.system() == "Windows":
+        sys_thread = Thread(target=recorder_sys, args=(stop_event, sys_queue))
+        recording_threads.append(sys_thread)
+        sys_thread.start()
+
+    # 5. Start mixer thread
+    # This thread will take data from mic and system queues, mix it, and write to a single WAV file.
+    mixer_thread = Thread(target=audio_mixer, args=(stop_event, mixed_temp_file, mic_queue, sys_queue))
+    recording_threads.append(mixer_thread)
+    mixer_thread.start()
 
 def resume_recording():
     """Resumes a paused recording session"""
     global is_paused, pause_start_time, total_pause_duration
-    
-    # Calculate pause duration and add to total
-    pause_duration = (datetime.now() - pause_start_time).total_seconds()
-    total_pause_duration += pause_duration
-    
+
+    # Calculate pause duration and add to total if pause_start_time is set
+    if pause_start_time:
+        pause_duration = (datetime.now() - pause_start_time).total_seconds()
+        total_pause_duration += pause_duration
+
     # Reset pause state
     is_paused = False
     pause_start_time = None
@@ -1743,85 +1673,118 @@ def start_recording_from_tray(icon, item):
     elif is_recording and is_paused:
         # Resume recording from pause
         resume_recording()
-        
+
         # Update tray menu to reflect new state
         update_tray_menu()
-        
+
         print("Запись возобновлена.")
     else:
-        start_new_recording()
-        
-        # Update tray menu to reflect new state
-        update_tray_menu()
-        
-        print("Запись начата.")
+        try:
+            start_recording()
+
+            # Update tray menu to reflect new state
+            update_tray_menu()
+
+            print("Запись начата.")
+        except Exception as e:
+            print(f"Ошибка при запуске записи: {e}")
+            is_recording = False  # Ensure recording flag is reset on error
 
 def stop_recording():
     """Stops the current recording session"""
-    global is_recording, start_time, recording_thread, frames, is_paused, pause_start_time, total_pause_duration
+    global is_recording, start_time, recording_threads, is_paused, total_pause_duration
 
     stop_event.set()
-    recording_thread.join()
+    for thread in recording_threads:
+        if thread.is_alive():
+            thread.join(timeout=5)
+    recording_threads = []
+
     end_time = datetime.now()
     is_recording = False
-    is_paused = False  # Reset pause state
-    pause_start_time = None  # Reset pause start time
-    total_pause_duration = 0  # Reset total pause duration
+    is_paused = False
+    total_pause_duration = 0.0
 
     script_dir = get_application_path()
-    day_dir = os.path.join(script_dir, 'rec', start_time.strftime('%Y-%m-%d'))
+    rec_dir = os.path.join(script_dir, 'rec')
+    day_dir = os.path.join(rec_dir, start_time.strftime('%Y-%m-%d'))
     os.makedirs(day_dir, exist_ok=True)
-    
-    if frames:
-        sound = AudioSegment(data=b''.join(frames.get(0, [])), 
-                             sample_width=pyaudio.PyAudio().get_sample_size(FORMAT), 
-                             frame_rate=RATE, 
-                             channels=CHANNELS)
-        duration = (end_time - start_time)
-        minutes, seconds = divmod(int(duration.total_seconds()), 60)
-        wav_filename = os.path.join(day_dir, f"{start_time.strftime('%H.%M')}_{minutes:02d}m{seconds:02d}s.wav")
-        sound.export(wav_filename, format='wav')
+    temp_dir = os.path.join(rec_dir, 'temp')
+
+    timestamp = start_time.strftime('%Y%m%d_%H%M%S')
+    mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
+    sys_temp_file = os.path.join(temp_dir, f"{timestamp}_sys.wav")
+    mixed_temp_file = os.path.join(temp_dir, f"{timestamp}_mixed.wav")
+
+    final_audio = None
+    if os.path.exists(mixed_temp_file) and os.path.getsize(mixed_temp_file) > 44:
+        # Load the pre-mixed audio file
+        final_audio = AudioSegment.from_wav(mixed_temp_file)
+
+        # Apply volume adjustments
+        mic_gain = settings.get("mic_volume_adjustment", 0)
+        sys_gain = settings.get("system_audio_volume_adjustment", 0)
         
-        # Compress to MP3 immediately
-        mp3_filename = wav_filename.replace('.wav', '.mp3')
-        try:
-            # Use the globally imported AudioSegment
-            audio = AudioSegment.from_file(wav_filename)
-            audio.export(mp3_filename, format="mp3", parameters=["-y", "-loglevel", "quiet"])
-            print(f"Auto-compression completed: {mp3_filename}")
-            
-            # Delete the original WAV file after successful compression
-            try:
-                os.remove(wav_filename)
-                print(f"Original WAV file deleted: {wav_filename}")
-            except OSError as e:
-                print(f"Error deleting original WAV file {wav_filename}: {e}")
-            
-            # Process the MP3 file instead of the WAV file
-            Thread(target=process_recording_tasks, args=(mp3_filename,), daemon=True).start()
-        except Exception as e:
-            print(f"Error during auto-compression to MP3: {e}")
-            # If compression fails, process the WAV file as backup
-            Thread(target=process_recording_tasks, args=(wav_filename,), daemon=True).start()
+        # Note: Applying gain to a mixed track affects both sources.
+        # This is a simplification. For separate gains, mixing must be more complex.
+        # We can average the gains for a simple adjustment.
+        average_gain = (mic_gain + sys_gain) / 2
+        if average_gain != 0:
+            final_audio += average_gain
+            print(f"Applied average gain of {average_gain:.2f} dB to the mixed audio.")
+    else:
+        print("Warning: No audio data was recorded. Skipping file creation.")
+        if os.path.exists(mic_temp_file): os.remove(mic_temp_file)
+        if os.path.exists(sys_temp_file): os.remove(sys_temp_file)
+        if os.path.exists(mixed_temp_file): os.remove(mixed_temp_file)
+        return
+
+    duration = (end_time - start_time)
+    minutes, seconds = divmod(int(duration.total_seconds()), 60)
+    wav_filename = os.path.join(day_dir, f"{start_time.strftime('%H.%M')}_{minutes:02d}m{seconds:02d}s.wav")
+    final_audio.export(wav_filename, format='wav')
+    print(f"Final audio saved to: {wav_filename}")
+
+    # Clean up temp files
+    if os.path.exists(mic_temp_file): os.remove(mic_temp_file)
+    if os.path.exists(sys_temp_file): os.remove(sys_temp_file)
+    if os.path.exists(mixed_temp_file): os.remove(mixed_temp_file)
+
+    # --- Post-processing ---
+    mp3_filename = wav_filename.replace('.wav', '.mp3')
+    try:
+        final_audio.export(mp3_filename, format="mp3", parameters=["-y", "-loglevel", "quiet"])
+        print(f"Auto-compression completed: {mp3_filename}")
+        # Process the MP3 file
+        Thread(target=process_recording_tasks, args=(mp3_filename,), daemon=True).start()
+    except Exception as e:
+        print(f"Error during auto-compression to MP3: {e}")
+        # If compression fails, process the WAV file as backup
+        Thread(target=process_recording_tasks, args=(wav_filename,), daemon=True).start()
 
 
 def stop_recording_from_tray(icon, item):
     global is_recording
-    if not is_recording: 
+    if not is_recording:
         print("Запись не идет.")
         return
-    
-    stop_recording()
-    
-    # Update tray menu to reflect new state
-    update_tray_menu()
-    
-    print("Запись остановлена.")
+
+    try:
+        stop_recording()
+
+        # Update tray menu to reflect new state
+        update_tray_menu()
+
+        print("Запись остановлена.")
+    except Exception as e:
+        print(f"Ошибка при остановке записи: {e}")
+        # Reset recording state in case of error
+        is_recording = False
 
 def pause_recording():
     """Pauses the current recording session"""
     global is_paused, pause_start_time
-    
+
     # Set pause state
     is_paused = True
     pause_start_time = datetime.now()
@@ -1829,35 +1792,114 @@ def pause_recording():
 
 def pause_recording_from_tray(icon, item):
     global is_recording
-    if not is_recording: 
+    if not is_recording:
         print("Запись не идет.")
         return
-    if is_paused: 
+    if is_paused:
         print("Запись уже на паузе.")
         return
-    
-    pause_recording()
-    
-    # Update tray menu to reflect new state
-    update_tray_menu()
-    
-    print("Запись приостановлена.")
+
+    try:
+        pause_recording()
+
+        # Update tray menu to reflect new state
+        update_tray_menu()
+
+        print("Запись приостановлена.")
+    except Exception as e:
+        print(f"Ошибка при паузе записи: {e}")
 
 def resume_recording_from_tray(icon, item):
     global is_recording
-    if not is_recording: 
+    if not is_recording:
         print("Запись не идет.")
         return
-    if not is_paused: 
+    if not is_paused:
         print("Запись не на паузе.")
         return
-    
-    resume_recording()
-    
-    # Update tray menu to reflect new state
-    update_tray_menu()
-    
-    print("Запись возобновлена.")
+
+    try:
+        resume_recording()
+
+        # Update tray menu to reflect new state
+        update_tray_menu()
+
+        print("Запись возобновлена.")
+    except Exception as e:
+        print(f"Ошибка при возобновлении записи: {e}")
+
+# The safe_open_stream function is no longer needed with the new sounddevice implementation
+
+def audio_mixer(stop_event, output_filename, mic_queue, sys_queue):
+    """Mixes audio from queues and writes to a single WAV file."""
+    print("Audio mixer started.")
+    with wave.open(output_filename, 'wb') as wf:
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(2)  # 16-bit
+        wf.setframerate(RATE)
+
+        mic_buffer = np.array([], dtype=np.int16)
+        sys_buffer = np.array([], dtype=np.int16)
+        block_size = 1024
+
+        while not stop_event.is_set() or len(mic_buffer) > 0 or len(sys_buffer) > 0:
+            try:
+                if not stop_event.is_set():
+                    try:
+                        while True:
+                            mic_buffer = np.append(mic_buffer, mic_queue.get_nowait())
+                    except Exception:
+                        pass
+                    try:
+                        while True:
+                            sys_buffer = np.append(sys_buffer, sys_queue.get_nowait())
+                    except Exception:
+                        pass
+
+                len_mic_samples = len(mic_buffer)
+                len_sys_samples = len(sys_buffer) // CHANNELS
+
+                # Определяем, сколько полных блоков можно обработать из самого длинного буфера
+                process_len = (max(len_mic_samples, len_sys_samples) // block_size) * block_size
+
+                # Если запись остановлена, обрабатываем все оставшиеся данные
+                if stop_event.is_set():
+                    process_len = max(len_mic_samples, len_sys_samples)
+
+                if process_len == 0:
+                    if not stop_event.is_set(): # Не спим, если нужно обработать остатки
+                        time.sleep(0.01)
+                    continue
+
+                # Извлекаем данные для обработки
+                mic_chunk = mic_buffer[:process_len]
+                sys_chunk = sys_buffer[:process_len * CHANNELS]
+
+                # Обновляем буферы, удаляя обработанные данные
+                mic_buffer = mic_buffer[process_len:]
+                sys_buffer = sys_buffer[process_len * CHANNELS:]
+
+                # Выравниваем массивы, добавляя тишину, если один из них короче
+                mic_chunk = np.pad(mic_chunk, (0, process_len - len(mic_chunk)), 'constant')
+                sys_chunk = np.pad(sys_chunk, (0, process_len * CHANNELS - len(sys_chunk)), 'constant')
+
+                mic_chunk = mic_chunk.reshape(-1, 1)
+                sys_chunk = sys_chunk.reshape(-1, CHANNELS)
+
+                mic_stereo = np.repeat(mic_chunk, CHANNELS, axis=1)
+
+                mixed_data_32 = mic_stereo.astype(np.int32) + sys_chunk.astype(np.int32)
+                mixed_data = np.clip(mixed_data_32, -32768, 32767).astype(np.int16)
+
+                wf.writeframes(mixed_data.tobytes())
+
+            except Exception as e: # pragma: no cover
+                if "empty" not in str(e).lower():
+                     print(f"Error in audio mixer: {e}")
+                time.sleep(0.01)
+
+    print("Audio mixer finished.")
+
 
 def open_rec_folder(icon, item):
     rec_dir = os.path.join(get_application_path(), 'rec')
@@ -1931,7 +1973,7 @@ if __name__ == '__main__':
 
     update_thread = Thread(target=update_icon, args=(main_icon,), daemon=True)
     update_thread.start()
-    
+
     # Start periodic tray menu update thread
     menu_update_thread = Thread(target=periodic_tray_menu_update, daemon=True)
     menu_update_thread.start()
