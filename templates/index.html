@@ -673,7 +673,7 @@
                                         <td>{{ recording.time }}</td>
                                         <td>
                                             <span class="status-indicator status-exists"></span>
-                                            <a href="/files/{{ recording.date }}/{{ recording.filename }}" class="file-link">{{ recording.filename }}</a>
+                                            <a href="/files/{{ recording.date }}/{{ recording.filename }}" class="file-link" target="_blank" rel="noopener noreferrer">{{ recording.filename }}</a>
                                             {% if recording.filename.endswith('.wav') %}
                                             <button class="compress-btn" onclick="compressToMp3('{{ recording.date }}', '{{ recording.filename }}')">Сжать в MP3</button>
                                             {% endif %}
@@ -681,7 +681,7 @@
                                         <td>
                                             {% if recording.transcription_exists %}
                                             <span class="status-indicator status-exists"></span>
-                                            <a href="/files/{{ recording.date }}/{{ recording.transcription_filename }}" class="file-link">{{ recording.transcription_filename }}</a>
+                                            <a href="/files/{{ recording.date }}/{{ recording.transcription_filename }}" class="file-link" target="_blank" rel="noopener noreferrer">{{ recording.transcription_filename }}</a>
                                             <button class="recreate-btn" onclick="recreateTranscription('{{ recording.date }}', '{{ recording.filename }}')">Пересоздать</button>
                                             {% else %}
                                             <span class="status-indicator status-missing"></span>
@@ -692,7 +692,7 @@
                                         <td>
                                             {% if recording.protocol_exists %}
                                             <span class="status-indicator status-exists"></span>
-                                            <a href="/files/{{ recording.date }}/{{ recording.protocol_filename }}" class="file-link">{{ recording.protocol_filename }}</a>
+                                            <a href="/files/{{ recording.date }}/{{ recording.protocol_filename }}" class="file-link" target="_blank" rel="noopener noreferrer">{{ recording.protocol_filename }}</a>
                                             <button class="recreate-btn" onclick="recreateProtocol('{{ recording.date }}', '{{ recording.filename }}')">Пересоздать</button>
                                             {% else %}
                                             <span class="status-indicator status-missing"></span>
