@@ -379,7 +379,7 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
-            margin-left: 10px;
+            margin-left: auto; /* Push to the far right */
         }
 
 
@@ -636,9 +636,9 @@
                 </div>
                 <div class="settings-actions">
                     <button id="saveSettingsButton">Применить настройки</button> 
-                    <button id="reloadSettingsButton">Перечитать настройки</button>
                     <span id="unsavedChangesIndicator" style="display: none; margin-left: 10px; color: #f39c12; font-style: italic;">* есть несохраненные изменения</span>
                     <div id="saveStatus"></div> 
+                    <button id="reloadSettingsButton">Перечитать настройки</button>
                 </div>
             </div>
         </div>
@@ -660,7 +660,7 @@
                             <table class="recordings-table">
                                 <thead>
                                     <tr>
-                                        <th>Время</th>
+                                        <th>Время начала</th>
                                         <th>Аудиозапись</th>
                                         <th>Транскрипция</th>
                                         <th>Протокол</th>
