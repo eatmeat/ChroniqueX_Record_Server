@@ -1383,7 +1383,13 @@ def index():
     # Sort date groups by date (newest first)
     date_groups.sort(key=lambda x: x['date'], reverse=True)
     
-    return render_template('index.html', date_groups=date_groups)
+    # Pass current settings to the template
+    return render_template('index.html', 
+                           date_groups=date_groups,
+                           use_custom_prompt=settings.get("use_custom_prompt", False),
+                           include_html_files=settings.get("include_html_files", True),
+                           prompt_addition=settings.get("prompt_addition", "")
+                           )
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')
@@ -1436,6 +1442,24 @@ def serve_recorded_file(filepath):
     else:
         return "File not found", 404
 
+@app.route('/save_web_settings', methods=['POST'])
+def save_web_settings():
+    """Saves settings received from the web UI."""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "Нет данных"}), 400
+
+        # Update only the settings from the web UI
+        settings['use_custom_prompt'] = data.get('use_custom_prompt', settings.get('use_custom_prompt'))
+        settings['include_html_files'] = data.get('include_html_files', settings.get('include_html_files'))
+        settings['prompt_addition'] = data.get('prompt_addition', settings.get('prompt_addition'))
+
+        save_settings(settings) # Save all settings
+        return jsonify({"status": "ok", "message": "Настройки успешно сохранены!"})
+    except Exception as e:
+        print(f"Error saving web settings: {e}")
+        return jsonify({"status": "error", "message": f"Ошибка при сохранении настроек: {e}"}), 500
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():

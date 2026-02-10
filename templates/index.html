@@ -826,7 +826,7 @@
                 const data = await response.json();
                 if (data.status === 'ok') {
                    // Добавляем небольшую задержку, чтобы сервер успел обновить состояние
-                   setTimeout(() => updateStatus(), 200);
+                   setTimeout(updateStatus, 200);
                    setTimeout(() => refreshRecordings(), 2000); // Обновляем список записей с задержкой, чтобы файл успел появиться
                 } else {
                     alert(`Ошибка: ${data.error}`);
