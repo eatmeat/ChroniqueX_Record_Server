@@ -618,7 +618,7 @@
                 </div>
                 <div class="setting-item">
                     <label for="promptAddition">Дополнение к промпту:</label>
-                    <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
+                    <textarea id="promptAddition" name="prompt_addition" rows="20">{{ prompt_addition }}</textarea>
                 </div>
                 <div class="setting-item">
                     <label for="micVolume">Громкость микрофона (dB):</label>
@@ -952,11 +952,6 @@
         });
 
         reloadSettingsButton.addEventListener('click', async () => {
-            if (unsavedChangesIndicator.style.display !== 'none') {
-                if (!confirm('Есть несохраненные изменения. Вы уверены, что хотите отменить их и перечитать настройки с сервера?')) {
-                    return;
-                }
-            }
             try {
                 const response = await fetch('/get_web_settings');
                 const newSettings = await response.json();
