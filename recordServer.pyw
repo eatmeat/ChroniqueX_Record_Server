@@ -587,11 +587,16 @@ main_window_instance = None
 
 def open_main_window(icon=None, item=None):
     global main_window_instance
+    # Если окно уже существует, показать его и передать фокус
     if main_window_instance and main_window_instance.winfo_exists():
+        main_window_instance.deiconify() # Показываем окно, если оно было скрыто
         main_window_instance.lift()
         main_window_instance.focus_force()
         print("Main window already open. Bringing to front.")
         return
+
+    # Если окно было уничтожено, но ссылка осталась, сбрасываем ее
+    main_window_instance = None
 
     old_settings = settings.copy()
     def on_save():
@@ -643,7 +648,7 @@ def open_main_window(icon=None, item=None):
         except ValueError as e:
             messagebox.showerror("Ошибка", f"Неверное значение для порта: {e}", parent=win)
 
-    def on_close():
+    def on_hide():
         # Save window geometry before closing
         x = win.winfo_x()
         y = win.winfo_y()
@@ -659,15 +664,18 @@ def open_main_window(icon=None, item=None):
         })
         save_settings(new_settings)
 
+        win.withdraw() # Скрываем окно вместо уничтожения
+
+    def on_destroy():
+        on_hide() # Сохраняем геометрию и скрываем
         # Cancel all scheduled 'after' jobs before destroying the window
         if hasattr(win, '_after_jobs'):
             for job_id in win._after_jobs:
                 win.after_cancel(job_id)
-
         global main_window_instance
         main_window_instance = None
         win.destroy()
-
+        
     
     win = tk.Tk()
     win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
@@ -686,7 +694,7 @@ def open_main_window(icon=None, item=None):
     win._after_jobs = []
 
     win.transient(); win.grab_set()
-    win.protocol("WM_DELETE_WINDOW", on_close)  # Handle window close event
+    win.protocol("WM_DELETE_WINDOW", on_hide)  # Handle window close event
 
     # Configure grid weights for proper resizing
     win.grid_rowconfigure(0, weight=1)
@@ -1046,7 +1054,7 @@ def open_main_window(icon=None, item=None):
     button_frame = tk.Frame(frame)
     button_frame.grid(row=3, columnspan=2, pady=10)
     tk.Button(button_frame, text="Сохранить", command=on_save).pack(side="left", padx=5)
-    tk.Button(button_frame, text="Свернуть", command=on_close).pack(side="left", padx=5)
+    tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
