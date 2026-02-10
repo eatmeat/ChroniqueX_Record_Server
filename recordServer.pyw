@@ -586,6 +586,7 @@ def update_tray_menu():
             # No active recording, show start option
             main_icon.menu = Menu(
                 item('Начать запись', start_recording_from_tray, enabled=True),  # Always enabled when not recording
+                item('Приостановить запись', pause_recording_from_tray, enabled=False),  # Always enabled if recording is active
                 item('Остановить запись', stop_recording_from_tray, enabled=False),  # Disabled since no recording is active
                 Menu.SEPARATOR,
                 item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
