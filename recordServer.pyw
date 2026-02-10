@@ -18,6 +18,14 @@ except ImportError:
     # WasapiSettings may not be available in all versions of sounddevice
     WasapiSettings = None
 import pyaudiowpatch as pyaudio
+
+# Для проверки одного экземпляра приложения
+try:
+    from win32event import CreateMutex
+    from win32api import GetLastError
+    from winerror import ERROR_ALREADY_EXISTS
+except ImportError:
+    CreateMutex, GetLastError, ERROR_ALREADY_EXISTS = None, None, None
 # Импортируем PaWasapiStreamInfo напрямую из оригинального pyaudio,
 # так как в некоторых версиях pyaudiowpatch он может отсутствовать.
 try:
@@ -555,8 +563,8 @@ def update_tray_menu():
                 item('Приостановить запись', pause_recording_from_tray, enabled=True),  # Always enabled if recording is active
                 item('Остановить запись', stop_recording_from_tray, enabled=True),  # Always enabled if recording is active
                 Menu.SEPARATOR,
-                item('Основное окно', open_main_window),
                 item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                item('Настройки', open_main_window),
                 item('Открыть папку с записями', open_rec_folder),
                 Menu.SEPARATOR,
                 item('Выход', exit_action)
@@ -580,8 +588,8 @@ def update_tray_menu():
                 item('Начать запись', start_recording_from_tray, enabled=True),  # Always enabled when not recording
                 item('Остановить запись', stop_recording_from_tray, enabled=False),  # Disabled since no recording is active
                 Menu.SEPARATOR,
-                item('Основное окно', open_main_window),
                 item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                item('Настройки', open_main_window),
                 item('Открыть папку с записями', open_rec_folder),
                 Menu.SEPARATOR,
                 item('Выход', exit_action)
@@ -614,29 +622,6 @@ def open_main_window(icon=None, item=None):
 
     old_settings = settings.copy()
     
-    # --- Unsaved Changes Logic ---
-    original_settings = {}
-    settings_changed = tk.BooleanVar(value=False)
-
-    def mark_as_changed(*args):
-        """Marks settings as changed and updates UI."""
-        settings_changed.set(True)
-
-    def mark_as_saved():
-        """Marks settings as saved and updates UI."""
-        settings_changed.set(False)
-        # Store the new state as the original state for future comparisons
-        capture_original_settings()
-
-    def update_ui_for_changes(*args):
-        """Updates window title and save button text based on change status."""
-        if settings_changed.get():
-            win.title("ChroniqueX - Настройки *")
-            save_button.config(text="Сохранить *")
-        else:
-            win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
-            save_button.config(text="Сохранить")
-
 
     def on_save():
         try:
@@ -720,6 +705,29 @@ def open_main_window(icon=None, item=None):
     
     win = tk.Tk()
     win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы") # Title will be updated if changes are made
+
+    # --- Unsaved Changes Logic (Moved after tk.Tk() initialization) ---
+    original_settings = {}
+    settings_changed = tk.BooleanVar(value=False)
+
+    def mark_as_changed(*args):
+        """Marks settings as changed and updates UI."""
+        settings_changed.set(True)
+
+    def mark_as_saved():
+        """Marks settings as saved and updates UI."""
+        settings_changed.set(False)
+        # Store the new state as the original state for future comparisons
+        capture_original_settings()
+
+    def update_ui_for_changes(*args):
+        """Updates window title and save button text based on change status."""
+        if settings_changed.get():
+            win.title("ChroniqueX - Настройки *")
+            save_button.config(text="Сохранить *")
+        else:
+            win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
+            save_button.config(text="Сохранить")
 
     # Set window size and position from settings
     width = settings.get("main_window_width", 700)
@@ -917,20 +925,32 @@ def open_main_window(icon=None, item=None):
     # Start the status update loop
     win.update_post_process_status = update_post_process_status
     win.schedule_toolbar_update = schedule_toolbar_update
-    win.schedule_toolbar_update()
-    
-    port_var = tk.StringVar(value=str(settings.get("port")))
-    server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
-    lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
-    use_custom_prompt_var = tk.BooleanVar(value=settings.get("use_custom_prompt"))
-    include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
 
     # Create StringVar for the text widget
     prompt_addition_frame = tk.Frame(main_frame)
     prompt_addition_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
     main_frame.grid_columnconfigure(0, weight=1)
 
+    # Переменные для виджетов настроек
+    port_var = tk.StringVar(value=str(settings.get("port")))
+    server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
+    lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
+    use_custom_prompt_var = tk.BooleanVar(value=settings.get("use_custom_prompt"))
+    include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
+    mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
+    sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
+
     tk.Checkbutton(prompt_addition_frame, text="Использовать дополнение к промпту", variable=use_custom_prompt_var).pack(anchor="w")
+    # --- Unsaved Changes Logic (continued) ---
+    def capture_original_settings():
+        original_settings['port'] = port_var.get()
+        original_settings['server_enabled'] = server_enabled_var.get()
+        original_settings['lan_accessible'] = lan_accessible_var.get()
+        original_settings['use_custom_prompt'] = use_custom_prompt_var.get()
+        original_settings['include_html_files'] = include_html_files_var.get()
+        original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
+        original_settings['mic_volume_adjustment'] = mic_volume_var.get()
+        original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
 
     prompt_addition_label = tk.Label(prompt_addition_frame, text="Дополнение к промпту:")
     prompt_addition_label.pack(anchor="w")
@@ -960,7 +980,6 @@ def open_main_window(icon=None, item=None):
     mic_volume_frame.pack(fill="x")
     mic_volume_label_var = tk.StringVar()
     tk.Label(mic_volume_frame, textvariable=mic_volume_label_var).pack(side="left")
-    mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
     mic_volume_scale = tk.Scale(mic_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
     mic_volume_scale.pack(side="right", fill="x", expand=True)
     update_mic_label(mic_volume_var.get()) # Initial update
@@ -974,22 +993,10 @@ def open_main_window(icon=None, item=None):
     sys_audio_volume_frame.pack(fill="x")
     sys_audio_label_var = tk.StringVar()
     tk.Label(sys_audio_volume_frame, textvariable=sys_audio_label_var).pack(side="left")
-    sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
     sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
     sys_audio_volume_scale.pack(side="right", fill="x", expand=True)
     update_sys_label(sys_audio_volume_var.get()) # Initial update
     
-    # --- Unsaved Changes Logic (continued) ---
-    def capture_original_settings():
-        original_settings['port'] = port_var.get()
-        original_settings['server_enabled'] = server_enabled_var.get()
-        original_settings['lan_accessible'] = lan_accessible_var.get()
-        original_settings['use_custom_prompt'] = use_custom_prompt_var.get()
-        original_settings['include_html_files'] = include_html_files_var.get()
-        original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
-        original_settings['mic_volume_adjustment'] = mic_volume_var.get()
-        original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
-
     # Listen for changes
     settings_changed.trace_add("write", update_ui_for_changes)
 
@@ -1126,6 +1133,8 @@ def open_main_window(icon=None, item=None):
     save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
     save_button.pack(side="left", padx=5)
     tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
+
+    win.schedule_toolbar_update()
 
     # --- Unsaved Changes Logic (final part) ---
     # Capture initial state
@@ -2213,6 +2222,21 @@ def make_hyperlink(widget):
     widget.tag_bind("hyperlink", "<Button-1>", click_link)
 
 if __name__ == '__main__':
+    # --- Проверка на запуск только одного экземпляра приложения ---
+    if CreateMutex:
+        mutex_name = "ChroniqueXRecordServerMutex"
+        mutex = CreateMutex(None, 1, mutex_name)
+        if GetLastError() == ERROR_ALREADY_EXISTS:
+            # Если мьютекс уже существует, значит, приложение уже запущено.
+            # Можно показать сообщение пользователю.
+            root = tk.Tk()
+            root.withdraw()  # Скрываем основное окно tkinter
+            messagebox.showwarning("Уже запущено", "Приложение ChroniqueX Record Server уже запущено.")
+            root.destroy()
+            sys.exit(0)
+    else:
+        print("Предупреждение: библиотека pywin32 не установлена. Проверка на запуск единственного экземпляра отключена.")
+
     load_settings()
     generate_favicons()
 
