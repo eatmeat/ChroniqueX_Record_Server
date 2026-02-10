@@ -583,9 +583,17 @@ def update_tray_menu():
                 item('Выход', exit_action)
             )
 # --- Settings Window ---
-def open_main_window(icon=None, item=None):
-    old_settings = settings.copy()
+main_window_instance = None
 
+def open_main_window(icon=None, item=None):
+    global main_window_instance
+    if main_window_instance and main_window_instance.winfo_exists():
+        main_window_instance.lift()
+        main_window_instance.focus_force()
+        print("Main window already open. Bringing to front.")
+        return
+
+    old_settings = settings.copy()
     def on_save():
         try:
             new_port = int(port_var.get())
@@ -650,8 +658,17 @@ def open_main_window(icon=None, item=None):
             "main_window_y": y
         })
         save_settings(new_settings)
+
+        # Cancel all scheduled 'after' jobs before destroying the window
+        if hasattr(win, '_after_jobs'):
+            for job_id in win._after_jobs:
+                win.after_cancel(job_id)
+
+        global main_window_instance
+        main_window_instance = None
         win.destroy()
 
+    
     win = tk.Tk()
     win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
 
@@ -664,6 +681,9 @@ def open_main_window(icon=None, item=None):
     win.geometry(f"{width}x{height}")
     if x is not None and y is not None:
         win.geometry(f"+{x}+{y}")
+
+    main_window_instance = win
+    win._after_jobs = []
 
     win.transient(); win.grab_set()
     win.protocol("WM_DELETE_WINDOW", on_close)  # Handle window close event
@@ -721,14 +741,18 @@ def open_main_window(icon=None, item=None):
             status_text = "Постобработка не выполняется"
 
         post_process_status_label.config(text=status_text)
-        # Schedule next update
-        win.after(1000, update_post_process_status)  # Update every second
+        # Schedule next update, referencing the function via the window to prevent garbage collection
+        if win.winfo_exists():
+            job_id = win.after(1000, win.update_post_process_status)  # Update every second
+            win._after_jobs.append(job_id)
     
     # Start the status update loop
-    update_post_process_status()
+    win.update_post_process_status = update_post_process_status
+    win.update_post_process_status()
+
 
     # Create icons for buttons
-    def create_button_icon_with_text(shape, color, text, size=(60, 65)):
+    def create_button_icon_with_text(shape, color, text, size=(60, 65), font_size=14):
         """Create an icon for buttons with both shape and text centered"""
         image = Image.new('RGBA', size, (0, 0, 0, 0))
         dc = ImageDraw.Draw(image)
@@ -756,10 +780,10 @@ def open_main_window(icon=None, item=None):
         # Add text below the icon
         try:
             # Try to use a default font
-            font = ImageFont.truetype("arial.ttf", 14)  # Increased font size
+            font = ImageFont.truetype("arial.ttf", font_size)
         except:
             try:
-                font = ImageFont.truetype("Arial.ttf", 14)  # Alternative capitalization
+                font = ImageFont.truetype("Arial.ttf", font_size)  # Alternative capitalization
             except:
                 # Fallback to default font if Arial is not available
                 font = ImageFont.load_default()
@@ -779,15 +803,15 @@ def open_main_window(icon=None, item=None):
     from PIL import ImageFont
 
     # Create button icons with text
-    rec_icon = create_button_icon_with_text('circle', 'red', 'REC')
-    pause_icon = create_button_icon_with_text('pause', 'orange', 'PAUSE')
-    stop_icon = create_button_icon_with_text('square', 'gray', 'STOP')
+    rec_icon = create_button_icon_with_text('circle', 'red', 'REC', font_size=12)
+    pause_icon = create_button_icon_with_text('pause', 'orange', 'PAUSE', font_size=12)
+    stop_icon = create_button_icon_with_text('square', 'gray', 'STOP', font_size=12)
     # For open folder button, keep text since it's a different type of action
 
     # Define button variables with icons
-    rec_button = tk.Button(toolbar_frame, image=rec_icon, width=65, height=70)
-    pause_button = tk.Button(toolbar_frame, image=pause_icon, width=65, height=70)
-    stop_button = tk.Button(toolbar_frame, image=stop_icon, width=65, height=70)
+    rec_button = tk.Button(toolbar_frame, image=rec_icon, width=65, height=65)
+    pause_button = tk.Button(toolbar_frame, image=pause_icon, width=65, height=65)
+    stop_button = tk.Button(toolbar_frame, image=stop_icon, width=65, height=65)
     open_folder_button = tk.Button(toolbar_frame, text="Открыть папку с записями", width=30, height=2)
     
     # Keep references to images to prevent garbage collection
@@ -836,10 +860,14 @@ def open_main_window(icon=None, item=None):
     # Schedule periodic updates of button states
     def schedule_toolbar_update():
         update_toolbar_buttons()
-        win.after(1000, schedule_toolbar_update)  # Update every 1000ms (1 second)
+        # Schedule next update, referencing the function via the window to prevent garbage collection
+        if win.winfo_exists():
+            job_id = win.after(1000, win.schedule_toolbar_update)  # Update every 1000ms (1 second)
+            win._after_jobs.append(job_id)
     
-    schedule_toolbar_update()
-
+    win.schedule_toolbar_update = schedule_toolbar_update
+    win.schedule_toolbar_update()
+    
     port_var = tk.StringVar(value=str(settings.get("port")))
     server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
     lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
