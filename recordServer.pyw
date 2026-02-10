@@ -6,6 +6,7 @@ import re
 import sys
 import platform
 from datetime import datetime
+import tempfile
 from pathlib import Path
 from threading import Thread, Event
 
@@ -1616,6 +1617,8 @@ def start_recording():
     script_dir = get_application_path()
     temp_dir = os.path.join(script_dir, 'rec', 'temp')
     os.makedirs(temp_dir, exist_ok=True)
+    # Используем системную временную директорию
+    temp_dir = tempfile.gettempdir()
 
     timestamp = start_time.strftime('%Y%m%d_%H%M%S')
     mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
@@ -1696,6 +1699,8 @@ def stop_recording():
     day_dir = os.path.join(rec_dir, start_time.strftime('%Y-%m-%d'))
     os.makedirs(day_dir, exist_ok=True)
     temp_dir = os.path.join(rec_dir, 'temp')
+    # Используем системную временную директорию
+    temp_dir = tempfile.gettempdir()
 
     timestamp = start_time.strftime('%Y%m%d_%H%M%S')
     mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
@@ -1755,6 +1760,12 @@ def stop_recording():
     try:
         final_audio.export(mp3_filename, format="mp3", parameters=["-y", "-loglevel", "quiet"])
         print(f"Auto-compression completed: {mp3_filename}")
+        # Удаляем временный WAV-файл после успешной конвертации в MP3
+        try:
+            os.remove(wav_filename)
+            print(f"Removed temporary WAV file: {wav_filename}")
+        except OSError as e:
+            print(f"Error removing temporary WAV file {wav_filename}: {e}")
         # Process the MP3 file
         Thread(target=process_recording_tasks, args=(mp3_filename,), daemon=True).start()
     except Exception as e:
