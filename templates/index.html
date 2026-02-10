@@ -343,10 +343,11 @@
             gap: 15px;
             margin-bottom: 10px;
         }
-        .volume-control label {
-            flex-basis: 220px; /* Fixed width for labels */
+        /* .volume-control label {
+            flex-basis: 220px; 
             flex-shrink: 0;
-        }
+        } */
+
         .volume-control input[type="range"] {
             flex-grow: 1;
             margin: 0;
@@ -607,15 +608,15 @@
                     <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
                 </div>
                 <div class="setting-item">
+                    <label for="micVolume">Громкость микрофона (dB):</label>
                     <div class="volume-control">
-                        <label for="micVolume">Громкость микрофона (dB):</label>
                         <input type="range" id="micVolume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="{{ mic_volume_adjustment }}">
                         <span id="micVolumeValue">{% if mic_volume_adjustment > 0 %}+{% endif %}{{ mic_volume_adjustment }} dB</span>
                     </div>
                 </div>
                 <div class="setting-item">
+                    <label for="sysAudioVolume">Громкость системного аудио (dB):</label>
                     <div class="volume-control">
-                        <label for="sysAudioVolume">Громкость системного аудио (dB):</label>
                         <input type="range" id="sysAudioVolume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="{{ system_audio_volume_adjustment }}">
                         <span id="sysAudioVolumeValue">{% if system_audio_volume_adjustment > 0 %}+{% endif %}{{ system_audio_volume_adjustment }} dB</span>
                     </div>
