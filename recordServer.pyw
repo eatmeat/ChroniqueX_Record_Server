@@ -26,8 +26,8 @@ except ImportError:
 import requests
 from dotenv import load_dotenv
 
-from queue import Queue
-from flask import Flask, jsonify, render_template, request
+import queue
+from flask import Flask, jsonify, render_template, request, send_file, Response
 from pydub import AudioSegment
 from werkzeug.serving import make_server
 
@@ -489,11 +489,10 @@ recording_threads = []
 stop_event = Event()
 frames = {}
 temp_buffers = {}  # Temporary buffers for real-time mixing
-RATE = 44100  # Default, will be updated dynamically
 CHANNELS = 2
 FORMAT = pyaudio.paInt16  # Keep for compatibility, though we're using sounddevice now
 
-audio_queue = Queue()
+audio_queue = queue.Queue()
 recording_thread = None
 
 flask_thread = None
@@ -509,6 +508,7 @@ post_process_stage = ""  # Track the current stage (transcribe, protocol, etc.)
 # --- Server Lifecycle Management ---
 def start_server():
     global flask_thread
+    flask_thread = None
     if settings.get("server_enabled"):
         if flask_thread and flask_thread.is_alive():
             print("Server thread is already running.")
@@ -520,6 +520,7 @@ def start_server():
 
 def stop_server(old_settings):
     global flask_thread
+    flask_thread = None
     if flask_thread and flask_thread.is_alive() and old_settings.get("server_enabled"):
         print("Attempting to shut down old server...")
         try:
@@ -1201,7 +1202,6 @@ def recorder_mic(device_index, stop_event, audio_queue):
     finally:
         print(f"Mic recording process finished for device {device_index}.")
 
-
 def recorder_sys(stop_event, audio_queue):
     """Records system audio using pyaudiowpatch."""
     try:
@@ -1220,35 +1220,37 @@ def recorder_sys(stop_event, audio_queue):
 
             print(f"Recording from: ({default_speakers['index']}){default_speakers['name']}")
 
-            # Динамически определяем параметры для системного звука
             channels = default_speakers["maxInputChannels"]
-            rate = int(default_speakers['defaultSampleRate'])
+
+            def callback(in_data, frame_count, time_info, status):
+                if not is_paused:
+                    # Преобразуем байты в numpy массив и сразу добавляем в очередь
+                    # Это немного быстрее, чем создавать промежуточные переменные
+                    audio_queue.put(np.frombuffer(in_data, dtype=np.int16).reshape(-1, channels))
+                return (in_data, pyaudio.paContinue)
 
             stream = p.open(format=pyaudio.paInt16,
                             channels=channels,
-                            rate=rate,
-                            frames_per_buffer=1024,
+                            rate=RATE,
                             input=True,
                             input_device_index=default_speakers["index"],
-                            input_host_api_specific_stream_info=(
-                                PaWasapiStreamInfo(flags=pyaudio.paWinWasapiThreadPriority)
+                            stream_callback=callback,
+                            # Используем флаг для повышения приоритета потока обработки аудио, если PaWasapiStreamInfo доступен.
+                            # Это помогает обеспечить более стабильный поток данных и избежать "рваной" записи.
+                            input_host_api_specific_stream_info=PaWasapiStreamInfo(flags=pyaudio.paWinWasapiThreadPriority)
                                 if PaWasapiStreamInfo else None
-                            ))
+                            )
 
             stream.start_stream()
-            print(f"System audio recording started with rate={rate} Hz, channels={channels}.")
-            while stream.is_active() and not stop_event.is_set():
-                in_data = stream.read(1024, exception_on_overflow=False)
-                if not is_paused:
-                    audio_data = np.frombuffer(in_data, dtype=np.int16)
-                    audio_queue.put(audio_data)
+            print("System audio recording started.")
+            while not stop_event.is_set():
+                time.sleep(0.001) # Prevent busy-waiting and allow other threads to run
             stream.stop_stream()
             stream.close()
     except Exception as e:
         print(f"Error during system audio recording: {e}", file=sys.stderr)
     finally:
         print("System audio recording process finished.")
-
 
 @app.route('/')
 def index():
@@ -1380,13 +1382,7 @@ def index():
     # Sort date groups by date (newest first)
     date_groups.sort(key=lambda x: x['date'], reverse=True)
     
-    # Pass current settings to the template
-    return render_template('index.html', 
-                           date_groups=date_groups,
-                           use_custom_prompt=settings.get("use_custom_prompt", False),
-                           include_html_files=settings.get("include_html_files", True),
-                           prompt_addition=settings.get("prompt_addition", "")
-                           )
+    return render_template('index.html', date_groups=date_groups)
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')
@@ -1451,25 +1447,6 @@ def shutdown():
     Thread(target=do_shutdown).start()
     return 'Server is shutting down...'
 
-@app.route('/save_web_settings', methods=['POST'])
-def save_web_settings():
-    try:
-        data = request.json
-        
-        # Update only the relevant settings from the web UI
-        current_settings = settings.copy()
-        current_settings['use_custom_prompt'] = data.get('use_custom_prompt', False)
-        current_settings['include_html_files'] = data.get('include_html_files', True)
-        current_settings['prompt_addition'] = data.get('prompt_addition', '')
-
-        save_settings(current_settings)
-        
-        return jsonify({"status": "success", "message": "Настройки сохранены."})
-
-    except Exception as e:
-        print(f"Error saving settings from web: {e}")
-        return jsonify({"status": "error", "message": "Ошибка при сохранении настроек."}), 500
-
 @app.route('/rec', methods=['GET'])
 def rec():
     global is_recording, is_paused
@@ -1478,11 +1455,11 @@ def rec():
     elif is_recording and is_paused:
         # Resume recording from pause
         resume_recording()
-        return jsonify({"status": "rec", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))})
+        return jsonify({"status": "rec", "message": "Recording resumed.", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))})
     else:
         # Start new recording
-        start_new_recording()
-        return jsonify({"status": "rec", "time": 0})
+        start_recording()
+        return jsonify({"status": "rec", "message": "Recording started.", "time": 0})
 
 @app.route('/stop', methods=['GET'])
 def stop():
@@ -1517,6 +1494,9 @@ def resume():
 
 @app.route('/status', methods=['GET'])
 def status():
+    # Update device list more frequently during recording
+    # check_and_update_devices_if_needed() # Disabled for simplicity
+    
     if is_recording:
         if is_paused:
             recording_status = {"status": "paused", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))}
@@ -1546,6 +1526,7 @@ def status():
 
 # --- Основная часть ---
 def run_flask():
+    flask_thread = None
     global http_server
     host = '0.0.0.0' if settings.get("lan_accessible") else '127.0.0.1'
     port = settings.get("port", DEFAULT_SETTINGS["port"])
@@ -1556,6 +1537,7 @@ def run_flask():
         print(f"Failed to start Flask server: {e}")
 
 def exit_action(icon, item):
+    flask_thread = None
     if flask_thread and flask_thread.is_alive() and settings.get("server_enabled"):
         print("Attempting to shut down server on exit...")
         try:
@@ -1613,29 +1595,26 @@ def update_icon(icon):
 
 def start_recording():
     """Starts a new recording session"""
-    global is_recording, start_time, stop_event, is_paused, total_pause_duration, recording_threads, RATE, CHANNELS
+    global is_recording, start_time, stop_event, is_paused, total_pause_duration, recording_threads, RATE
 
     # 1. Find devices
+    try:
+        with pyaudio.PyAudio() as p:
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+            RATE = int(default_speakers['defaultSampleRate'])
+            print(f"System audio sample rate detected: {RATE} Hz. Using this for all recordings.")
+    except Exception as e:
+        RATE = 44100 # Fallback to default
+        print(f"Could not detect system sample rate, falling back to {RATE} Hz. Error: {e}")
+
     mic_device_index = None
     try:
         mic_device_index = sd.default.device[0]
         print(f"Default microphone found: {sd.query_devices(mic_device_index)['name']}")
     except (ValueError, sd.PortAudioError) as e:
         print(f"Could not find a default microphone: {e}")
-        mic_device_index = None # Ensure it's None if not found
 
-    # Dynamically determine the best sample rate from the system's output device
-    try:
-        with pyaudio.PyAudio() as p:
-            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
-            RATE = int(default_speakers['defaultSampleRate'])
-            CHANNELS = default_speakers['maxInputChannels']
-            print(f"System audio sample rate detected: {RATE} Hz. Using this for all recordings.")
-    except Exception as e:
-        RATE = 44100 # Fallback to default
-        CHANNELS = 2
-        print(f"Could not detect system sample rate, falling back to {RATE} Hz, {CHANNELS} channels. Error: {e}")
 
     # System audio is handled by pyaudiowpatch, no need to find device index here
     if mic_device_index is None and platform.system() != "Windows":
@@ -1650,10 +1629,28 @@ def start_recording():
     start_time = datetime.now()
     stop_event.clear()
 
-    # 3. Start a single recording thread that handles everything.
-    main_record_thread = Thread(target=record_and_mix_streams, args=(stop_event, mic_device_index))
-    recording_threads = [main_record_thread]
-    main_record_thread.start()
+    # 3. Create temporary file paths
+    script_dir = get_application_path()
+    temp_dir = os.path.join(script_dir, 'rec', 'temp')
+    os.makedirs(temp_dir, exist_ok=True)
+
+    timestamp = start_time.strftime('%Y%m%d_%H%M%S')
+    mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
+    sys_temp_file = os.path.join(temp_dir, f"{timestamp}_sys.wav")
+
+    # 4. Start recording threads
+    recording_threads = []
+
+    if mic_device_index is not None:
+        mic_thread = Thread(target=recorder_mic_to_file, args=(mic_device_index, stop_event, mic_temp_file))
+        recording_threads.append(mic_thread)
+        mic_thread.start()
+
+    if platform.system() == "Windows":
+        sys_thread = Thread(target=recorder_sys_to_file, args=(stop_event, sys_temp_file))
+        recording_threads.append(sys_thread)
+        sys_thread.start()
+
 
 def resume_recording():
     """Resumes a paused recording session"""
@@ -1718,13 +1715,11 @@ def stop_recording():
     timestamp = start_time.strftime('%Y%m%d_%H%M%S')
     mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
     sys_temp_file = os.path.join(temp_dir, f"{timestamp}_sys.wav")
-    mixed_temp_file = os.path.join(temp_dir, f"{timestamp}_mixed.wav")
 
     final_audio = None
     mic_audio = None
     sys_audio = None
 
-    # Load individual audio streams
     if os.path.exists(mic_temp_file) and os.path.getsize(mic_temp_file) > 44:
         mic_audio = AudioSegment.from_wav(mic_temp_file)
         mic_gain = settings.get("mic_volume_adjustment", 0)
@@ -1739,12 +1734,18 @@ def stop_recording():
             sys_audio += sys_gain
             print(f"Applied gain of {sys_gain:.2f} dB to the system audio.")
 
-    # Mix the streams
     if mic_audio and sys_audio:
-        print("Mixing microphone and system audio.")
-        # Ensure both are stereo for mixing
-        mic_audio = mic_audio.set_channels(2)
-        sys_audio = sys_audio.set_channels(2)
+        # Ensure both segments have the same frame rate before overlaying
+        if mic_audio.frame_rate != sys_audio.frame_rate:
+             # Resample mic audio to match system audio's higher sample rate
+            print(f"Resampling mic audio from {mic_audio.frame_rate} to {sys_audio.frame_rate}")
+            mic_audio = mic_audio.set_frame_rate(sys_audio.frame_rate)
+
+        # Ensure mic audio is stereo to match system audio
+        if mic_audio.channels == 1:
+            mic_audio = mic_audio.set_channels(2)
+
+        print("Mixing microphone and system audio...")
         final_audio = mic_audio.overlay(sys_audio)
     elif mic_audio:
         print("Only microphone audio was recorded.")
@@ -1761,12 +1762,8 @@ def stop_recording():
     duration = (end_time - start_time)
     minutes, seconds = divmod(int(duration.total_seconds()), 60)
     wav_filename = os.path.join(day_dir, f"{start_time.strftime('%H.%M')}_{minutes:02d}m{seconds:02d}s.wav")
-    final_audio.set_channels(2).export(wav_filename, format='wav')
+    final_audio.export(wav_filename, format='wav')
     print(f"Final audio saved to: {wav_filename}")
-
-    # Move temp files to final destination instead of deleting
-    if os.path.exists(mic_temp_file): os.rename(mic_temp_file, os.path.join(day_dir, f"{timestamp}_mic.wav"))
-    if os.path.exists(sys_temp_file): os.rename(sys_temp_file, os.path.join(day_dir, f"{timestamp}_sys.wav"))
 
     # --- Post-processing ---
     mp3_filename = wav_filename.replace('.wav', '.mp3')
@@ -1779,6 +1776,11 @@ def stop_recording():
         print(f"Error during auto-compression to MP3: {e}")
         # If compression fails, process the WAV file as backup
         Thread(target=process_recording_tasks, args=(wav_filename,), daemon=True).start()
+
+    # Clean up temporary files
+    if os.path.exists(mic_temp_file): os.remove(mic_temp_file)
+    if os.path.exists(sys_temp_file): os.remove(sys_temp_file)
+
 
 
 def stop_recording_from_tray(icon, item):
@@ -1848,110 +1850,99 @@ def resume_recording_from_tray(icon, item):
 
 # The safe_open_stream function is no longer needed with the new sounddevice implementation
 
-def record_and_mix_streams(stop_event, mic_device_index):
-    """
-    Opens microphone and system audio streams, reads data in a loop,
-    mixes it in real-time, and writes to WAV files.
-    This function runs in a single thread to avoid queueing and synchronization issues.
-    """
-    global start_time, RATE, CHANNELS
-    block_size = 1024
-    mic_stream = None
-    sys_stream = None
-    p = None
-    sys_channels = 2  # Default to stereo, will be updated for Windows
-
-    script_dir = get_application_path()
-    temp_dir = os.path.join(script_dir, 'rec', 'temp')
-    os.makedirs(temp_dir, exist_ok=True)
-
-    timestamp = start_time.strftime('%Y%m%d_%H%M%S')
-    mic_temp_file = os.path.join(temp_dir, f"{timestamp}_mic.wav")
-    sys_temp_file = os.path.join(temp_dir, f"{timestamp}_sys.wav")
-
+def recorder_mic_to_file(device_index, stop_event, output_filename):
+    """Records audio from microphone using sounddevice and writes to a file."""
     try:
-        # --- Open output files ---
-        with wave.open(mic_temp_file, 'wb') as wf_mic, \
-             wave.open(sys_temp_file, 'wb') as wf_sys:
+        q = queue.Queue()
 
-            wf_mic.setnchannels(1); wf_mic.setsampwidth(2); wf_mic.setframerate(RATE)
-            # System audio channels will be set dynamically
+        def callback(indata, frames, time, status):
+            if status:
+                print(status, file=sys.stderr)
+            q.put(indata.copy())
 
-            # --- Open input streams ---
-            if mic_device_index is not None:
-                mic_stream = sd.InputStream(samplerate=RATE, device=mic_device_index, channels=1, dtype='int16', blocksize=block_size)
-                mic_stream.start()
-                print("Microphone stream started.")
+        with sd.InputStream(samplerate=RATE, device=device_index, channels=1, dtype='int16', callback=callback) as stream, \
+             wave.open(output_filename, 'wb') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2) # 16-bit
+            wf.setframerate(stream.samplerate)
+            print(f"Recording started for mic device {device_index} to {output_filename}.")
 
-            if platform.system() == "Windows":
-                p = pyaudio.PyAudio()
-                wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-                # 1. Get the default output device to determine the number of channels reliably.
-                default_output_device = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
-                sys_channels = default_output_device.get('maxInputChannels')
-                if not sys_channels or sys_channels < 1:
-                    sys_channels = 2 # Fallback to stereo
-                    print("Warning: Could not determine system audio channels, falling back to 2.")
-                wf_sys.setnchannels(sys_channels); wf_sys.setsampwidth(2); wf_sys.setframerate(RATE)
-
-                # 2. Find the corresponding loopback device for recording.
-                loopback_device = None
-                if not default_output_device["isLoopbackDevice"]:
-                    for loopback in p.get_loopback_device_info_generator():
-                        if default_output_device["name"] in loopback["name"]:
-                            loopback_device = loopback
-                            break
-                if not loopback_device:
-                    raise Exception("Loopback device not found.")
-
-                sys_stream = p.open(format=pyaudio.paInt16, channels=sys_channels, rate=RATE, input=True,
-                                    frames_per_buffer=block_size, input_device_index=loopback_device["index"])
-                sys_stream.start_stream()
-                print(f"System audio stream started with {sys_channels} channels.")
-
-            # --- Main recording loop ---
-            print("Starting recording loop.")
             while not stop_event.is_set():
-                mic_chunk = np.zeros((block_size, 1), dtype=np.int16)
-                sys_chunk = np.zeros((block_size, sys_channels), dtype=np.int16)
-
                 if is_paused:
-                    time.sleep(0.1)
-                    # Write silence to maintain timing
-                    if mic_stream:
-                        wf_mic.writeframes(mic_chunk.tobytes())
-                    if sys_stream:
-                        wf_sys.writeframes(sys_chunk.tobytes())
+                    # Write silence while paused to keep sync
+                    silence = np.zeros((stream.blocksize, 1), dtype=np.int16)
+                    wf.writeframes(silence.tobytes())
+                    time.sleep(stream.blocksize / stream.samplerate)
                 else:
-                    # Read from streams
-                    if mic_stream:
-                        data, overflowed = mic_stream.read(block_size)
-                        if overflowed: print("Warning: Microphone input overflowed", file=sys.stderr)
-                        mic_chunk = data
-
-                    if sys_stream:
-                        data = sys_stream.read(block_size, exception_on_overflow=False)
-                        sys_chunk = np.frombuffer(data, dtype=np.int16).reshape(-1, sys_channels)
-
-                # Write individual streams
-                wf_mic.writeframes(mic_chunk.tobytes())
-                wf_sys.writeframes(sys_chunk.tobytes())
-
+                    try:
+                        data = q.get(timeout=0.1)
+                        wf.writeframes(data)
+                    except queue.Empty:
+                        pass
     except Exception as e:
-        print(f"Error in recording/mixing thread: {e}", file=sys.stderr)
+        print(f"Error during mic recording: {e}", file=sys.stderr)
     finally:
-        # --- Cleanup ---
-        print("Stopping streams and closing files.")
-        if mic_stream: mic_stream.stop(); mic_stream.close()
-        if sys_stream: sys_stream.stop_stream(); sys_stream.close()
-        if p: p.terminate()
+        print(f"Mic recording process finished for device {device_index}.")
 
-        # Ensure temp files are not empty before moving
-        if not os.path.exists(mic_temp_file) or os.path.getsize(mic_temp_file) <= 44:
-            if os.path.exists(mic_temp_file): os.remove(mic_temp_file)
-        if not os.path.exists(sys_temp_file) or os.path.getsize(sys_temp_file) <= 44:
-            if os.path.exists(sys_temp_file): os.remove(sys_temp_file)
-        print("Recording process finished.")
+def recorder_sys_to_file(stop_event, output_filename):
+    """Records system audio using pyaudiowpatch and writes to a file."""
+    try:
+        with pyaudio.PyAudio() as p:
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+
+            if not default_speakers["isLoopbackDevice"]:
+                for loopback in p.get_loopback_device_info_generator():
+                    if default_speakers["name"] in loopback["name"]:
+                        default_speakers = loopback
+                        break
+                else:
+                    print("Не удалось найти loopback-устройство для системного звука.", file=sys.stderr)
+                    return
+
+            print(f"Recording from: ({default_speakers['index']}){default_speakers['name']} to {output_filename}")
+
+            channels = default_speakers["maxInputChannels"]
+            rate = int(default_speakers['defaultSampleRate'])
+            
+            with wave.open(output_filename, 'wb') as wf:
+                wf.setnchannels(channels)
+                wf.setsampwidth(p.get_sample_size(pyaudio.paInt16))
+                wf.setframerate(rate)
+
+                q = queue.Queue()
+
+                def callback(in_data, frame_count, time_info, status):
+                    q.put(in_data)
+                    return (None, pyaudio.paContinue)
+
+                stream = p.open(format=pyaudio.paInt16, channels=channels, rate=rate, input=True,
+                                input_device_index=default_speakers["index"], stream_callback=callback)
+
+                stream.start_stream()
+                print("System audio recording started.")
+                while not stop_event.is_set():
+                    if is_paused:
+                        # Write silence while paused
+                        chunk_size = int(rate * 0.1) # 100ms of silence
+                        silence = b'\0' * (chunk_size * channels * 2)
+                        wf.writeframes(silence)
+                        time.sleep(0.1)
+                    else:
+                        try:
+                            data = q.get(timeout=0.1)
+                            wf.writeframes(data)
+                        except queue.Empty:
+                            # Если в очереди нет данных (например, системный звук не воспроизводится),
+                            # записываем тишину, чтобы сохранить синхронизацию с другими потоками.
+                            silence_chunk = b'\0' * int(rate * 0.1 * channels * 2) # 100ms of silence
+                            wf.writeframes(silence_chunk)
+                stream.stop_stream()
+                stream.close()
+    except Exception as e:
+        print(f"Error during system audio recording: {e}", file=sys.stderr)
+    finally:
+        print("System audio recording process finished.")
 
 
 def open_rec_folder(icon, item):

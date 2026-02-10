@@ -505,6 +505,39 @@
             100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
         }
 
+        /* Custom Context Menu */
+        .custom-context-menu {
+            position: absolute;
+            z-index: 1000;
+            display: none;
+            background-color: #fff;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            padding: 5px 0;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .context-menu-item {
+            padding: 8px 15px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+        }
+
+        .context-menu-item:hover {
+            background-color: #f0f2f5;
+        }
+
+        .context-menu-separator {
+            height: 1px;
+            background-color: #eee;
+            margin: 4px 0;
+        }
+
+
+
+
     </style>
 </head>
 <body>
@@ -618,6 +651,20 @@
         </div>
     </div>
 
+    <!-- Custom Context Menu for Textarea -->
+    <div id="textareaContextMenu" class="custom-context-menu">
+        <div class="context-menu-item" data-action="cut">Вырезать</div>
+        <div class="context-menu-item" data-action="copy">Копировать</div>
+        <div class="context-menu-item" data-action="paste">Вставить</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="selectAll">Выделить всё</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="comment">Закомментировать</div>
+        <div class="context-menu-item" data-action="uncomment">Раскомментировать</div>
+        <div class="context-menu-separator"></div>
+        <div class="context-menu-item" data-action="clear">Очистить</div>
+    </div>
+
     <!-- Back to Top Button -->
     <button onclick="topFunction()" id="backToTop" title="Go to top" style="
         display: none;
@@ -648,6 +695,8 @@
         const includeHtmlFilesCheckbox = document.getElementById('includeHtmlFiles');
         const promptAdditionTextarea = document.getElementById('promptAddition');
         const saveStatusDiv = document.getElementById('saveStatus');
+        const contextMenu = document.getElementById('textareaContextMenu');
+
 
         let statusInterval;
 
@@ -993,6 +1042,122 @@
                 alert(`Ошибка при запросе сжатия в MP3: ${error.message}`);
             }
         }
+
+        // --- Textarea Context Menu Logic ---
+
+        promptAdditionTextarea.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            contextMenu.style.top = `${e.pageY}px`;
+            contextMenu.style.left = `${e.pageX}px`;
+            contextMenu.style.display = 'block';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!contextMenu.contains(e.target)) {
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        contextMenu.addEventListener('click', (e) => {
+            const action = e.target.dataset.action;
+            if (action) {
+                executeContextMenuAction(action);
+                contextMenu.style.display = 'none';
+            }
+        });
+
+        function executeContextMenuAction(action) {
+            const textarea = promptAdditionTextarea;
+            const start = textarea.selectionStart;
+            const end = textarea.selectionEnd;
+
+            switch (action) {
+                case 'cut':
+                    document.execCommand('cut');
+                    break;
+                case 'copy':
+                    document.execCommand('copy');
+                    break;
+                case 'paste':
+                    navigator.clipboard.readText().then(text => {
+                        const currentText = textarea.value;
+                        const newText = currentText.substring(0, start) + text + currentText.substring(end);
+                        textarea.value = newText;
+                        textarea.selectionStart = textarea.selectionEnd = start + text.length;
+                    }).catch(err => console.error('Failed to read clipboard contents: ', err));
+                    break;
+                case 'selectAll':
+                    textarea.select();
+                    break;
+                case 'comment':
+                case 'uncomment':
+                    modifyLines(textarea, action);
+                    break;
+                case 'clear':
+                    textarea.value = '';
+                    break;
+            }
+        }
+
+        function modifyLines(textarea, action) {
+            const text = textarea.value;
+            let selStart = textarea.selectionStart;
+            let selEnd = textarea.selectionEnd;
+
+            // Find the start of the first selected line
+            let lineStart = text.lastIndexOf('\n', selStart - 1) + 1;
+
+            // Find the end of the last selected line
+            let lineEnd = text.indexOf('\n', selEnd);
+            if (lineEnd === -1) {
+                lineEnd = text.length;
+            }
+            // If selection ends exactly at a newline, don't include the next line
+            if (selEnd > 0 && text[selEnd - 1] === '\n') {
+                lineEnd = selEnd -1;
+            }
+
+            const selectedLinesText = text.substring(lineStart, lineEnd);
+            const lines = selectedLinesText.split('\n');
+            let modifiedLinesText = '';
+            let lengthChange = 0;
+
+            if (action === 'comment') {
+                modifiedLinesText = lines.map(line => {
+                    if (line.trim() !== '') { // Don't comment empty lines
+                        lengthChange += 2;
+                        return '//' + line;
+                    }
+                    return line;
+                }).join('\n');
+            } else { // uncomment
+                modifiedLinesText = lines.map(line => {
+                    if (line.trim().startsWith('//')) {
+                        lengthChange -= 2;
+                        return line.replace('//', '');
+                    }
+                    return line;
+                }).join('\n');
+            }
+
+            // Replace the original lines with the modified ones
+            const newText = text.substring(0, lineStart) + modifiedLinesText + text.substring(lineEnd);
+            textarea.value = newText;
+
+            // Restore selection
+            textarea.selectionStart = selStart;
+            textarea.selectionEnd = selEnd + lengthChange;
+            textarea.focus();
+        }
+
+        // Add keyboard shortcuts for comment/uncomment (Ctrl + /)
+        promptAdditionTextarea.addEventListener('keydown', function(e) {
+            // Ctrl + / for comment/uncomment
+            if (e.ctrlKey && e.key === '/') {
+                e.preventDefault();
+                modifyLines(this, 'comment'); // Or toggle logic could be added here
+            }
+        });
 
         // Initial status check
         updateStatus();
