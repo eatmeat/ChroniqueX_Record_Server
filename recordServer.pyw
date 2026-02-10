@@ -1585,6 +1585,19 @@ def save_web_settings():
         print(f"Error saving web settings: {e}")
         return jsonify({"status": "error", "message": f"Ошибка при сохранении настроек: {e}"}), 500
 
+@app.route('/get_web_settings', methods=['GET'])
+def get_web_settings():
+    """Возвращает текущие настройки для веб-интерфейса в формате JSON."""
+    web_settings = {
+        "use_custom_prompt": settings.get("use_custom_prompt", False),
+        "include_html_files": settings.get("include_html_files", True),
+        "prompt_addition": settings.get("prompt_addition", ""),
+        "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
+        "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0)
+    }
+    return jsonify(web_settings)
+
+
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
     def do_shutdown():

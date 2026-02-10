@@ -369,6 +369,19 @@
             font-size: 16px;
             transition: background-color 0.3s;
         }
+        
+        #reloadSettingsButton {
+            background-color: #6c757d; /* Gray */
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            margin-left: 10px;
+        }
+
 
         #saveSettingsButton:hover {
             background-color: #2980b9;
@@ -623,6 +636,7 @@
                 </div>
                 <div class="settings-actions">
                     <button id="saveSettingsButton">Применить настройки</button> 
+                    <button id="reloadSettingsButton">Перечитать настройки</button>
                     <span id="unsavedChangesIndicator" style="display: none; margin-left: 10px; color: #f39c12; font-style: italic;">* есть несохраненные изменения</span>
                     <div id="saveStatus"></div> 
                 </div>
@@ -750,6 +764,7 @@
         const sysAudioVolumeSlider = document.getElementById('sysAudioVolume');
         const sysAudioVolumeValue = document.getElementById('sysAudioVolumeValue');
         const contextMenu = document.getElementById('textareaContextMenu');
+        const reloadSettingsButton = document.getElementById('reloadSettingsButton');
         const unsavedChangesIndicator = document.getElementById('unsavedChangesIndicator');
 
 
@@ -933,6 +948,36 @@
             } catch (error) {
                 console.error('Ошибка сохранения настроек:', error);
                 alert('Произошла ошибка при сохранении настроек.');
+            }
+        });
+
+        reloadSettingsButton.addEventListener('click', async () => {
+            if (unsavedChangesIndicator.style.display !== 'none') {
+                if (!confirm('Есть несохраненные изменения. Вы уверены, что хотите отменить их и перечитать настройки с сервера?')) {
+                    return;
+                }
+            }
+            try {
+                const response = await fetch('/get_web_settings');
+                const newSettings = await response.json();
+
+                // Update UI elements
+                useCustomPromptCheckbox.checked = newSettings.use_custom_prompt;
+                includeHtmlFilesCheckbox.checked = newSettings.include_html_files;
+                promptAdditionTextarea.value = newSettings.prompt_addition;
+                micVolumeSlider.value = newSettings.mic_volume_adjustment;
+                sysAudioVolumeSlider.value = newSettings.system_audio_volume_adjustment;
+
+                // Manually trigger input event to update slider labels
+                micVolumeSlider.dispatchEvent(new Event('input'));
+                sysAudioVolumeSlider.dispatchEvent(new Event('input'));
+
+                // Hide unsaved changes indicator
+                unsavedChangesIndicator.style.display = 'none';
+
+            } catch (error) {
+                console.error('Ошибка при перезагрузке настроек:', error);
+                alert('Произошла ошибка при перезагрузке настроек.');
             }
         });
 
@@ -1249,6 +1294,9 @@
             textarea.selectionStart = selStart;
             textarea.selectionEnd = selEnd + lengthChange;
             textarea.focus();
+
+            // Trigger unsaved changes indicator
+            showUnsavedChanges();
         }
 
         // Add keyboard shortcuts for comment/uncomment (Ctrl + /)
