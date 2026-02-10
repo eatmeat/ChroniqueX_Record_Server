@@ -976,26 +976,22 @@ def open_main_window(icon=None, item=None):
     def update_mic_label(value):
         val = float(value)
         mic_volume_label_var.set(f"Громкость микрофона ({'+' if val > 0 else ''}{int(val)} dB):")
-
-    mic_volume_frame = tk.Frame(volume_frame)
-    mic_volume_frame.pack(fill="x")
+    
     mic_volume_label_var = tk.StringVar()
-    tk.Label(mic_volume_frame, textvariable=mic_volume_label_var).pack(side="left")
-    mic_volume_scale = tk.Scale(mic_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
-    mic_volume_scale.pack(side="right", fill="x", expand=True)
+    tk.Label(volume_frame, textvariable=mic_volume_label_var).pack(anchor="w")
+    mic_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
+    mic_volume_scale.pack(fill="x", expand=True, pady=(0, 5))
     update_mic_label(mic_volume_var.get()) # Initial update
 
     # System audio volume control
     def update_sys_label(value):
         val = float(value)
         sys_audio_label_var.set(f"Громкость системного аудио ({'+' if val > 0 else ''}{int(val)} dB):")
-
-    sys_audio_volume_frame = tk.Frame(volume_frame)
-    sys_audio_volume_frame.pack(fill="x")
+    
     sys_audio_label_var = tk.StringVar()
-    tk.Label(sys_audio_volume_frame, textvariable=sys_audio_label_var).pack(side="left")
-    sys_audio_volume_scale = tk.Scale(sys_audio_volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
-    sys_audio_volume_scale.pack(side="right", fill="x", expand=True)
+    tk.Label(volume_frame, textvariable=sys_audio_label_var).pack(anchor="w")
+    sys_audio_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
+    sys_audio_volume_scale.pack(fill="x", expand=True)
     update_sys_label(sys_audio_volume_var.get()) # Initial update
     
     # Listen for changes
