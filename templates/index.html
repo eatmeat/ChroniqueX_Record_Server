@@ -556,6 +556,11 @@
             margin: 4px 0;
         }
 
+        .settings-container .group-content {
+            padding-top: 15px;
+        }
+
+
 
 
 
@@ -581,37 +586,44 @@
             </div>
         </div>
 
-        <div class="settings-container">
-            <h2>Настройки</h2>
-            <div class="setting-item">
-                <div class="checkbox-group">
-                    <input type="checkbox" id="useCustomPrompt" name="use_custom_prompt" {% if use_custom_prompt %}checked{% endif %}>
-                    <label for="useCustomPrompt">Использовать дополнение к промпту</label>
-                    <input type="checkbox" id="includeHtmlFiles" name="include_html_files" {% if include_html_files %}checked{% endif %}>
-                    <label for="includeHtmlFiles">Добавлять HTML файлы в контекст</label>
+        <div class="settings-container date-group">
+            <div class="group-header" onclick="toggleGroup('settings')">
+                <h3>
+                    <span class="expand-icon" id="icon-settings">▶</span>
+                    Настройки
+                </h3>
+            </div>
+            <div class="group-content" id="content-settings" style="display: none;">
+                <div class="setting-item">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="useCustomPrompt" name="use_custom_prompt" {% if use_custom_prompt %}checked{% endif %}>
+                        <label for="useCustomPrompt">Использовать дополнение к промпту</label>
+                        <input type="checkbox" id="includeHtmlFiles" name="include_html_files" {% if include_html_files %}checked{% endif %}>
+                        <label for="includeHtmlFiles">Добавлять HTML файлы в контекст</label>
+                    </div>
                 </div>
-            </div>
-            <div class="setting-item">
-                <label for="promptAddition">Дополнение к промпту:</label>
-                <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
-            </div>
-            <div class="setting-item">
-                <div class="volume-control">
-                    <label for="micVolume">Громкость микрофона (dB):</label>
-                    <input type="range" id="micVolume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="{{ mic_volume_adjustment }}">
-                    <span id="micVolumeValue">{% if mic_volume_adjustment > 0 %}+{% endif %}{{ mic_volume_adjustment }} dB</span>
+                <div class="setting-item">
+                    <label for="promptAddition">Дополнение к промпту:</label>
+                    <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
                 </div>
-            </div>
-            <div class="setting-item">
-                <div class="volume-control">
-                    <label for="sysAudioVolume">Громкость системного аудио (dB):</label>
-                    <input type="range" id="sysAudioVolume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="{{ system_audio_volume_adjustment }}">
-                    <span id="sysAudioVolumeValue">{% if system_audio_volume_adjustment > 0 %}+{% endif %}{{ system_audio_volume_adjustment }} dB</span>
+                <div class="setting-item">
+                    <div class="volume-control">
+                        <label for="micVolume">Громкость микрофона (dB):</label>
+                        <input type="range" id="micVolume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="{{ mic_volume_adjustment }}">
+                        <span id="micVolumeValue">{% if mic_volume_adjustment > 0 %}+{% endif %}{{ mic_volume_adjustment }} dB</span>
+                    </div>
                 </div>
-            </div>
-            <div class="settings-actions">
-                <button id="saveSettingsButton">Применить настройки</button>
-                <div id="saveStatus"></div>
+                <div class="setting-item">
+                    <div class="volume-control">
+                        <label for="sysAudioVolume">Громкость системного аудио (dB):</label>
+                        <input type="range" id="sysAudioVolume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="{{ system_audio_volume_adjustment }}">
+                        <span id="sysAudioVolumeValue">{% if system_audio_volume_adjustment > 0 %}+{% endif %}{{ system_audio_volume_adjustment }} dB</span>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button id="saveSettingsButton">Применить настройки</button>
+                    <div id="saveStatus"></div>
+                </div>
             </div>
         </div>
 
