@@ -689,7 +689,7 @@
         const statusDiv = document.getElementById('status');
         const statusLight = document.getElementById('status-light');
         const timerDiv = document.getElementById('timer');
-        const postPrcessDiv = document.getElementById('post-process-container');
+        const postProcessDiv = document.getElementById('post-process-container');
         const saveSettingsButton = document.getElementById('saveSettingsButton');
         const useCustomPromptCheckbox = document.getElementById('useCustomPrompt');
         const includeHtmlFilesCheckbox = document.getElementById('includeHtmlFiles');
@@ -790,9 +790,10 @@
             try {
                 const response = await fetch('/rec');
                 const data = await response.json();
-                if (data.status === 'rec' || data.status === 'paused') {
-                    await updateStatus();
-                    setTimeout(() => refreshRecordings(), 1000); // Refresh recordings after a delay
+                if (data.status === 'ok') {
+                    // Добавляем небольшую задержку, чтобы сервер успел обновить состояние
+                    setTimeout(() => updateStatus(), 200);
+                    // Не обновляем список записей сразу, ждем остановки
                 } else {
                     alert(`Ошибка: ${data.error}`);
                 }
@@ -806,9 +807,10 @@
             try {
                 const response = await fetch('/pause');
                 const data = await response.json();
-                if (data.status === 'paused') {
-                    await updateStatus();
-                    setTimeout(() => refreshRecordings(), 1000); // Refresh recordings after a delay
+                if (data.status === 'ok') {
+                    // Добавляем небольшую задержку, чтобы сервер успел обновить состояние
+                    setTimeout(() => updateStatus(), 200);
+                    // Не обновляем список записей
                 } else {
                     alert(`Ошибка: ${data.error}`);
                 }
@@ -822,9 +824,10 @@
             try {
                 const response = await fetch('/stop');
                 const data = await response.json();
-                if (data.status === 'stop') {
-                   await updateStatus();
-                   setTimeout(() => refreshRecordings(), 1000); // Refresh recordings after a delay
+                if (data.status === 'ok') {
+                   // Добавляем небольшую задержку, чтобы сервер успел обновить состояние
+                   setTimeout(() => updateStatus(), 200);
+                   setTimeout(() => refreshRecordings(), 2000); // Обновляем список записей с задержкой, чтобы файл успел появиться
                 } else {
                     alert(`Ошибка: ${data.error}`);
                 }

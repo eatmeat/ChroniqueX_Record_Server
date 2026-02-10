@@ -1450,47 +1450,30 @@ def shutdown():
 @app.route('/rec', methods=['GET'])
 def rec():
     global is_recording, is_paused
-    if is_recording and not is_paused:
-        return jsonify({"status": "error", "error": "Запись уже идет."})
-    elif is_recording and is_paused:
-        # Resume recording from pause
-        resume_recording()
-        return jsonify({"status": "rec", "message": "Recording resumed.", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))})
-    else:
-        # Start new recording
-        start_recording()
-        return jsonify({"status": "rec", "message": "Recording started.", "time": 0})
+    # Запускаем start_recording_from_tray в отдельном потоке, чтобы немедленно вернуть ответ веб-интерфейсу.
+    # Это предотвращает ошибку "Ошибка начала записи" в браузере.
+    Thread(target=start_recording_from_tray, args=(None, None), daemon=True).start()
+    return jsonify({"status": "ok", "message": "Recording command sent."})
 
 @app.route('/stop', methods=['GET'])
 def stop():
-    global is_recording
-    if not is_recording: return jsonify({"status": "error", "error": "Запись не идет."})
-    
-    stop_recording()
-    
-    return jsonify({"status": "stop", "time": time.strftime('%H:%M:%S', time.gmtime((datetime.now() - start_time).total_seconds()))})
+    # Используем ту же функцию, что и для трея
+    Thread(target=stop_recording_from_tray, args=(None, None), daemon=True).start()
+    return jsonify({"status": "ok", "message": "Stop command sent."})
 
 
 @app.route('/pause', methods=['GET'])
 def pause():
-    global is_recording, is_paused
-    if not is_recording: return jsonify({"status": "error", "error": "Запись не идет."})
-    if is_paused: return jsonify({"status": "error", "error": "Запись уже на паузе."})
-
-    pause_recording()
-
-    return jsonify({"status": "paused", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))})
+    # Используем ту же функцию, что и для трея
+    Thread(target=pause_recording_from_tray, args=(None, None), daemon=True).start()
+    return jsonify({"status": "ok", "message": "Pause command sent."})
 
 
 @app.route('/resume', methods=['GET'])
 def resume():
-    global is_recording, is_paused
-    if not is_recording: return jsonify({"status": "error", "error": "Запись не идет."})
-    if not is_paused: return jsonify({"status": "error", "error": "Запись не на паузе."})
-
-    resume_recording()
-
-    return jsonify({"status": "rec", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))})
+    # Используем ту же функцию, что и для трея
+    Thread(target=resume_recording_from_tray, args=(None, None), daemon=True).start()
+    return jsonify({"status": "ok", "message": "Resume command sent."})
 
 @app.route('/status', methods=['GET'])
 def status():
@@ -1667,29 +1650,31 @@ def resume_recording():
 
 
 def start_recording_from_tray(icon, item):
-    global is_recording, is_paused, pause_start_time, total_pause_duration
-    if is_recording and not is_paused:
-        print("Запись уже идет.")
-        return
-    elif is_recording and is_paused:
-        # Resume recording from pause
-        resume_recording()
-
-        # Update tray menu to reflect new state
-        update_tray_menu()
-
-        print("Запись возобновлена.")
-    else:
-        try:
-            start_recording()
-
+    def _start_or_resume():
+        global is_recording, is_paused
+        if is_recording and not is_paused:
+            print("Запись уже идет.")
+            return
+        elif is_recording and is_paused:
+            # Resume recording from pause
+            resume_recording()
+    
             # Update tray menu to reflect new state
             update_tray_menu()
+    
+            print("Запись возобновлена.")
+        else:
+            try:
+                start_recording()
+                print("Запись начата.")
+            except Exception as e:
+                print(f"Ошибка при запуске записи: {e}")
+                is_recording = False  # Ensure recording flag is reset on error
 
-            print("Запись начата.")
-        except Exception as e:
-            print(f"Ошибка при запуске записи: {e}")
-            is_recording = False  # Ensure recording flag is reset on error
+        update_tray_menu()
+
+    # Запускаем в отдельном потоке, чтобы не блокировать основной поток (особенно важно для Flask)
+    Thread(target=_start_or_resume, daemon=True).start()
 
 def stop_recording():
     """Stops the current recording session"""
