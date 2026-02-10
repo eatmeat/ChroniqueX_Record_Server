@@ -555,6 +555,7 @@ def update_tray_menu():
                 item('Остановить запись', stop_recording_from_tray, enabled=True),  # Always enabled if recording is active
                 Menu.SEPARATOR,
                 item('Основное окно', open_main_window),
+                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
                 item('Открыть папку с записями', open_rec_folder),
                 Menu.SEPARATOR,
                 item('Выход', exit_action)
@@ -566,7 +567,8 @@ def update_tray_menu():
                 item('Возобновить запись', resume_recording_from_tray, enabled=True),  # Always enabled if paused
                 item('Остановить запись', stop_recording_from_tray, enabled=True),  # Always enabled if recording is active
                 Menu.SEPARATOR,
-                item('Основное окно', open_main_window),
+                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                item('Настройки', open_main_window),
                 item('Открыть папку с записями', open_rec_folder),
                 Menu.SEPARATOR,
                 item('Выход', exit_action)
@@ -578,11 +580,22 @@ def update_tray_menu():
                 item('Остановить запись', stop_recording_from_tray, enabled=False),  # Disabled since no recording is active
                 Menu.SEPARATOR,
                 item('Основное окно', open_main_window),
+                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
                 item('Открыть папку с записями', open_rec_folder),
                 Menu.SEPARATOR,
                 item('Выход', exit_action)
             )
 # --- Settings Window ---
+def open_web_interface(icon=None, item=None):
+    """Открывает веб-интерфейс в браузере по умолчанию."""
+    if settings.get("server_enabled"):
+        import webbrowser
+        port = settings.get("port", DEFAULT_SETTINGS["port"])
+        url = f"http://127.0.0.1:{port}/"
+        webbrowser.open(url)
+    else:
+        print("Веб-сервер отключен. Невозможно открыть интерфейс.")
+
 main_window_instance = None
 
 def open_main_window(icon=None, item=None):
