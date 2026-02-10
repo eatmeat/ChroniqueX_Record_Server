@@ -1380,7 +1380,13 @@ def index():
     # Sort date groups by date (newest first)
     date_groups.sort(key=lambda x: x['date'], reverse=True)
     
-    return render_template('index.html', date_groups=date_groups)
+    # Pass current settings to the template
+    return render_template('index.html', 
+                           date_groups=date_groups,
+                           use_custom_prompt=settings.get("use_custom_prompt", False),
+                           include_html_files=settings.get("include_html_files", True),
+                           prompt_addition=settings.get("prompt_addition", "")
+                           )
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')
@@ -1445,6 +1451,25 @@ def shutdown():
     Thread(target=do_shutdown).start()
     return 'Server is shutting down...'
 
+@app.route('/save_web_settings', methods=['POST'])
+def save_web_settings():
+    try:
+        data = request.json
+        
+        # Update only the relevant settings from the web UI
+        current_settings = settings.copy()
+        current_settings['use_custom_prompt'] = data.get('use_custom_prompt', False)
+        current_settings['include_html_files'] = data.get('include_html_files', True)
+        current_settings['prompt_addition'] = data.get('prompt_addition', '')
+
+        save_settings(current_settings)
+        
+        return jsonify({"status": "success", "message": "Настройки сохранены."})
+
+    except Exception as e:
+        print(f"Error saving settings from web: {e}")
+        return jsonify({"status": "error", "message": "Ошибка при сохранении настроек."}), 500
+
 @app.route('/rec', methods=['GET'])
 def rec():
     global is_recording, is_paused
@@ -1492,9 +1517,6 @@ def resume():
 
 @app.route('/status', methods=['GET'])
 def status():
-    # Update device list more frequently during recording
-    # check_and_update_devices_if_needed() # Disabled for simplicity
-    
     if is_recording:
         if is_paused:
             recording_status = {"status": "paused", "time": time.strftime('%H:%M:%S', time.gmtime(get_elapsed_record_time()))}

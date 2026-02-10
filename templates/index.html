@@ -22,6 +22,14 @@
             padding: 5px;
         }
 
+        .settings-container {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
         .recorder-container {
             background-color: #fff;
             padding: 15px;
@@ -31,6 +39,14 @@
             width: 100%;
             margin-bottom: 20px;
             box-sizing: border-box;
+        }
+
+        .settings-container {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
 
         .recordings-container {
@@ -290,81 +306,71 @@
             background-color: #138496;
         }
 
-        .audio-devices-container {
-            background-color: #fff;
-            padding: 15px;
-            border-radius: 12px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
-            width: 100%;
-            box-sizing: border-box;
-            margin-bottom: 20px;
+        .settings-container h2 {
+            margin-top: 0;
+            font-weight: 700;
+            color: #2c3e50;
+            font-size: 1.3rem;
+            text-align: left;
+            margin-bottom: 15px;
         }
 
-        .audio-device {
+        .setting-item {
+            margin-bottom: 15px;
+            text-align: left;
+        }
+
+        .setting-item label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 400;
+        }
+        .setting-item input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        .setting-item textarea {
+            width: 100%;
             padding: 8px;
-            border-bottom: 1px solid #eee;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
             font-size: 14px;
         }
-
-        .audio-device:last-child {
-            border-bottom: none;
-        }
-
-        .device-name {
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .device-info {
-            color: #7f8c8d;
-            font-size: 12px;
-        }
-
-        .device-type {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 10px;
-            font-weight: bold;
-            margin-left: 8px;
-        }
-
-        .input-device {
+        #saveSettingsButton {
             background-color: #3498db;
             color: white;
-        }
-
-        .output-device {
-            background-color: #2ecc71;
-            color: white;
-        }
-
-        .audio-devices-container .group-header {
-            background-color: #f8f9fa;
-            padding: 12px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
             cursor: pointer;
-            user-select: none;
-            display: flex;
-            align-items: center;
-            border: 1px solid #ddd;
-            border-radius: 8px 8px 0 0;
-            margin-bottom: 0;
-        }
-
-        .audio-devices-container .group-header:hover {
-            background-color: #e9ecef;
-        }
-
-        .audio-devices-container .group-header h3 {
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 8px;
             font-size: 16px;
+            transition: background-color 0.3s;
         }
 
-        .audio-devices-container .group-header.expanded {
-            border-radius: 8px 8px 0 0;
+        #saveSettingsButton:hover {
+            background-color: #2980b9;
+        }
+
+        #saveStatus {
+            /* margin-top: 10px; */ /* Removed to allow flexbox to align vertically */
+            margin-left: 15px; /* Add left margin for spacing */
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+        }
+        
+        .settings-actions {
+            display: flex;
+            align-items: center;
+            margin-top: 10px; /* Add some space above the button and status */
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px; /* Adjust gap between checkbox items */
+            align-items: center;
         }
 
         /* Mobile responsiveness */
@@ -520,17 +526,23 @@
             </div>
         </div>
 
-        <div class="audio-devices-container">
-            <div class="group-header" onclick="toggleAudioDevices()">
-                <h3>
-                    <span class="expand-icon" id="audio-devices-expand-icon">▶</span>
-                    Доступные аудиоустройства
-                </h3>
-            </div>
-            <div id="audio-devices-content" style="display: none;">
-                <div id="audio-devices-info">
-                    <p>Загрузка информации об аудиоустройствах...</p>
+        <div class="settings-container">
+            <h2>Настройки постобработки</h2>
+            <div class="setting-item">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="useCustomPrompt" name="use_custom_prompt" {% if use_custom_prompt %}checked{% endif %}>
+                    <label for="useCustomPrompt">Использовать дополнение к промпту</label>
+                    <input type="checkbox" id="includeHtmlFiles" name="include_html_files" {% if include_html_files %}checked{% endif %}>
+                    <label for="includeHtmlFiles">Добавлять HTML файлы в контекст</label>
                 </div>
+            </div>
+            <div class="setting-item">
+                <label for="promptAddition">Дополнение к промпту:</label>
+                <textarea id="promptAddition" name="prompt_addition" rows="8">{{ prompt_addition }}</textarea>
+            </div>
+            <div class="settings-actions">
+                <button id="saveSettingsButton">Применить настройки</button>
+                <div id="saveStatus"></div>
             </div>
         </div>
 
@@ -630,7 +642,12 @@
         const statusDiv = document.getElementById('status');
         const statusLight = document.getElementById('status-light');
         const timerDiv = document.getElementById('timer');
-        const postProcessDiv = document.getElementById('post-process-container');
+        const postPrcessDiv = document.getElementById('post-process-container');
+        const saveSettingsButton = document.getElementById('saveSettingsButton');
+        const useCustomPromptCheckbox = document.getElementById('useCustomPrompt');
+        const includeHtmlFilesCheckbox = document.getElementById('includeHtmlFiles');
+        const promptAdditionTextarea = document.getElementById('promptAddition');
+        const saveStatusDiv = document.getElementById('saveStatus');
 
         let statusInterval;
 
@@ -765,6 +782,40 @@
             } catch (error) {
                 console.error('Ошибка остановки записи:', error);
                 alert('Ошибка остановки записи.');
+            }
+        });
+
+        saveSettingsButton.addEventListener('click', async () => {
+            const settings = {
+                use_custom_prompt: useCustomPromptCheckbox.checked,
+                include_html_files: includeHtmlFilesCheckbox.checked,
+                prompt_addition: promptAdditionTextarea.value
+            };
+
+            try {
+                const response = await fetch('/save_web_settings', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(settings),
+                });
+                const data = await response.json();
+
+                saveStatusDiv.textContent = data.message;
+                if (response.ok) {
+                    saveStatusDiv.style.color = 'green';
+                    saveStatusDiv.style.backgroundColor = '#e8f5e9';
+                } else {
+                    saveStatusDiv.style.color = 'red';
+                    saveStatusDiv.style.backgroundColor = '#fce4e4';
+                }
+                saveStatusDiv.style.display = 'block';
+                setTimeout(() => { saveStatusDiv.style.display = 'none'; }, 5000);
+
+            } catch (error) {
+                console.error('Ошибка сохранения настроек:', error);
+                alert('Произошла ошибка при сохранении настроек.');
             }
         });
 
@@ -943,91 +994,10 @@
             }
         }
 
-        // Function to toggle audio devices section visibility
-        function toggleAudioDevices() {
-            const content = document.getElementById('audio-devices-content');
-            const icon = document.getElementById('audio-devices-expand-icon');
-            const header = document.querySelector('.audio-devices-container .group-header');
-
-            if (content.style.display === 'none' || content.style.display === '') {
-                content.style.display = 'block';
-                icon.textContent = '▼'; // Change to down arrow when expanded
-                header.classList.add('expanded');
-                // Load audio devices when expanding the section
-                loadAudioDevices();
-            } else {
-                content.style.display = 'none';
-                icon.textContent = '▶'; // Change back to right arrow when collapsed
-                header.classList.remove('expanded');
-            }
-        }
-
-        // Function to load and display audio devices information
-        async function loadAudioDevices() {
-            try {
-                const response = await fetch('/audio_devices');
-                const data = await response.json();
-
-                if (data.error) {
-                    document.getElementById('audio-devices-info').innerHTML = `<p>Ошибка при получении информации об устройствах: ${data.error}</p>`;
-                    return;
-                }
-
-                let html = '<div class="devices-list">';
-
-                // Display input devices
-                if (data.input_devices && data.input_devices.length > 0) {
-                    html += '<div class="device-category"><h3>Устройства ввода (микрофоны)</h3>';
-                    data.input_devices.forEach(device => {
-                        html += `
-                            <div class="audio-device">
-                                <span class="device-name">${device.name}</span>
-                                <span class="device-type input-device">INPUT</span><br>
-                                <span class="device-info">ID: ${device.id}, Каналы: ${device.max_input_channels}, Частота: ${device.default_samplerate} Гц</span>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                }
-
-                // Display output devices
-                if (data.output_devices && data.output_devices.length > 0) {
-                    html += '<div class="device-category"><h3>Устройства вывода (для системного аудио)</h3>';
-                    data.output_devices.forEach(device => {
-                        // Check if this is likely a system audio device
-                        const isSystemAudio = device.max_input_channels === 0; // Output-only devices are typically used for system audio via WASAPI loopback
-                        html += `
-                            <div class="audio-device">
-                                <span class="device-name">${device.name}</span>
-                                <span class="device-type ${isSystemAudio ? 'output-device' : 'input-device'}">${isSystemAudio ? 'OUTPUT (SYSTEM AUDIO)' : 'OUTPUT'}</span><br>
-                                <span class="device-info">ID: ${device.id}, Входные каналы: ${device.max_input_channels}, Выходные каналы: ${device.max_output_channels}, Частота: ${device.default_samplerate} Гц</span>
-                            </div>
-                        `;
-                    });
-                    html += '</div>';
-                }
-
-                if (data.input_devices.length === 0 && data.output_devices.length === 0) {
-                    html += '<p>Не найдено аудиоустройств.</p>';
-                }
-
-                html += '</div>';
-
-                document.getElementById('audio-devices-info').innerHTML = html;
-            } catch (error) {
-                console.error('Ошибка при загрузке информации об аудиоустройствах:', error);
-                document.getElementById('audio-devices-info').innerHTML = '<p>Ошибка при загрузке информации об аудиоустройствах.</p>';
-            }
-        }
-
         // Initial status check
         updateStatus();
-        // Load audio devices info
-        loadAudioDevices();
         // Fallback polling to sync state if things get out of sync
         setInterval(updateStatus, 5000);
-        // Refresh audio devices info periodically
-        setInterval(loadAudioDevices, 30000); // Refresh audio devices every 30 seconds
         // Periodically refresh recordings list to show updates
         setInterval(refreshRecordings, 10000); // Refresh recordings every 10 seconds
     </script>
