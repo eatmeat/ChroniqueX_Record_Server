@@ -1675,6 +1675,64 @@ def status():
 
     return jsonify(recording_status)
 
+@app.route('/recreate_transcription/<date>/<filename>', methods=['GET'])
+def recreate_transcription(date, filename):
+    """Запускает задачу пересоздания транскрипции для аудиофайла."""
+    rec_dir = os.path.join(get_application_path(), 'rec')
+    file_path = os.path.join(rec_dir, date, filename)
+
+    if not os.path.exists(file_path):
+        return jsonify({"status": "error", "message": "Аудиофайл не найден"}), 404
+
+    # Запускаем задачу в фоновом потоке
+    Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
+
+    return jsonify({"status": "ok", "message": f"Задача транскрибации для {filename} запущена."})
+
+@app.route('/recreate_protocol/<date>/<filename>', methods=['GET'])
+def recreate_protocol(date, filename):
+    """Запускает задачу пересоздания протокола для аудиофайла."""
+    rec_dir = os.path.join(get_application_path(), 'rec')
+    audio_file_path = os.path.join(rec_dir, date, filename)
+    base_name, _ = os.path.splitext(audio_file_path)
+    txt_file_path = base_name + ".txt"
+
+    if not os.path.exists(txt_file_path):
+        return jsonify({"status": "error", "message": "Файл транскрипции (.txt) не найден. Сначала создайте транскрипцию."}), 404
+
+    # Запускаем задачу в фоновом потоке
+    Thread(target=process_protocol_task, args=(txt_file_path,), daemon=True).start()
+
+    return jsonify({"status": "ok", "message": f"Задача создания протокола для {filename} запущена."})
+
+@app.route('/compress_to_mp3/<date>/<filename>', methods=['GET'])
+def compress_to_mp3(date, filename):
+    """Сжимает WAV файл в MP3."""
+    rec_dir = os.path.join(get_application_path(), 'rec')
+    wav_path = os.path.join(rec_dir, date, filename)
+
+    if not os.path.exists(wav_path) or not wav_path.lower().endswith('.wav'):
+        return jsonify({"status": "error", "message": "WAV файл не найден"}), 404
+
+    mp3_path = wav_path.replace('.wav', '.mp3')
+
+    def compress():
+        try:
+            audio = AudioSegment.from_wav(wav_path)
+            audio.export(mp3_path, format="mp3", parameters=["-y", "-loglevel", "quiet"])
+            print(f"Сжатие завершено: {mp3_path}")
+            # Удаляем WAV после успешной конвертации
+            os.remove(wav_path)
+            print(f"Удален WAV файл: {wav_path}")
+        except Exception as e:
+            print(f"Ошибка при сжатии в MP3: {e}")
+
+    # Запускаем сжатие в фоновом потоке, чтобы не блокировать интерфейс
+    Thread(target=compress, daemon=True).start()
+
+    return jsonify({"status": "ok", "message": f"Процесс сжатия для {filename} запущен."})
+
+
 @app.route('/favicon.ico')
 def favicon():
     """Отдает favicon в зависимости от статуса записи."""
@@ -1723,6 +1781,70 @@ def generate_favicons():
     FAVICON_PAUSE_BYTES = create_favicon('pause', 'orange')
     FAVICON_STOP_BYTES = create_favicon('square', 'gray')
     print("Favicons generated.")
+
+def process_transcription_task(file_path):
+    """Обрабатывает только задачу транскрибации."""
+    global is_post_processing, post_process_file_path, post_process_stage
+    print(f"--- Начало транскрибации для файла: {file_path} ---")
+    is_post_processing = True
+    post_process_file_path = file_path
+    post_process_stage = "transcribe"
+
+    base_name, _ = os.path.splitext(file_path)
+    txt_output_path = base_name + ".txt"
+    transcription_task_id = post_task(file_path, "transcribe")
+    if transcription_task_id:
+        poll_and_save_result(transcription_task_id, txt_output_path)
+
+    is_post_processing = False
+    post_process_file_path = ""
+    post_process_stage = ""
+    print(f"--- Завершение транскрибации для файла: {file_path} ---")
+
+def process_protocol_task(txt_file_path):
+    """Обрабатывает только задачу создания протокола из .txt файла."""
+    global is_post_processing, post_process_file_path, post_process_stage
+    print(f"--- Начало создания протокола из файла: {txt_file_path} ---")
+    is_post_processing = True
+    post_process_file_path = txt_file_path
+    post_process_stage = "protocol"
+
+    load_settings()
+    prompt_addition = settings.get("prompt_addition", "") if settings.get("use_custom_prompt", False) else ""
+    current_date_formatted = format_date_russian(datetime.now())
+    prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
+
+    if settings.get("include_html_files", True):
+        txt_path = Path(txt_file_path)
+        html_files = sorted(list(txt_path.parent.glob('*.html')))
+        for html_file in html_files:
+            try:
+                with open(html_file, 'r', encoding='utf-8') as f:
+                    task_context_html = f.read()
+                allowed_tags = {'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot'}
+                def should_keep_tag(match):
+                    tag = match.group(0)
+                    try:
+                        is_closing = tag.startswith('</')
+                        tag_name = tag.strip('</>').split()[0].lower()
+                        return f'</{tag_name}>' if is_closing and tag_name in allowed_tags else f'<{tag_name}>' if tag_name in allowed_tags else ' '
+                    except IndexError: return ' '
+                task_context = re.sub(r'<[^>]+>', should_keep_tag, task_context_html).strip()
+                if task_context:
+                    prompt_addition += f"\n--- НАЧАЛО файла @{html_file.name} ---\n{task_context}\n--- КОНЕЦ файла @{html_file.name} ---\n"
+            except Exception as e: print(f"Не удалось прочитать файл задач {html_file}: {e}")
+
+    filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
+    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition=filtered_prompt_addition)
+    if protocol_task_id:
+        base_name, _ = os.path.splitext(txt_file_path)
+        protocol_output_path = base_name + "_protocol.pdf"
+        poll_and_save_result(protocol_task_id, protocol_output_path)
+
+    is_post_processing = False
+    post_process_file_path = ""
+    post_process_stage = ""
+    print(f"--- Завершение создания протокола из файла: {txt_file_path} ---")
 
 # --- Основная часть ---
 def run_flask():
