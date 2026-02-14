@@ -188,10 +188,33 @@ document.addEventListener('DOMContentLoaded', function () {
             const groupEl = document.createElement('div');
             groupEl.className = 'contact-group';
 
+            const groupHeaderEl = document.createElement('div');
+            groupHeaderEl.className = 'contact-group-header';
+
             const groupNameEl = document.createElement('h4');
             groupNameEl.className = 'contact-group-name';
             groupNameEl.textContent = group.name;
-            groupEl.appendChild(groupNameEl);
+
+            const groupCheckbox = document.createElement('input');
+            groupCheckbox.type = 'checkbox';
+            groupCheckbox.title = 'Выбрать/снять всех в группе';
+
+            groupHeaderEl.appendChild(groupCheckbox);
+            groupHeaderEl.appendChild(groupNameEl);
+            groupEl.appendChild(groupHeaderEl);
+
+            // Получаем все ID контактов в этой группе
+            const contactIdsInGroup = group.contacts.map(c => c.id);
+
+            // Функция для обновления состояния группового чекбокса
+            const updateGroupCheckboxState = () => {
+                const checkedInGroup = contactIdsInGroup.filter(id => selectedContactIds.includes(id));
+                groupCheckbox.checked = checkedInGroup.length === contactIdsInGroup.length && contactIdsInGroup.length > 0;
+                groupCheckbox.indeterminate = checkedInGroup.length > 0 && checkedInGroup.length < contactIdsInGroup.length;
+            };
+
+            // Обработчик для группового чекбокса
+            groupCheckbox.addEventListener('change', () => handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup));
 
             const listEl = document.createElement('ul');
             listEl.className = 'contact-group-list';
@@ -207,7 +230,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 checkbox.type = 'checkbox';
                 checkbox.value = contact.id;
                 checkbox.checked = selectedContactIds.includes(contact.id);
-                checkbox.addEventListener('change', saveContactSelection);
+                checkbox.addEventListener('change', () => {
+                    saveContactSelection(); // Сохраняем выбор
+                    updateGroupCheckboxState(); // Обновляем состояние группового чекбокса
+                });
 
                 labelEl.appendChild(checkbox);
                 
@@ -220,11 +246,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 itemEl.appendChild(labelEl);
 
                 const buttonsContainer = document.createElement('div');
+                buttonsContainer.className = 'item-actions';
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Удалить';
                 deleteBtn.className = 'action-btn';
                 deleteBtn.onclick = () => deleteContact(contact.id, contact.name);
+                deleteBtn.style.display = 'none'; // Скрываем кнопку по умолчанию
 
                 buttonsContainer.appendChild(deleteBtn);
                 itemEl.appendChild(buttonsContainer);
@@ -242,6 +270,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Заменяем span на input
                     labelEl.replaceChild(input, nameSpan);
                     input.focus();
+                    deleteBtn.style.display = 'inline-block'; // Показываем кнопку
                     input.select();
 
                     const saveChanges = async () => {
@@ -249,6 +278,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Если имя не изменилось или пустое, просто возвращаем span
                         if (newName === currentName || !newName) {
                             labelEl.replaceChild(nameSpan, input);
+                            deleteBtn.style.display = 'none'; // Скрываем кнопку
                             return;
                         }
 
@@ -262,6 +292,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Обновляем имя в span и возвращаем его
                         nameSpan.textContent = newName;
                         labelEl.replaceChild(nameSpan, input);
+                        deleteBtn.style.display = 'none'; // Скрываем кнопку
                     };
 
                     // Сохраняем при потере фокуса
@@ -269,8 +300,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
                     // Сохраняем по Enter, отменяем по Escape
                     input.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') input.blur();
-                        if (e.key === 'Escape') labelEl.replaceChild(nameSpan, input);
+                        if (e.key === 'Enter') {
+                            input.blur();
+                        } else if (e.key === 'Escape') {
+                            labelEl.replaceChild(nameSpan, input);
+                            deleteBtn.style.display = 'none'; // Скрываем кнопку при отмене
+                        }
                     });
                 });
             });
@@ -308,6 +343,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             groupEl.appendChild(listEl);
             contactsListContainer.appendChild(groupEl);
+
+            // Устанавливаем начальное состояние группового чекбокса
+            updateGroupCheckboxState();
         });
     }
 
@@ -329,6 +367,22 @@ document.addEventListener('DOMContentLoaded', function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
+    }
+
+    async function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
+        const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"]`);
+        let selectionChanged = false;
+        groupCheckboxes.forEach(cb => {
+            if (contactIdsInGroup.includes(cb.value)) {
+                if (cb.checked !== isChecked) {
+                    cb.checked = isChecked;
+                    selectionChanged = true;
+                }
+            }
+        });
+
+        // Сохраняем изменения, только если они были
+        if (selectionChanged) await saveContactSelection();
     }
 
     addGroupBtn.addEventListener('click', async () => {

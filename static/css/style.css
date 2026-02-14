@@ -112,6 +112,14 @@ h1, h2, h3, h4 {
     margin-bottom: 15px;
 }
 
+.contact-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.contact-group-name { margin: 0; }
+
 .contact-group-list {
     list-style: none;
     padding-left: 10px;
