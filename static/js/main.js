@@ -169,17 +169,25 @@ document.addEventListener('DOMContentLoaded', function () {
     function setRandomGroupPlaceholder() {
         const adjectives = [
             'Лысый', 'Грустный', 'Танцующий', 'Летающий', 'Пьяный',
-            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий'
+            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий',
+            'Голодный', 'Задумчивый', 'Испуганный', 'Счастливый',
+            'Прыгающий', 'Влюблённый', 'Уставший', 'Безумный',
+            'Сердитый', 'Летающий задом наперёд', 'Танцующий ламбаду'
         ];
+
         const nouns = [
+            // Все мужского рода
             'Хомяк', 'Пингвин', 'Картофель', 'Утюг', 'Кактус',
-            'Огурец', 'Носок', 'Борщ', 'Тапок', 'Холодильник'
+            'Огурец', 'Носок', 'Тапок', 'Холодильник', 'Чайник',
+            'Ботинок', 'Банан', 'Пульт', 'Коврик', 'Батон',
+            'Веник', 'Ёршик', 'Тазик', 'Кабачок', 'Бублик',
+            'Робот', 'Ананас', 'Ниндзя', 'Монитор', 'Принтер'
         ];
         const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
         const adjective = getRandomItem(adjectives);
         const noun = getRandomItem(nouns);
 
-        newGroupNameInput.placeholder = `Название новой группы, например: ${adjective} ${noun}`;
+        newGroupNameInput.placeholder = `Новая группа: ${adjective} ${noun}`;
     }
 
     let contactsData = {};
@@ -195,8 +203,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderContacts() {
         contactsListContainer.innerHTML = '';
+
+        // Создаем и добавляем строку для добавления новой группы в начало
+        const addGroupRow = document.createElement('div');
+        addGroupRow.className = 'add-item-row';
+        addGroupRow.style.marginBottom = '15px';
+        addGroupRow.style.paddingBottom = '15px';
+        addGroupRow.style.borderBottom = '1px solid #e0e0e0';
+        addGroupRow.appendChild(newGroupNameInput); // Перемещаем существующий инпут
+        addGroupRow.appendChild(addGroupBtn); // Перемещаем существующую кнопку
+        contactsListContainer.appendChild(addGroupRow);
+
         if (!contactsData.groups || contactsData.groups.length === 0) {
-            contactsListContainer.innerHTML = '<p>Список участников пуст.</p>';
+            contactsListContainer.insertAdjacentHTML('beforeend', '<p>Список участников пуст. Создайте первую группу.</p>');
             return;
         }
 
@@ -228,23 +247,90 @@ document.addEventListener('DOMContentLoaded', function () {
             return `${finalSurname} ${name} ${finalPatronymic} — ${position}`;
         }
 
-        contactsData.groups.forEach(group => {
+        // Сортируем группы по имени (алфавиту)
+        const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+        sortedGroups.forEach(group => {
             const groupEl = document.createElement('div');
             groupEl.className = 'contact-group';
 
             const groupHeaderEl = document.createElement('div');
             groupHeaderEl.className = 'contact-group-header';
 
+            const groupHeaderLabel = document.createElement('label');
+            groupHeaderLabel.style.display = 'flex';
+            groupHeaderLabel.style.alignItems = 'center';
+            groupHeaderLabel.style.gap = '10px';
+            groupHeaderLabel.style.cursor = 'pointer';
+
             const groupNameEl = document.createElement('h4');
             groupNameEl.className = 'contact-group-name';
             groupNameEl.textContent = group.name;
+            groupNameEl.style.cursor = 'text'; // Указываем, что текст можно редактировать
 
             const groupCheckbox = document.createElement('input');
             groupCheckbox.type = 'checkbox';
             groupCheckbox.title = 'Выбрать/снять всех в группе';
 
-            groupHeaderEl.appendChild(groupCheckbox);
-            groupHeaderEl.appendChild(groupNameEl);
+
+            
+            // Логика inline-редактирования для названия группы
+            groupNameEl.addEventListener('click', () => {
+                const oldName = group.name;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.value = oldName;
+                input.className = 'contact-name-edit'; // Используем тот же стиль, что и для участника
+                input.style.flexGrow = '1'; // Занимает все доступное место
+
+                // Заменяем h4 на input
+                groupHeaderLabel.replaceChild(input, groupNameEl);
+                input.focus();
+                input.select();
+
+                const saveChanges = async () => {
+                    const newName = input.value.trim();
+                    // Если имя не изменилось или пустое, просто возвращаем h4
+                    if (newName === oldName || !newName) {
+                        groupHeaderLabel.replaceChild(groupNameEl, input);
+                        return;
+                    }
+
+                    // Отправляем запрос на сервер
+                    const response = await fetch(`/groups/update`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ old_name: oldName, new_name: newName })
+                    });
+
+                    if (response.ok) {
+                        // При успехе перезагружаем список, чтобы все обновилось
+                        loadContactsAndSettings();
+                    } else {
+                        const result = await response.json();
+                        alert(`Ошибка: ${result.message}`);
+                        groupHeaderLabel.replaceChild(groupNameEl, input); // Возвращаем старое имя в случае ошибки
+                    }
+                };
+
+                input.addEventListener('blur', saveChanges);
+                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+            });
+
+            groupHeaderLabel.appendChild(groupCheckbox); // Чекбокс внутри label
+            groupHeaderLabel.appendChild(groupNameEl);   // Имя группы внутри label
+
+            const deleteGroupBtn = document.createElement('button');
+            deleteGroupBtn.textContent = 'Удалить группу';
+            deleteGroupBtn.className = 'action-btn delete-group-btn';
+            deleteGroupBtn.dataset.groupName = group.name;
+            deleteGroupBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteGroup(e.target.dataset.groupName);
+            };
+
+            groupHeaderEl.appendChild(groupHeaderLabel); // Label добавляется в заголовок
+            groupHeaderEl.appendChild(deleteGroupBtn);   // Кнопка добавляется в заголовок, но *вне* label
+
             groupEl.appendChild(groupHeaderEl);
 
             // Получаем все ID контактов в этой группе
@@ -269,7 +355,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const addInput = document.createElement('input');
             addInput.type = 'text';
-            addInput.placeholder = `Например: ${generateRandomPlaceholder()}`;
+            addInput.placeholder = `Новый учасник: ${generateRandomPlaceholder()}`;
             addInput.className = 'add-item-input';
             const addBtn = document.createElement('button');
             addBtn.textContent = 'Добавить';
@@ -326,10 +412,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 const deleteBtn = document.createElement('button');
                 deleteBtn.textContent = 'Удалить';
                 deleteBtn.className = 'action-btn';
-                deleteBtn.onclick = () => deleteContact(contact.id, contact.name);
-                deleteBtn.style.display = 'none'; // Скрываем кнопку по умолчанию
-
-                buttonsContainer.appendChild(deleteBtn);
+                deleteBtn.onclick = (e) => { e.stopPropagation(); deleteContact(contact.id, contact.name); };
+                buttonsContainer.appendChild(deleteBtn); // Кнопка теперь всегда в DOM
                 itemEl.appendChild(buttonsContainer);
 
                 listEl.appendChild(itemEl);
@@ -345,7 +429,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     // Заменяем span на input
                     labelEl.replaceChild(input, nameSpan);
                     input.focus();
-                    deleteBtn.style.display = 'inline-block'; // Показываем кнопку
                     input.select();
 
                     const saveChanges = async () => {
@@ -353,7 +436,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Если имя не изменилось или пустое, просто возвращаем span
                         if (newName === currentName || !newName) {
                             labelEl.replaceChild(nameSpan, input);
-                            deleteBtn.style.display = 'none'; // Скрываем кнопку
                             return;
                         }
 
@@ -367,7 +449,6 @@ document.addEventListener('DOMContentLoaded', function () {
                         // Обновляем имя в span и возвращаем его
                         nameSpan.textContent = newName;
                         labelEl.replaceChild(nameSpan, input);
-                        deleteBtn.style.display = 'none'; // Скрываем кнопку
                     };
 
                     // Сохраняем при потере фокуса
@@ -379,7 +460,6 @@ document.addEventListener('DOMContentLoaded', function () {
                             input.blur();
                         } else if (e.key === 'Escape') {
                             labelEl.replaceChild(nameSpan, input);
-                            deleteBtn.style.display = 'none'; // Скрываем кнопку при отмене
                         }
                     });
                 });
@@ -464,6 +544,18 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
         await fetch(`/contacts/delete/${id}`, { method: 'POST' });
+        loadContactsAndSettings();
+    }
+
+    async function deleteGroup(name) {
+        if (!confirm(`Вы уверены, что хотите удалить группу "${name}" и всех ее участников?`)) {
+            return;
+        }
+        await fetch(`/groups/delete`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
         loadContactsAndSettings();
     }
 

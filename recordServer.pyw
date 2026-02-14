@@ -836,7 +836,8 @@ def open_main_window(icon=None, item=None):
 
         selected_ids = set(settings.get("selected_contacts", []))
 
-        for group in contacts_data.get("groups", []):
+        # Сортируем группы по имени для консистентного отображения
+        for group in sorted(contacts_data.get("groups", []), key=lambda g: g.get("name", "")):
             group_frame = tk.LabelFrame(scrollable_contacts_frame, text=group.get("name", "Без имени"), padx=5, pady=5)
             group_frame.pack(fill="x", expand=True, pady=5)
             for contact in group.get("contacts", []):
@@ -916,7 +917,8 @@ def open_main_window(icon=None, item=None):
             for widget in scrollable_frame.winfo_children():
                 widget.destroy()
 
-            for group_idx, group in enumerate(contacts_data.get("groups", [])):
+            # Сортируем группы по имени
+            for group in sorted(contacts_data.get("groups", []), key=lambda g: g.get("name", "")):
                 group_frame = tk.LabelFrame(scrollable_frame, text=group.get("name", "Без имени"), padx=10, pady=5)
                 group_frame.pack(fill="x", expand=True, pady=5, padx=5)
 
@@ -1889,6 +1891,8 @@ def get_web_settings():
 @app.route('/get_contacts', methods=['GET'])
 def get_contacts():
     """Returns the current contacts list."""
+    # Сортируем группы по имени перед отправкой
+    contacts_data.get("groups", []).sort(key=lambda g: g.get("name", ""))
     return jsonify(contacts_data)
 
 @app.route('/get_group_names', methods=['GET'])
@@ -1972,6 +1976,49 @@ def delete_contact_web(contact_id):
 
     save_contacts(contacts_data)
     return jsonify({"status": "ok", "message": "Участник удален"})
+
+@app.route('/groups/update', methods=['POST'])
+def update_group_web():
+    """Updates an existing group's name."""
+    data = request.get_json()
+    old_name = data.get('old_name', '').strip()
+    new_name = data.get('new_name', '').strip()
+
+    if not old_name or not new_name:
+        return jsonify({"status": "error", "message": "Имя группы не может быть пустым"}), 400
+
+    if old_name == new_name:
+        return jsonify({"status": "ok", "message": "Имя группы не изменилось"})
+
+    # Проверяем, не существует ли уже группа с новым именем
+    if any(g.get('name') == new_name for g in contacts_data.get("groups", [])):
+        return jsonify({"status": "error", "message": f"Группа с именем '{new_name}' уже существует"}), 409 # 409 Conflict
+
+    for group in contacts_data.get("groups", []):
+        if group.get("name") == old_name:
+            group["name"] = new_name
+            save_contacts(contacts_data)
+            return jsonify({"status": "ok", "message": "Группа переименована"})
+
+    return jsonify({"status": "error", "message": "Группа не найдена"}), 404
+
+@app.route('/groups/delete', methods=['POST'])
+def delete_group_web():
+    """Deletes an entire group."""
+    data = request.get_json()
+    group_name = data.get('name', '').strip()
+
+    if not group_name:
+        return jsonify({"status": "error", "message": "Имя группы не может быть пустым"}), 400
+
+    original_group_count = len(contacts_data.get("groups", []))
+    contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("name") != group_name]
+
+    if len(contacts_data.get("groups", [])) < original_group_count:
+        save_contacts(contacts_data)
+        return jsonify({"status": "ok", "message": "Группа удалена"})
+    else:
+        return jsonify({"status": "error", "message": "Группа не найдена"}), 404
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
