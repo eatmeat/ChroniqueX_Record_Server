@@ -132,6 +132,7 @@ h1, h2, h3, h4 {
 .contact-group-list li label {
     display: flex;
     align-items: center;
+    flex-grow: 1; /* Позволяет label занять доступное пространство */
     gap: 8px;
     cursor: pointer;
 }
@@ -146,6 +147,7 @@ h1, h2, h3, h4 {
     border: 1px solid #bdc3c7;
     border-radius: 3px;
     outline-color: #3498db;
+    width: 100%; /* Занимает всю ширину родительского label */
 }
 
 .action-btn {

@@ -199,7 +199,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const listEl = document.createElement('ul');
             listEl.className = 'contact-group-list';
 
-            group.contacts.forEach(contact => {
+            // Сортируем контакты в группе по имени (алфавиту)
+            const sortedContacts = [...group.contacts].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+
+            sortedContacts.forEach(contact => {
                 const itemEl = document.createElement('li');
                 
                 const labelEl = document.createElement('label');
