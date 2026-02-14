@@ -9,6 +9,7 @@ from datetime import datetime
 import tempfile
 from pathlib import Path
 from threading import Thread, Event
+import uuid
 
 import sounddevice as sd
 import numpy as np
@@ -42,6 +43,7 @@ from werkzeug.serving import make_server
 
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import ttk
 from pystray import Icon, Menu, MenuItem as item
 from PIL import Image, ImageDraw
 from PIL import ImageTk
@@ -456,6 +458,7 @@ DEFAULT_SETTINGS = {
     "mic_volume_adjustment": -3,  # Volume adjustment for microphone in dB
     "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
 }
+DEFAULT_SETTINGS["selected_contacts"] = [] # List of selected contact IDs
 DEFAULT_SETTINGS["num_speakers"] = 0 # 0 - автоопределение
 settings = {}
 main_icon = None # Global reference to the pystray icon
@@ -483,6 +486,32 @@ def save_settings(new_settings):
         json.dump(settings, f, indent=4)
     print("Settings saved.")
 
+# --- Contacts Management ---
+CONTACTS_FILE = os.path.join(get_application_path(), 'contacts.json')
+contacts_data = {"groups": []}
+
+def load_contacts():
+    """Loads contacts from the JSON file or creates it if it doesn't exist."""
+    global contacts_data
+    if os.path.exists(CONTACTS_FILE):
+        try:
+            with open(CONTACTS_FILE, 'r', encoding='utf-8') as f:
+                contacts_data = json.load(f)
+            if "groups" not in contacts_data:
+                contacts_data = {"groups": []}
+        except (json.JSONDecodeError, TypeError):
+            contacts_data = {"groups": []}
+    else:
+        contacts_data = {"groups": []}
+        save_contacts(contacts_data)
+
+def save_contacts(new_contacts_data):
+    """Saves contacts to the JSON file."""
+    global contacts_data
+    contacts_data = new_contacts_data
+    with open(CONTACTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(contacts_data, f, indent=4, ensure_ascii=False)
+
 # --- Load Environment Variables ---
 dotenv_path = os.path.join(get_application_path(), '.env')
 load_dotenv(dotenv_path)
@@ -490,7 +519,11 @@ API_URL = os.getenv("API_URL")
 API_KEY = os.getenv("API_KEY")
 
 # --- Глобальные переменные ---
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=os.path.join(get_application_path(), 'templates'),
+    static_folder=os.path.join(get_application_path(), 'static')
+)
 is_recording = False
 is_paused = False  # Track pause state
 start_time = None
@@ -647,6 +680,7 @@ def open_main_window(icon=None, item=None):
                 "include_html_files": include_html_files_var.get(),
                 "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
                 "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
+                "selected_contacts": [contact_id for contact_id, var in contact_vars.items() if var.get()],
                 "num_speakers": num_speakers_var.get(),
                 "main_window_width": width,
                 "main_window_height": height,
@@ -752,9 +786,201 @@ def open_main_window(icon=None, item=None):
     win.grid_rowconfigure(0, weight=1)
     win.grid_columnconfigure(0, weight=1)
 
+    # --- Contacts Management UI ---
+    contacts_frame = tk.LabelFrame(win, text="Участники", padx=10, pady=10)
+    contacts_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
+    contacts_frame.grid_columnconfigure(0, weight=1)
+
+    contacts_canvas = tk.Canvas(contacts_frame)
+    contacts_scrollbar = tk.Scrollbar(contacts_frame, orient="vertical", command=contacts_canvas.yview)
+    scrollable_contacts_frame = tk.Frame(contacts_canvas)
+
+    scrollable_contacts_frame.bind(
+        "<Configure>",
+        lambda e: contacts_canvas.configure(
+            scrollregion=contacts_canvas.bbox("all")
+        )
+    )
+
+    contacts_canvas.create_window((0, 0), window=scrollable_contacts_frame, anchor="nw")
+    contacts_canvas.configure(yscrollcommand=contacts_scrollbar.set)
+
+    contacts_canvas.pack(side="left", fill="both", expand=True)
+    contacts_scrollbar.pack(side="right", fill="y")
+
+    contact_vars = {}
+
+    def render_contacts_ui():
+        for widget in scrollable_contacts_frame.winfo_children():
+            widget.destroy()
+        contact_vars.clear()
+
+        selected_ids = set(settings.get("selected_contacts", []))
+
+        for group in contacts_data.get("groups", []):
+            group_frame = tk.LabelFrame(scrollable_contacts_frame, text=group.get("name", "Без имени"), padx=5, pady=5)
+            group_frame.pack(fill="x", expand=True, pady=5)
+            for contact in group.get("contacts", []):
+                contact_id = contact.get("id")
+                if contact_id:
+                    var = tk.BooleanVar(value=(contact_id in selected_ids))
+                    chk = tk.Checkbutton(group_frame, text=contact.get("name"), variable=var, command=mark_as_changed)
+                    chk.pack(anchor="w")
+                    contact_vars[contact_id] = var
+
+    def add_contact():
+        # Simple dialog to add a contact
+        dialog = tk.Toplevel(win)
+        dialog.title("Добавить участника")
+        dialog.transient(win); dialog.grab_set()
+        
+        tk.Label(dialog, text="Имя:").pack(padx=5, pady=5)
+        name_entry = tk.Entry(dialog, width=30)
+        name_entry.pack(padx=5, pady=5)
+        name_entry.focus()
+
+        tk.Label(dialog, text="Группа:").pack(padx=5, pady=5)
+        group_names = [g['name'] for g in contacts_data.get("groups", [])]
+        group_combo = ttk.Combobox(dialog, values=group_names)
+        group_combo.pack(padx=5, pady=5)
+
+        def on_add():
+            name = name_entry.get().strip()
+            group_name = group_combo.get().strip()
+            if not name:
+                messagebox.showerror("Ошибка", "Имя не может быть пустым.", parent=dialog)
+                return
+            if not group_name:
+                group_name = "Без группы"
+
+            new_contact = {"id": str(uuid.uuid4()), "name": name}
+            
+            # Find group or create new one
+            group_found = False
+            for group in contacts_data.get("groups", []):
+                if group['name'] == group_name:
+                    group.setdefault('contacts', []).append(new_contact)
+                    group_found = True
+                    break
+            if not group_found:
+                contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": [new_contact]})
+
+            save_contacts(contacts_data)
+            render_contacts_ui()
+            mark_as_changed()
+            dialog.destroy()
+
+        tk.Button(dialog, text="Добавить", command=on_add).pack(pady=10)
+
+    def manage_contacts():
+        """Opens a dedicated window for managing contacts (CRUD)."""
+        manager_win = tk.Toplevel(win)
+        manager_win.title("Управление участниками")
+        manager_win.transient(win); manager_win.grab_set()
+        manager_win.geometry("500x400")
+
+        # Main frame with scrollbar
+        main_frame = tk.Frame(manager_win)
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        canvas = tk.Canvas(main_frame)
+        scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas)
+
+        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def populate_manager():
+            for widget in scrollable_frame.winfo_children():
+                widget.destroy()
+
+            for group_idx, group in enumerate(contacts_data.get("groups", [])):
+                group_frame = tk.LabelFrame(scrollable_frame, text=group.get("name", "Без имени"), padx=10, pady=5)
+                group_frame.pack(fill="x", expand=True, pady=5, padx=5)
+
+                for contact_idx, contact in enumerate(group.get("contacts", [])):
+                    contact_frame = tk.Frame(group_frame)
+                    contact_frame.pack(fill="x", expand=True, pady=2)
+                    
+                    tk.Label(contact_frame, text=contact.get("name")).pack(side="left", fill="x", expand=True)
+                    
+                    delete_btn = tk.Button(contact_frame, text="Удалить", command=lambda c=contact: delete_contact_gui(c, manager_win))
+                    delete_btn.pack(side="right", padx=5)
+                    
+                    edit_btn = tk.Button(contact_frame, text="Изменить", command=lambda c=contact: edit_contact_gui(c, manager_win))
+                    edit_btn.pack(side="right")
+
+        def add_contact_gui():
+            add_contact() # Re-use the existing add_contact dialog
+            populate_manager() # Refresh the manager list
+            render_contacts_ui() # Refresh the main window list
+
+        def edit_contact_gui(contact, parent):
+            dialog = tk.Toplevel(parent)
+            dialog.title("Изменить участника")
+            dialog.transient(parent); dialog.grab_set()
+
+            tk.Label(dialog, text="Имя:").pack(padx=5, pady=5)
+            name_var = tk.StringVar(value=contact.get("name"))
+            name_entry = tk.Entry(dialog, width=30, textvariable=name_var)
+            name_entry.pack(padx=5, pady=5)
+            name_entry.focus()
+
+            def on_save_edit():
+                new_name = name_var.get().strip()
+                if not new_name:
+                    messagebox.showerror("Ошибка", "Имя не может быть пустым.", parent=dialog)
+                    return
+                
+                # Find and update the contact in the main data structure
+                for g in contacts_data.get("groups", []):
+                    for c in g.get("contacts", []):
+                        if c.get("id") == contact.get("id"):
+                            c["name"] = new_name
+                            break
+                
+                save_contacts(contacts_data)
+                populate_manager() # Refresh manager
+                render_contacts_ui() # Refresh main window
+                mark_as_changed()
+                dialog.destroy()
+
+            tk.Button(dialog, text="Сохранить", command=on_save_edit).pack(pady=10)
+
+        def delete_contact_gui(contact, parent):
+            if not messagebox.askyesno("Подтверждение", f"Вы уверены, что хотите удалить участника '{contact.get('name')}'?", parent=parent):
+                return
+            
+            contact_id_to_delete = contact.get("id")
+            
+            # Remove from contacts_data
+            for group in contacts_data.get("groups", []):
+                group["contacts"] = [c for c in group.get("contacts", []) if c.get("id") != contact_id_to_delete]
+            
+            # Remove empty groups
+            contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("contacts")]
+
+            save_contacts(contacts_data)
+            populate_manager()
+            render_contacts_ui()
+            mark_as_changed()
+
+        tk.Button(manager_win, text="Добавить участника", command=add_contact_gui).pack(pady=10)
+        populate_manager()
+
+    contacts_buttons_frame = tk.Frame(contacts_frame)
+    contacts_buttons_frame.pack(fill="x", pady=5)
+    tk.Button(contacts_buttons_frame, text="Добавить", command=add_contact).pack(side="left", padx=5)
+    tk.Button(contacts_buttons_frame, text="Управлять", command=manage_contacts).pack(side="left", padx=5)
+
+    render_contacts_ui()
+
     # Main frame
     main_frame = tk.Frame(win)
-    main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+    main_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
     main_frame.grid_rowconfigure(4, weight=1)  # Give row 4 (text area) weight to expand
     main_frame.grid_rowconfigure(7, weight=0)  # Row for endpoints info
     main_frame.grid_columnconfigure(0, weight=1)
@@ -955,6 +1181,7 @@ def open_main_window(icon=None, item=None):
         original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
         original_settings['mic_volume_adjustment'] = mic_volume_var.get()
         original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
+        original_settings['selected_contacts'] = [contact_id for contact_id, var in contact_vars.items() if var.get()]
         original_settings['num_speakers'] = num_speakers_var.get()
 
     prompt_addition_label = tk.Label(prompt_addition_frame, text="Дополнение к промпту:")
@@ -1153,6 +1380,9 @@ def open_main_window(icon=None, item=None):
     # Trace changes on all variable-based widgets
     port_var.trace_add("write", mark_as_changed)
     server_enabled_var.trace_add("write", mark_as_changed)
+    # Trace changes on contact checkboxes
+    for var in contact_vars.values():
+        var.trace_add("write", mark_as_changed)
     lan_accessible_var.trace_add("write", mark_as_changed)
     use_custom_prompt_var.trace_add("write", mark_as_changed)
     include_html_files_var.trace_add("write", mark_as_changed)
@@ -1163,20 +1393,36 @@ def open_main_window(icon=None, item=None):
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
-def post_task(file_path, task_type, prompt_addition=None):
+def post_task(file_path, task_type, prompt_addition_str=None):
     if not API_URL or not API_KEY: return None
     try:
         with open(file_path, 'rb') as f:
             files = {'file': (os.path.basename(file_path), f)}
             data = {'api_key': API_KEY, 'task_type': task_type}
+            
+            # --- Contact List Integration ---
+            selected_contact_ids = set(settings.get("selected_contacts", []))
+            num_speakers_from_contacts = len(selected_contact_ids)
+            
+            participants_prompt = ""
+            if num_speakers_from_contacts > 0:
+                all_contacts = [contact for group in contacts_data.get("groups", []) for contact in group.get("contacts", [])]
+                selected_names = [c['name'] for c in all_contacts if c.get('id') in selected_contact_ids]
+                
+                if selected_names:
+                    participants_list = "\n".join(f"- {name}" for name in selected_names)
+                    participants_prompt = f"# Список участников:\n{participants_list}\n\n"
+
             # Add prompt_addition if it's a protocol task and prompt_addition is provided
-            if task_type == 'protocol' and prompt_addition:
-                data['prompt_addition'] = prompt_addition
+            if task_type == 'protocol' and (prompt_addition_str or participants_prompt):
+                data['prompt_addition'] = participants_prompt + (prompt_addition_str or "")
+
             # Add num_speakers if it's a transcribe task and the value is greater than 0
             if task_type == 'transcribe':
-                num_speakers = settings.get("num_speakers", 0)
-                if num_speakers > 0:
-                    data['num_speakers'] = num_speakers
+                # Prioritize contacts count, then manual setting
+                final_num_speakers = num_speakers_from_contacts if num_speakers_from_contacts > 0 else settings.get("num_speakers", 0)
+                if final_num_speakers > 0:
+                    data['num_speakers'] = final_num_speakers
             # Disable SSL certificate verification for self-signed certificates
             response = requests.post(f"{API_URL}/add_task", files=files, data=data, verify=False)
         if response.status_code == 202:
@@ -1400,7 +1646,7 @@ def recorder_sys(stop_event, audio_queue):
         print("System audio recording process finished.")
 
 @app.route('/')
-def index():
+def index():    
     # Get all recordings from the 'rec' directory
     date_groups = []
     rec_dir = os.path.join(get_application_path(), 'rec')
@@ -1530,15 +1776,7 @@ def index():
     date_groups.sort(key=lambda x: x['date'], reverse=True)
     
     # Pass current settings to the template
-    return render_template('index.html', 
-                           date_groups=date_groups,
-                           use_custom_prompt=settings.get("use_custom_prompt", False),
-                           include_html_files=settings.get("include_html_files", True),
-                           prompt_addition=settings.get("prompt_addition", ""),
-                           mic_volume_adjustment=settings.get("mic_volume_adjustment", -3),
-                           system_audio_volume_adjustment=settings.get("system_audio_volume_adjustment", 0),
-                           num_speakers=settings.get("num_speakers", 0)
-                           )
+    return render_template('index.html', date_groups=date_groups)
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')
@@ -1600,12 +1838,13 @@ def save_web_settings():
             return jsonify({"status": "error", "message": "Нет данных"}), 400
 
         # Update only the settings from the web UI
-        settings['use_custom_prompt'] = data.get('use_custom_prompt', settings.get('use_custom_prompt'))
-        settings['include_html_files'] = data.get('include_html_files', settings.get('include_html_files'))
-        settings['prompt_addition'] = data.get('prompt_addition', settings.get('prompt_addition'))
-        settings['mic_volume_adjustment'] = data.get('mic_volume_adjustment', settings.get('mic_volume_adjustment'))
-        settings['system_audio_volume_adjustment'] = data.get('system_audio_volume_adjustment', settings.get('system_audio_volume_adjustment'))
-        settings['num_speakers'] = data.get('num_speakers', settings.get('num_speakers'))
+        # Use .get() to avoid errors if a key is missing in the request
+        # This allows partial updates (e.g., only updating contacts)
+        for key in ['use_custom_prompt', 'include_html_files', 'prompt_addition', 
+                    'mic_volume_adjustment', 'system_audio_volume_adjustment', 
+                    'selected_contacts', 'num_speakers']:
+            if key in data:
+                settings[key] = data[key]
 
         save_settings(settings) # Save all settings
         return jsonify({"status": "ok", "message": "Настройки успешно сохранены!"})
@@ -1622,10 +1861,85 @@ def get_web_settings():
         "prompt_addition": settings.get("prompt_addition", ""),
         "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
         "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
+        "selected_contacts": settings.get("selected_contacts", []),
         "num_speakers": settings.get("num_speakers", 0)
     }
     return jsonify(web_settings)
 
+@app.route('/get_contacts', methods=['GET'])
+def get_contacts():
+    """Returns the current contacts list."""
+    return jsonify(contacts_data)
+
+@app.route('/get_group_names', methods=['GET'])
+def get_group_names():
+    """Returns a list of existing group names."""
+    # Используем set для получения уникальных имен, затем сортируем
+    group_names = sorted(list(set([group.get("name") for group in contacts_data.get("groups", []) if group.get("name")])))
+    return jsonify(group_names)
+
+@app.route('/contacts/add', methods=['POST'])
+def add_contact_web():
+    """Adds a new contact."""
+    data = request.get_json()
+    name = data.get('name', '').strip()
+    group_name = data.get('group_name', 'Без группы').strip()
+    if not group_name: group_name = 'Без группы'
+
+    if not name:
+        return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
+
+    new_contact = {"id": str(uuid.uuid4()), "name": name}
+    
+    group_found = False
+    for group in contacts_data.get("groups", []):
+        if group['name'] == group_name:
+            group.setdefault('contacts', []).append(new_contact)
+            group_found = True
+            break
+    if not group_found:
+        contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": [new_contact]})
+
+    save_contacts(contacts_data)
+    return jsonify({"status": "ok", "contact": new_contact})
+
+@app.route('/contacts/update/<contact_id>', methods=['POST'])
+def update_contact_web(contact_id):
+    """Updates an existing contact."""
+    data = request.get_json()
+    new_name = data.get('name', '').strip()
+
+    if not new_name:
+        return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
+
+    for group in contacts_data.get("groups", []):
+        for contact in group.get("contacts", []):
+            if contact.get("id") == contact_id:
+                contact["name"] = new_name
+                save_contacts(contacts_data)
+                return jsonify({"status": "ok", "message": "Участник обновлен"})
+
+    return jsonify({"status": "error", "message": "Участник не найден"}), 404
+
+@app.route('/contacts/delete/<contact_id>', methods=['POST'])
+def delete_contact_web(contact_id):
+    """Deletes a contact."""
+    contact_found = False
+    for group in contacts_data.get("groups", []):
+        original_len = len(group.get("contacts", []))
+        group["contacts"] = [c for c in group.get("contacts", []) if c.get("id") != contact_id]
+        if len(group.get("contacts", [])) < original_len:
+            contact_found = True
+            break
+    
+    if not contact_found:
+        return jsonify({"status": "error", "message": "Участник не найден"}), 404
+
+    # Remove empty groups
+    contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("contacts")]
+
+    save_contacts(contacts_data)
+    return jsonify({"status": "ok", "message": "Участник удален"})
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
@@ -2014,31 +2328,22 @@ def resume_recording():
 
 
 def start_recording_from_tray(icon, item):
-    def _start_or_resume():
-        global is_recording, is_paused
-        if is_recording and not is_paused:
-            print("Запись уже идет.")
-            return
-        elif is_recording and is_paused:
-            # Resume recording from pause
-            resume_recording()
-    
-            # Update tray menu to reflect new state
-            update_tray_menu()
-    
-            print("Запись возобновлена.")
-        else:
-            try:
-                start_recording()
-                print("Запись начата.")
-            except Exception as e:
-                print(f"Ошибка при запуске записи: {e}")
-                is_recording = False  # Ensure recording flag is reset on error
+    global is_recording, is_paused
+    if is_recording:
+        print("Запись уже идет (возможно, на паузе). Используйте 'Возобновить'.")
+        return
 
+    def _start():
+        try:
+            start_recording()
+            print("Запись начата.")
+        except Exception as e:
+            print(f"Ошибка при запуске записи: {e}")
+            is_recording = False  # Ensure recording flag is reset on error
         update_tray_menu()
 
     # Запускаем в отдельном потоке, чтобы не блокировать основной поток (особенно важно для Flask)
-    Thread(target=_start_or_resume, daemon=True).start()
+    Thread(target=_start, daemon=True).start()
 
 def stop_recording():
     """Stops the current recording session"""
@@ -2187,12 +2492,12 @@ def pause_recording_from_tray(icon, item):
         print(f"Ошибка при паузе записи: {e}")
 
 def resume_recording_from_tray(icon, item):
-    global is_recording
+    global is_recording, is_paused
     if not is_recording:
         print("Запись не идет.")
         return
     if not is_paused:
-        print("Запись не на паузе.")
+        print("Запись не на паузе, возобновление не требуется.")
         return
 
     try:
@@ -2380,6 +2685,7 @@ if __name__ == '__main__':
         print("Предупреждение: библиотека pywin32 не установлена. Проверка на запуск единственного экземпляра отключена.")
 
     load_settings()
+    load_contacts()
     generate_favicons()
 
     stop_icon = create_icon('square', 'gray')
