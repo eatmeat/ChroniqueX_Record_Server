@@ -337,6 +337,12 @@
             font-family: 'Roboto', sans-serif;
             font-size: 14px;
         }
+        .setting-item input[type="number"] {
+            width: 60px;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
         .volume-control {
             display: flex;
             align-items: center;
@@ -634,6 +640,12 @@
                         <span id="sysAudioVolumeValue">{% if system_audio_volume_adjustment > 0 %}+{% endif %}{{ system_audio_volume_adjustment }} dB</span>
                     </div>
                 </div>
+                <div class="setting-item">
+                    <label for="numSpeakers">Количество спикеров (0 = автоопределение):</label>
+                    <div class="volume-control">
+                        <input type="number" id="numSpeakers" name="num_speakers" min="0" max="10" step="1" value="{{ num_speakers }}">
+                    </div>
+                </div>
                 <div class="settings-actions">
                     <button id="saveSettingsButton">Применить настройки</button> 
                     <span id="unsavedChangesIndicator" style="display: none; margin-left: 10px; color: #f39c12; font-style: italic;">* есть несохраненные изменения</span>
@@ -660,8 +672,8 @@
                             <table class="recordings-table">
                                 <thead>
                                     <tr>
-                                        <th>Время начала</th>
                                         <th>Аудиозапись</th>
+                                        <th>Время окончания</th>
                                         <th>Транскрипция</th>
                                         <th>Протокол</th>
                                         <th>Размер</th>
@@ -670,7 +682,6 @@
                                 <tbody>
                                     {% for recording in group.recordings %}
                                     <tr>
-                                        <td>{{ recording.time }}</td>
                                         <td>
                                             <span class="status-indicator status-exists"></span>
                                             <a href="/files/{{ recording.date }}/{{ recording.filename }}" class="file-link" target="_blank" rel="noopener noreferrer">{{ recording.filename }}</a>
@@ -678,6 +689,7 @@
                                             <button class="compress-btn" onclick="compressToMp3('{{ recording.date }}', '{{ recording.filename }}')">Сжать в MP3</button>
                                             {% endif %}
                                         </td>
+                                        <td>{{ recording.time }}</td>
                                         <td>
                                             {% if recording.transcription_exists %}
                                             <span class="status-indicator status-exists"></span>
@@ -764,6 +776,7 @@
         const sysAudioVolumeSlider = document.getElementById('sysAudioVolume');
         const sysAudioVolumeValue = document.getElementById('sysAudioVolumeValue');
         const contextMenu = document.getElementById('textareaContextMenu');
+        const numSpeakersInput = document.getElementById('numSpeakers');
         const reloadSettingsButton = document.getElementById('reloadSettingsButton');
         const unsavedChangesIndicator = document.getElementById('unsavedChangesIndicator');
 
@@ -918,7 +931,8 @@
                 include_html_files: includeHtmlFilesCheckbox.checked,
                 prompt_addition: promptAdditionTextarea.value,
                 mic_volume_adjustment: parseInt(micVolumeSlider.value, 10),
-                system_audio_volume_adjustment: parseInt(sysAudioVolumeSlider.value, 10)
+                system_audio_volume_adjustment: parseInt(sysAudioVolumeSlider.value, 10),
+                num_speakers: parseInt(numSpeakersInput.value, 10)
             };
 
             try {
@@ -962,6 +976,7 @@
                 promptAdditionTextarea.value = newSettings.prompt_addition;
                 micVolumeSlider.value = newSettings.mic_volume_adjustment;
                 sysAudioVolumeSlider.value = newSettings.system_audio_volume_adjustment;
+                numSpeakersInput.value = newSettings.num_speakers;
 
                 // Manually trigger input event to update slider labels
                 micVolumeSlider.dispatchEvent(new Event('input'));
@@ -987,7 +1002,8 @@
             includeHtmlFilesCheckbox,
             promptAdditionTextarea,
             micVolumeSlider,
-            sysAudioVolumeSlider
+            sysAudioVolumeSlider,
+            numSpeakersInput
         ].forEach(element => {
             element.addEventListener('input', showUnsavedChanges);
         });

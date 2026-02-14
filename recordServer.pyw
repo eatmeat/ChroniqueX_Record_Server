@@ -456,6 +456,7 @@ DEFAULT_SETTINGS = {
     "mic_volume_adjustment": -3,  # Volume adjustment for microphone in dB
     "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
 }
+DEFAULT_SETTINGS["num_speakers"] = 0 # 0 - автоопределение
 settings = {}
 main_icon = None # Global reference to the pystray icon
 
@@ -646,6 +647,7 @@ def open_main_window(icon=None, item=None):
                 "include_html_files": include_html_files_var.get(),
                 "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
                 "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
+                "num_speakers": num_speakers_var.get(),
                 "main_window_width": width,
                 "main_window_height": height,
                 "main_window_x": x,
@@ -940,6 +942,7 @@ def open_main_window(icon=None, item=None):
     include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
     mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
+    num_speakers_var = tk.IntVar(value=settings.get("num_speakers", 0))
 
     tk.Checkbutton(prompt_addition_frame, text="Использовать дополнение к промпту", variable=use_custom_prompt_var).pack(anchor="w")
     # --- Unsaved Changes Logic (continued) ---
@@ -952,6 +955,7 @@ def open_main_window(icon=None, item=None):
         original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
         original_settings['mic_volume_adjustment'] = mic_volume_var.get()
         original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
+        original_settings['num_speakers'] = num_speakers_var.get()
 
     prompt_addition_label = tk.Label(prompt_addition_frame, text="Дополнение к промпту:")
     prompt_addition_label.pack(anchor="w")
@@ -967,6 +971,16 @@ def open_main_window(icon=None, item=None):
     # Checkbox for including HTML files
     include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
     include_html_check.pack(anchor="w")
+
+    # Number of speakers control
+    num_speakers_frame = tk.Frame(prompt_addition_frame)
+    num_speakers_frame.pack(anchor="w", pady=(5, 0))
+    tk.Label(num_speakers_frame, text="Количество спикеров (0 = авто):").pack(side="left")
+    num_speakers_spinbox = tk.Spinbox(num_speakers_frame, from_=0, to=10, width=5, textvariable=num_speakers_var)
+    num_speakers_spinbox.pack(side="left", padx=5)
+    # Add context menu to the spinbox's entry component
+    _add_context_menu_to_text_widget(num_speakers_spinbox)
+
 
     # Audio volume controls frame
     volume_frame = tk.LabelFrame(prompt_addition_frame, text="Настройки громкости", padx=5, pady=5)
@@ -1144,6 +1158,7 @@ def open_main_window(icon=None, item=None):
     include_html_files_var.trace_add("write", mark_as_changed)
     mic_volume_var.trace_add("write", mark_as_changed)
     sys_audio_volume_var.trace_add("write", mark_as_changed)
+    num_speakers_var.trace_add("write", mark_as_changed)
     prompt_addition_text.bind("<<Modified>>", lambda e: (mark_as_changed(), prompt_addition_text.edit_modified(False)))
     win.mainloop()
 
@@ -1157,6 +1172,11 @@ def post_task(file_path, task_type, prompt_addition=None):
             # Add prompt_addition if it's a protocol task and prompt_addition is provided
             if task_type == 'protocol' and prompt_addition:
                 data['prompt_addition'] = prompt_addition
+            # Add num_speakers if it's a transcribe task and the value is greater than 0
+            if task_type == 'transcribe':
+                num_speakers = settings.get("num_speakers", 0)
+                if num_speakers > 0:
+                    data['num_speakers'] = num_speakers
             # Disable SSL certificate verification for self-signed certificates
             response = requests.post(f"{API_URL}/add_task", files=files, data=data, verify=False)
         if response.status_code == 202:
@@ -1516,7 +1536,8 @@ def index():
                            include_html_files=settings.get("include_html_files", True),
                            prompt_addition=settings.get("prompt_addition", ""),
                            mic_volume_adjustment=settings.get("mic_volume_adjustment", -3),
-                           system_audio_volume_adjustment=settings.get("system_audio_volume_adjustment", 0)
+                           system_audio_volume_adjustment=settings.get("system_audio_volume_adjustment", 0),
+                           num_speakers=settings.get("num_speakers", 0)
                            )
 
 # Route to serve recorded files
@@ -1584,6 +1605,7 @@ def save_web_settings():
         settings['prompt_addition'] = data.get('prompt_addition', settings.get('prompt_addition'))
         settings['mic_volume_adjustment'] = data.get('mic_volume_adjustment', settings.get('mic_volume_adjustment'))
         settings['system_audio_volume_adjustment'] = data.get('system_audio_volume_adjustment', settings.get('system_audio_volume_adjustment'))
+        settings['num_speakers'] = data.get('num_speakers', settings.get('num_speakers'))
 
         save_settings(settings) # Save all settings
         return jsonify({"status": "ok", "message": "Настройки успешно сохранены!"})
@@ -1599,7 +1621,8 @@ def get_web_settings():
         "include_html_files": settings.get("include_html_files", True),
         "prompt_addition": settings.get("prompt_addition", ""),
         "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
-        "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0)
+        "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
+        "num_speakers": settings.get("num_speakers", 0)
     }
     return jsonify(web_settings)
 
