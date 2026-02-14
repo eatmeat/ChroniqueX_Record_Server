@@ -219,6 +219,37 @@ document.addEventListener('DOMContentLoaded', function () {
             const listEl = document.createElement('ul');
             listEl.className = 'contact-group-list';
 
+            // Добавляем строку для добавления нового участника в группу (в начало списка)
+            const addItemEl = document.createElement('li');
+            addItemEl.className = 'add-item-row';
+
+            const addInput = document.createElement('input');
+            addInput.type = 'text';
+            addInput.placeholder = 'Имя нового участника, например: Иванов Иван Иванович (программист)';
+            addInput.className = 'add-item-input';
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'Добавить';
+            addBtn.className = 'action-btn';
+            addBtn.onclick = async () => {
+                const name = addInput.value.trim();
+                if (!name) {
+                    alert('Имя участника не может быть пустым.');
+                    return;
+                }
+                await fetch('/contacts/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, group_name: group.name })
+                });
+                addInput.value = '';
+                loadContactsAndSettings(); // Перезагружаем список
+            };
+            addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
+
+            addItemEl.appendChild(addInput);
+            addItemEl.appendChild(addBtn);
+            listEl.appendChild(addItemEl);
+
             // Сортируем контакты в группе по имени (алфавиту)
             const sortedContacts = [...group.contacts].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
 
@@ -309,37 +340,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     });
                 });
             });
-
-            // Добавляем строку для добавления нового участника в группу
-            const addItemEl = document.createElement('li');
-            addItemEl.className = 'add-item-row';
-
-            const addInput = document.createElement('input');
-            addInput.type = 'text';
-            addInput.placeholder = 'Имя нового участника, например: Иванов Иван Иванович (программист)';
-            addInput.className = 'add-item-input';
-            const addBtn = document.createElement('button');
-            addBtn.textContent = 'Добавить';
-            addBtn.className = 'action-btn';
-            addBtn.onclick = async () => {
-                const name = addInput.value.trim();
-                if (!name) {
-                    alert('Имя участника не может быть пустым.');
-                    return;
-                }
-                await fetch('/contacts/add', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, group_name: group.name })
-                });
-                addInput.value = '';
-                loadContactsAndSettings(); // Перезагружаем список
-            };
-            addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
-
-            addItemEl.appendChild(addInput);
-            addItemEl.appendChild(addBtn);
-            listEl.appendChild(addItemEl);
 
             groupEl.appendChild(listEl);
             contactsListContainer.appendChild(groupEl);
