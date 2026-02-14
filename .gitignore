@@ -4,3 +4,4 @@ build/
 .env
 record_server_settings.json
 pushall.bat
+contacts.json

@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 from threading import Thread, Event
 import uuid
+import logging
 
 import sounddevice as sd
 import numpy as np
@@ -59,6 +60,25 @@ def get_application_path():
         application_path = os.path.dirname(os.path.abspath(__file__))
     return application_path
 
+def setup_logging():
+    """Настраивает логирование в файл и в консоль."""
+    log_file = os.path.join(get_application_path(), 'record_server.log')
+    # Используем getLogger для создания или получения логгера, чтобы избежать многократной настройки
+    logger = logging.getLogger()
+    if not logger.handlers: # Настраиваем только если обработчики еще не добавлены
+        logger.setLevel(logging.INFO)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        
+        # Обработчик для записи только ошибок в файл
+        file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(logging.ERROR) # Устанавливаем уровень логирования только для ошибок
+        logger.addHandler(file_handler)
+
+        # Обработчик для вывода INFO и выше в консоль
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
 
 def format_date_russian(date_obj):
     """Форматирует дату в формат 'DD MMMMM YYYY' на русском языке."""
@@ -447,6 +467,7 @@ SETTINGS_FILE = os.path.join(get_application_path(), 'record_server_settings.jso
 DEFAULT_SETTINGS = {
     "port": 8288,
     "server_enabled": True,
+    "autostart_server": True, # New setting to control server autostart
     "lan_accessible": False,
     "use_custom_prompt": False,
     "prompt_addition": "",
@@ -459,7 +480,6 @@ DEFAULT_SETTINGS = {
     "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
 }
 DEFAULT_SETTINGS["selected_contacts"] = [] # List of selected contact IDs
-DEFAULT_SETTINGS["num_speakers"] = 0 # 0 - автоопределение
 settings = {}
 main_icon = None # Global reference to the pystray icon
 
@@ -681,7 +701,6 @@ def open_main_window(icon=None, item=None):
                 "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
                 "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
                 "selected_contacts": [contact_id for contact_id, var in contact_vars.items() if var.get()],
-                "num_speakers": num_speakers_var.get(),
                 "main_window_width": width,
                 "main_window_height": height,
                 "main_window_x": x,
@@ -1168,7 +1187,6 @@ def open_main_window(icon=None, item=None):
     include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
     mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
-    num_speakers_var = tk.IntVar(value=settings.get("num_speakers", 0))
 
     tk.Checkbutton(prompt_addition_frame, text="Использовать дополнение к промпту", variable=use_custom_prompt_var).pack(anchor="w")
     # --- Unsaved Changes Logic (continued) ---
@@ -1182,7 +1200,6 @@ def open_main_window(icon=None, item=None):
         original_settings['mic_volume_adjustment'] = mic_volume_var.get()
         original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
         original_settings['selected_contacts'] = [contact_id for contact_id, var in contact_vars.items() if var.get()]
-        original_settings['num_speakers'] = num_speakers_var.get()
 
     prompt_addition_label = tk.Label(prompt_addition_frame, text="Дополнение к промпту:")
     prompt_addition_label.pack(anchor="w")
@@ -1198,15 +1215,6 @@ def open_main_window(icon=None, item=None):
     # Checkbox for including HTML files
     include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
     include_html_check.pack(anchor="w")
-
-    # Number of speakers control
-    num_speakers_frame = tk.Frame(prompt_addition_frame)
-    num_speakers_frame.pack(anchor="w", pady=(5, 0))
-    tk.Label(num_speakers_frame, text="Количество спикеров (0 = авто):").pack(side="left")
-    num_speakers_spinbox = tk.Spinbox(num_speakers_frame, from_=0, to=10, width=5, textvariable=num_speakers_var)
-    num_speakers_spinbox.pack(side="left", padx=5)
-    # Add context menu to the spinbox's entry component
-    _add_context_menu_to_text_widget(num_speakers_spinbox)
 
 
     # Audio volume controls frame
@@ -1388,7 +1396,6 @@ def open_main_window(icon=None, item=None):
     include_html_files_var.trace_add("write", mark_as_changed)
     mic_volume_var.trace_add("write", mark_as_changed)
     sys_audio_volume_var.trace_add("write", mark_as_changed)
-    num_speakers_var.trace_add("write", mark_as_changed)
     prompt_addition_text.bind("<<Modified>>", lambda e: (mark_as_changed(), prompt_addition_text.edit_modified(False)))
     win.mainloop()
 
@@ -1417,12 +1424,20 @@ def post_task(file_path, task_type, prompt_addition_str=None):
             if task_type == 'protocol' and (prompt_addition_str or participants_prompt):
                 data['prompt_addition'] = participants_prompt + (prompt_addition_str or "")
 
-            # Add num_speakers if it's a transcribe task and the value is greater than 0
+            # Количество спикеров определяется по количеству выбранных контактов
             if task_type == 'transcribe':
-                # Prioritize contacts count, then manual setting
-                final_num_speakers = num_speakers_from_contacts if num_speakers_from_contacts > 0 else settings.get("num_speakers", 0)
-                if final_num_speakers > 0:
-                    data['num_speakers'] = final_num_speakers
+                if num_speakers_from_contacts > 0:
+                    data['num_speakers'] = num_speakers_from_contacts
+            
+            # --- Logging ---
+            # Создаем копию данных для логирования, чтобы не изменять оригинал и не светить ключ
+            log_data = data.copy()
+            if 'api_key' in log_data:
+                log_data['api_key'] = '***' # Маскируем ключ API
+            if 'prompt_addition' in log_data and log_data['prompt_addition']:
+                log_data['prompt_addition'] = log_data['prompt_addition'][:100] + '...' # Укорачиваем промпт
+            logging.info(f"Отправка задачи: файл='{os.path.basename(file_path)}', параметры={log_data}")
+
             # Disable SSL certificate verification for self-signed certificates
             response = requests.post(f"{API_URL}/add_task", files=files, data=data, verify=False)
         if response.status_code == 202:
@@ -1430,10 +1445,13 @@ def post_task(file_path, task_type, prompt_addition_str=None):
         else:
             print(f"Ошибка создания задачи '{task_type}': {response.status_code} - {response.text}")
             return None
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         print(f"Ошибка соединения при создании задачи '{task_type}': {e}")
+        logging.error(f"Ошибка соединения при создании задачи '{task_type}': {e}")
         return None
 
+    except Exception as e:
+        logging.error(f"Непредвиденная ошибка в post_task для задачи '{task_type}': {e}", exc_info=True)
 def poll_and_save_result(task_id, output_path):
     if not task_id: return False
     while True:
@@ -1442,13 +1460,17 @@ def poll_and_save_result(task_id, output_path):
             response = requests.get(f"{API_URL}/get_result/{task_id}", timeout=10, verify=False)
             if response.status_code == 200:
                 with open(output_path, 'wb') as f: f.write(response.content)
+                logging.info(f"Задача {task_id} успешно завершена. Результат сохранен в {output_path}")
                 return True
             elif response.status_code == 202: time.sleep(5)
             elif response.status_code == 500:
                 print(f"Задача {task_id} провалена: {response.json().get('error', 'Неизвестная ошибка')}")
+                error_msg = response.json().get('error', 'Неизвестная ошибка')
+                logging.error(f"Задача {task_id} провалена на сервере: {error_msg}")
                 return False
             else: time.sleep(10)
         except requests.exceptions.RequestException as e:
+            logging.warning(f"Ошибка соединения при проверке статуса задачи {task_id}: {e}. Повтор через 10 секунд...")
             print(f"Ошибка соединения при проверке статуса задачи {task_id}: {e}. Повтор через 10 секунд...")
             time.sleep(10)
 
@@ -1841,8 +1863,7 @@ def save_web_settings():
         # Use .get() to avoid errors if a key is missing in the request
         # This allows partial updates (e.g., only updating contacts)
         for key in ['use_custom_prompt', 'include_html_files', 'prompt_addition', 
-                    'mic_volume_adjustment', 'system_audio_volume_adjustment', 
-                    'selected_contacts', 'num_speakers']:
+                    'mic_volume_adjustment', 'system_audio_volume_adjustment', 'selected_contacts']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1862,7 +1883,6 @@ def get_web_settings():
         "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
         "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
         "selected_contacts": settings.get("selected_contacts", []),
-        "num_speakers": settings.get("num_speakers", 0)
     }
     return jsonify(web_settings)
 
@@ -1891,11 +1911,18 @@ def add_contact_web():
 
     # Специальный случай для создания пустой группы
     if name == '_init_group_':
-        # Просто создаем группу, если она не существует, и не добавляем контакт
-        return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
+        # Если имя группы не пустое, создаем группу, если она не существует
+        if group_name:
+            group_exists = any(g['name'] == group_name for g in contacts_data.get("groups", []))
+            if not group_exists:
+                contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": []})
+                save_contacts(contacts_data)
+                return jsonify({"status": "ok", "message": "Группа создана"})
+        # Возвращаем 'ok', даже если группа уже существует или имя группы пустое, чтобы не вызывать ошибку в UI
+        return jsonify({"status": "ok", "message": "Действие обработано"})
 
     new_contact = {"id": str(uuid.uuid4()), "name": name}
-    
+
     group_found = False
     for group in contacts_data.get("groups", []):
         if group['name'] == group_name:
@@ -2689,6 +2716,7 @@ if __name__ == '__main__':
     else:
         print("Предупреждение: библиотека pywin32 не установлена. Проверка на запуск единственного экземпляра отключена.")
 
+    setup_logging()
     load_settings()
     load_contacts()
     generate_favicons()

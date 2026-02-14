@@ -123,7 +123,6 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('use-custom-prompt').checked = settings.use_custom_prompt;
         document.getElementById('include-html-files').checked = settings.include_html_files;
         document.getElementById('prompt-addition').value = settings.prompt_addition;
-        document.getElementById('num-speakers').value = settings.num_speakers;
         micVolumeSlider.value = settings.mic_volume_adjustment;
         sysAudioVolumeSlider.value = settings.system_audio_volume_adjustment;
 
@@ -145,7 +144,6 @@ document.addEventListener('DOMContentLoaded', function () {
             use_custom_prompt: formData.get('use_custom_prompt') === 'on',
             include_html_files: formData.get('include_html_files') === 'on',
             prompt_addition: formData.get('prompt_addition'),
-            num_speakers: parseInt(formData.get('num_speakers'), 10),
             mic_volume_adjustment: parseFloat(formData.get('mic_volume_adjustment')),
             system_audio_volume_adjustment: parseFloat(formData.get('system_audio_volume_adjustment')),
             selected_contacts: getSelectedContacts()
