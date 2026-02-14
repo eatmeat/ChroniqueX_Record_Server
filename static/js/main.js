@@ -166,6 +166,22 @@ document.addEventListener('DOMContentLoaded', function () {
     const newGroupNameInput = document.getElementById('new-group-name');
     const addGroupBtn = document.getElementById('add-group-btn');
 
+    function setRandomGroupPlaceholder() {
+        const adjectives = [
+            'Лысый', 'Грустный', 'Танцующий', 'Летающий', 'Пьяный',
+            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий'
+        ];
+        const nouns = [
+            'Хомяк', 'Пингвин', 'Картофель', 'Утюг', 'Кактус',
+            'Огурец', 'Носок', 'Борщ', 'Тапок', 'Холодильник'
+        ];
+        const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        const adjective = getRandomItem(adjectives);
+        const noun = getRandomItem(nouns);
+
+        newGroupNameInput.placeholder = `Название новой группы, например: ${adjective} ${noun}`;
+    }
+
     let contactsData = {};
     let selectedContactIds = [];
 
@@ -182,6 +198,34 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!contactsData.groups || contactsData.groups.length === 0) {
             contactsListContainer.innerHTML = '<p>Список участников пуст.</p>';
             return;
+        }
+
+        function generateRandomPlaceholder() {
+            const names = ['Иван', 'Борис', 'Анна', 'Семён', 'Максим', 'Людмила', 'Геннадий', 'Ольга', 'Виктор', 'Наталья', 'Пётр', 'Зинаида', 'Руслан', 'Эльвира', 'Дмитрий', 'Клавдия', 'Аркадий', 'Татьяна', 'Юрий', 'Фёдор'];
+            const patronymics = ['Вилкович', 'Борисович', 'Ананасович', 'Семёнович', 'Максимович', 'Люциферович', 'Генераторович', 'Огурцовович', 'Викторович', 'Носкович', 'Петрович', 'Закусонович', 'Рулетович', 'Эскимосович', 'Дмитриевич', 'Котлетович', 'Арбузович', 'Тапочкович', 'Юрьевич', 'Фёдорович'];
+            const surnames = ['Ложкин', 'Бублик', 'Ананасов', 'Семечкин', 'Максимум', 'Лепёшкин', 'Глюкозов', 'Окрошка', 'Винегретов', 'Носков', 'Пельмёнов', 'Заливной', 'Рулетов', 'Эскимосов', 'Дырявин', 'Котлетов', 'Арбузов', 'Тапкин', 'Юморов', 'Фантазёров'];
+            const positions = ['программист', 'бухгалтер', 'дизайнер', 'менеджер', 'аналитик', 'юрист', 'директор', 'редактор', 'тестировщик', 'администратор', 'инженер', 'маркетолог', 'консультант', 'куратор', 'архитектор', 'экономист', 'продюсер', 'секретарь', 'тренер', 'разработчик'];
+
+            const getRandomItem = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+            const name = getRandomItem(names);
+            const patronymic = getRandomItem(patronymics);
+            const surname = getRandomItem(surnames);
+            const position = getRandomItem(positions);
+
+            // Корректируем окончание фамилии и отчества для женских имен
+            let finalSurname = surname;
+            let finalPatronymic = patronymic;
+            if (['Анна', 'Людмила', 'Ольга', 'Наталья', 'Зинаида', 'Эльвира', 'Клавдия', 'Татьяна'].includes(name)) {
+                if (surname.endsWith('ов') || surname.endsWith('ин') || surname.endsWith('ев')) {
+                    finalSurname += 'а';
+                }
+                if (patronymic.endsWith('ич')) {
+                    finalPatronymic = patronymic.slice(0, -2) + 'на';
+                }
+            }
+
+            return `${finalSurname} ${name} ${finalPatronymic} — ${position}`;
         }
 
         contactsData.groups.forEach(group => {
@@ -225,7 +269,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const addInput = document.createElement('input');
             addInput.type = 'text';
-            addInput.placeholder = 'Имя нового участника, например: Иванов Иван Иванович (программист)';
+            addInput.placeholder = `Например: ${generateRandomPlaceholder()}`;
             addInput.className = 'add-item-input';
             const addBtn = document.createElement('button');
             addBtn.textContent = 'Добавить';
@@ -446,6 +490,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // Load data for tabs
         loadSettings();
         loadContactsAndSettings();
+        setRandomGroupPlaceholder();
         // loadGroupNames(); // Больше не используется для datalist
 
         // Обработчик для создания новой группы
