@@ -1564,7 +1564,7 @@ def process_recording_tasks(file_path):
 
         # Update post-processing status for protocol stage
         post_process_stage = "protocol"
-        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition=filtered_prompt_addition)
+        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=filtered_prompt_addition)
         if protocol_task_id:
             protocol_output_path = base_name + "_protocol.pdf"
             poll_and_save_result(protocol_task_id, protocol_output_path)
@@ -1889,6 +1889,11 @@ def add_contact_web():
     if not name:
         return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
 
+    # Специальный случай для создания пустой группы
+    if name == '_init_group_':
+        # Просто создаем группу, если она не существует, и не добавляем контакт
+        return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
+
     new_contact = {"id": str(uuid.uuid4()), "name": name}
     
     group_found = False
@@ -2172,7 +2177,7 @@ def process_protocol_task(txt_file_path):
             except Exception as e: print(f"Не удалось прочитать файл задач {html_file}: {e}")
 
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
-    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition=filtered_prompt_addition)
+    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=filtered_prompt_addition)
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"

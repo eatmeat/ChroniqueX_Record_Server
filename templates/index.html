@@ -16,9 +16,9 @@
                 <span id="status-text">Остановлено</span>
                 <span id="status-time">(00:00:00)</span>
             </div>
-            <div id="post-process-status" class="post-process-status"></div>
         </header>
 
+        <div id="post-process-status" class="post-process-status" style="display: none;"></div>
         <div class="controls">
             <button id="rec-btn" class="control-btn rec-btn">REC</button>
             <button id="pause-btn" class="control-btn pause-btn" disabled>PAUSE</button>
@@ -118,20 +118,9 @@
                 </div>
 
                 <div class="contacts-management">
-                    <h3>Управление контактами</h3>
-
-                    <div id="contact-add-form-container">
-                        <h4>Добавить нового участника</h4>
-                        <div class="form-group">
-                            <input type="text" id="new-contact-name" placeholder="Имя нового участника">
-                        </div>
-                        <div class="form-group">
-                            <input type="text" id="new-contact-group" list="group-names-list" placeholder="Название группы (необязательно)">
-                            <datalist id="group-names-list">
-                                <!-- Опции будут загружены через JS -->
-                            </datalist>
-                        </div>
-                        <button id="add-contact-btn">Добавить</button>
+                    <div class="add-item-row">
+                        <input type="text" id="new-group-name" class="add-item-input" placeholder="Название новой группы...">
+                        <button id="add-group-btn" class="action-btn">Добавить</button>
                     </div>
                 </div>
             </div>

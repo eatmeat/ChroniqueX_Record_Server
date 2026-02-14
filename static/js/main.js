@@ -165,9 +165,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Contacts Tab ---
     const contactsListContainer = document.getElementById('contacts-list-container');
-    const newContactNameInput = document.getElementById('new-contact-name');
-    const newContactGroupInput = document.getElementById('new-contact-group');
-    const addContactBtn = document.getElementById('add-contact-btn');
+    const newGroupNameInput = document.getElementById('new-group-name');
+    const addGroupBtn = document.getElementById('add-group-btn');
 
     let contactsData = {};
     let selectedContactIds = [];
@@ -278,6 +277,37 @@ document.addEventListener('DOMContentLoaded', function () {
                 });
             });
 
+            // Добавляем строку для добавления нового участника в группу
+            const addItemEl = document.createElement('li');
+            addItemEl.className = 'add-item-row';
+
+            const addInput = document.createElement('input');
+            addInput.type = 'text';
+            addInput.placeholder = 'Имя нового участника, например: Иванов Иван Иванович (программист)';
+            addInput.className = 'add-item-input';
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'Добавить';
+            addBtn.className = 'action-btn';
+            addBtn.onclick = async () => {
+                const name = addInput.value.trim();
+                if (!name) {
+                    alert('Имя участника не может быть пустым.');
+                    return;
+                }
+                await fetch('/contacts/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, group_name: group.name })
+                });
+                addInput.value = '';
+                loadContactsAndSettings(); // Перезагружаем список
+            };
+            addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
+
+            addItemEl.appendChild(addInput);
+            addItemEl.appendChild(addBtn);
+            listEl.appendChild(addItemEl);
+
             groupEl.appendChild(listEl);
             contactsListContainer.appendChild(groupEl);
         });
@@ -303,22 +333,21 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    addContactBtn.addEventListener('click', async () => {
-        const name = newContactNameInput.value.trim();
-        const groupName = newContactGroupInput.value.trim();
-        if (!name) {
-            alert('Имя участника не может быть пустым.');
+    addGroupBtn.addEventListener('click', async () => {
+        const groupName = newGroupNameInput.value.trim();
+        if (!groupName) {
+            alert('Имя группы не может быть пустым.');
             return;
         }
 
+        // Просто добавляем контакт с пустым именем, чтобы сервер создал группу
         await fetch('/contacts/add', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, group_name: groupName })
+            body: JSON.stringify({ name: `_init_group_`, group_name: groupName })
         });
 
-        newContactNameInput.value = '';
-        newContactGroupInput.value = '';
+        newGroupNameInput.value = '';
         loadContactsAndSettings();
     });
 
@@ -342,6 +371,21 @@ document.addEventListener('DOMContentLoaded', function () {
         loadContactsAndSettings();
     }
 
+    // Удаляем временный контакт, если он остался после создания группы
+    async function cleanupInitialContact(groupName) {
+        const response = await fetch('/get_contacts');
+        const data = await response.json();
+        const group = data.groups.find(g => g.name === groupName);
+        if (group) {
+            const initContact = group.contacts.find(c => c.name === '_init_group_');
+            if (initContact) {
+                await fetch(`/contacts/delete/${initContact.id}`, { method: 'POST' });
+            }
+        }
+        // Перезагружаем список, чтобы убрать временный контакт
+        loadContactsAndSettings();
+    }
+
     // --- Initialization ---
     function initialize() {
         updateStatus();
@@ -350,7 +394,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // Load data for tabs
         loadSettings();
         loadContactsAndSettings();
-        loadGroupNames();
+        // loadGroupNames(); // Больше не используется для datalist
+
+        // Обработчик для создания новой группы
+        newGroupNameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') addGroupBtn.click();
+        });
     }
 
     initialize();
