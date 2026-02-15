@@ -209,6 +209,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = await settingsRes.json();
         selectedContactIds = settings.selected_contacts || [];
         renderContacts();
+        updateSelectedContactsCount();
     }
 
     function renderContacts() {
@@ -286,6 +287,7 @@ document.addEventListener('DOMContentLoaded', function () {
             groupNameEl.style.cursor = 'text'; // Указываем, что текст можно редактировать
 
             const groupCheckbox = document.createElement('input');
+            groupCheckbox.value = "";
             groupCheckbox.type = 'checkbox';
             groupCheckbox.title = 'Выбрать/снять всех в группе';
             
@@ -556,14 +558,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function getSelectedContacts() {
         const selected = [];
-        document.querySelectorAll('#contacts-list-container input[type="checkbox"]:checked').forEach(cb => {
-            selected.push(cb.value);
+        document.querySelectorAll('#contacts-list-container .contact-group-list li label input[type="checkbox"]:checked').forEach(cb => {
+            // Убедимся, что у чекбокса есть значение (ID контакта), чтобы не считать групповые чекбоксы
+            if (cb.value) {
+                selected.push(cb.value);
+            }
         });
         return selected;
     }
 
     async function saveContactSelection() {
         selectedContactIds = getSelectedContacts();
+        updateSelectedContactsCount(); // Обновляем счетчик на вкладке
         const settings = { selected_contacts: selectedContactIds };
 
         // We only update the contacts, not the whole form
@@ -572,6 +578,18 @@ document.addEventListener('DOMContentLoaded', function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
+    }
+    
+    // --- Функция для обновления счетчика на вкладке ---
+    function updateSelectedContactsCount() {
+        const countElement = document.getElementById('selected-contacts-count');
+        if (countElement) {
+            const count = selectedContactIds.length;
+            countElement.textContent = count > 0 ? `(${count})` : '';
+            // Добавим немного стиля, чтобы счетчик был заметнее
+            countElement.style.color = '#3498db';
+            countElement.style.fontWeight = 'normal';
+        }
     }
 
     async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCounterCallback) {
