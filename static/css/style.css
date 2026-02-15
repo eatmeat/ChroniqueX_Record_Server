@@ -385,10 +385,28 @@ input[type="text"], input[type="number"], textarea {
 }
 
 .context-rule-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
+
+.context-rule-header {
     display: grid;
-    grid-template-columns: 1fr 2fr auto;
+    grid-template-columns: auto 1fr auto;
     gap: 10px;
     align-items: center;
+}
+
+.context-rule-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    white-space: nowrap;
 }
 
 .context-rule-pattern, .context-rule-prompt {
@@ -398,6 +416,11 @@ input[type="text"], input[type="number"], textarea {
     border-radius: 4px;
     box-sizing: border-box;
     font-size: 0.9em;
+}
+
+.context-rule-prompt {
+    resize: vertical;
+    min-height: 40px;
 }
 
 .remove-rule-btn {

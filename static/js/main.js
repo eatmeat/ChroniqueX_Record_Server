@@ -140,9 +140,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const rules = [];
         document.querySelectorAll('.context-rule-item').forEach(item => {
             const pattern = item.querySelector('.context-rule-pattern').value.trim();
-            const prompt = item.querySelector('.context-rule-prompt').value.trim();
+            const prompt = item.querySelector('.context-rule-prompt').value; // Не тримим, чтобы сохранить отступы
+            const enabled = item.querySelector('.context-rule-enabled').checked;
             if (pattern && prompt) {
-                rules.push({ pattern, prompt });
+                rules.push({ pattern, prompt, enabled });
             }
         });
         return rules;
@@ -189,7 +190,7 @@ document.addEventListener('DOMContentLoaded', function () {
         contextRulesContainer.innerHTML = '';
         if (rules.length === 0) {
             // Добавляем правило по умолчанию, если список пуст
-            rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n' });
+            rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n', enabled: true });
         }
         rules.forEach(rule => {
             addContextRuleRow(rule.pattern, rule.prompt);
@@ -197,13 +198,20 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function addContextRuleRow(pattern = '', prompt = '') {
+        const isEnabled = arguments.length > 2 ? arguments[2] : true; // По умолчанию включено
         const ruleItem = document.createElement('div');
         ruleItem.className = 'context-rule-item';
 
         ruleItem.innerHTML = `
-            <input type="text" class="context-rule-pattern" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
+            <div class="context-rule-header">
+                <label class="context-rule-toggle">
+                    <input type="checkbox" class="context-rule-enabled" ${isEnabled ? 'checked' : ''}>
+                    Включено
+                </label>
+                <input type="text" class="context-rule-pattern" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
+                <button type="button" class="action-btn remove-rule-btn">&times;</button>
+            </div>
             <textarea class="context-rule-prompt" rows="2" placeholder="Добавка к промпту...">${prompt}</textarea>
-            <button type="button" class="action-btn remove-rule-btn">&times;</button>
         `;
 
         ruleItem.querySelector('.remove-rule-btn').addEventListener('click', () => {
@@ -212,6 +220,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Автосохранение при изменении полей
+        ruleItem.querySelector('.context-rule-enabled').addEventListener('change', saveSettings);
         ruleItem.querySelector('.context-rule-pattern').addEventListener('change', saveSettings);
         ruleItem.querySelector('.context-rule-prompt').addEventListener('change', saveSettings);
 
@@ -219,7 +228,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     addContextRuleBtn.addEventListener('click', () => {
-        addContextRuleRow();
+        addContextRuleRow('', '', true);
     });
 
     settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы

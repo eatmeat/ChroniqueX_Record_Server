@@ -475,7 +475,8 @@ DEFAULT_SETTINGS = {
     "context_file_rules": [
         {
             "pattern": "*.html", 
-            "prompt": "\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n"
+            "prompt": "\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n",
+            "enabled": True
         }
     ],
     "main_window_width": 700,
@@ -1563,6 +1564,10 @@ def process_recording_tasks(file_path):
         context_rules = settings.get("context_file_rules", [])
         audio_path = Path(file_path)
         for rule in context_rules:
+            # Проверяем, включено ли правило
+            if not rule.get("enabled", False):
+                continue
+
             pattern = rule.get("pattern")
             prompt_template = rule.get("prompt")
             if not pattern or not prompt_template:
