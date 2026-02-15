@@ -30,6 +30,21 @@
             <button id="stop-btn" class="control-btn stop-btn" disabled>STOP</button>
         </div>
 
+        <div class="volume-meters-container">
+            <div class="volume-meter">
+                <label for="mic-volume">Микрофон: <span id="mic-volume-value"></span> dB</label>
+                <div class="meter-bar-container"><div id="mic-level-bar" class="meter-bar"></div></div>
+                <input type="range" id="mic-volume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="-3">
+            </div>
+            <div class="volume-meter">
+                <label for="sys-audio-volume">Системное аудио: <span id="sys-audio-volume-value"></span> dB</label>
+                <div class="meter-bar-container"><div id="sys-level-bar" class="meter-bar"></div></div>
+                <input type="range" id="sys-audio-volume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="0">
+            </div>
+        </div>
+        
+        <div id="settings-save-status" style="text-align: center; margin-bottom: 15px; height: 1em;"></div>
+
         <main>
             <div class="tabs">
                 <button class="tab-link active" data-tab="recordings-tab">Записи</button>
@@ -100,7 +115,7 @@
                             <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
                             <p>Строки, начинающиеся с <code>//</code>, будут проигнорированы.</p>
                         </div>
-                        <textarea id="prompt-addition" name="prompt_addition" rows="20"></textarea>
+                        <textarea id="prompt-addition" name="prompt_addition" rows="20"></textarea>                    
                     </div>
 
                     <h3>Правила для файлов контекста</h3>
@@ -108,26 +123,15 @@
                         <p>Здесь можно настроить, какие файлы из папки с записью будут добавлены в контекст. В шаблоне имени файла можно использовать:</p>
                         <ul>
                             <li><code>*</code> — заменяет любую последовательность символов (например, <code>*.txt</code>).</li>
-                            <li><code>?</code> — заменяет один любой символ (например, <code>task?.html</code>).</li>
-                            <li><code>[]</code> — заменяет один из символов в скобках (например, <code>список[123].json</code>).</li>
+                            <li><code>?</code> — заменяет один любой символ (например, <code>report_?.doc</code>).</li>
+                            <li><code>[]</code> — заменяет один из символов в скобках (например, <code>img[123].png</code>).</li>
                         </ul>
                         <p>Доступные плейсхолдеры в "Добавке к промпту": <code>{filename}</code>, <code>{content}</code>.</p>
                     </div>
                     <div id="context-file-rules-container"></div>
                     <button type="button" id="add-context-rule-btn" class="action-btn">Добавить правило</button>
 
-                    <h3>Корректировка громкости</h3>
-                    <div class="form-group slider-group">
-                        <label for="mic-volume">Микрофона: <span id="mic-volume-value"></span> dB</label>
-                        <input type="range" id="mic-volume" name="mic_volume_adjustment" min="-20" max="20" step="1" value="-3">
-                    </div>
-                    <div class="form-group slider-group">
-                        <label for="sys-audio-volume">Системного аудио: <span id="sys-audio-volume-value"></span> dB</label>
-                        <input type="range" id="sys-audio-volume" name="system_audio_volume_adjustment" min="-20" max="20" step="1" value="0">
-                    </div>
-
                 </form>
-                <div id="settings-save-status" style="margin-top: 15px;"></div>
             </div>
 
             <div id="contacts-tab" class="tab-content">

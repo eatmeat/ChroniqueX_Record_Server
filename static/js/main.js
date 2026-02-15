@@ -8,6 +8,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const pauseBtn = document.getElementById('pause-btn');
     const stopBtn = document.getElementById('stop-btn');
     const favicon = document.getElementById('favicon');
+    const micLevelBar = document.getElementById('mic-level-bar');
+    const sysLevelBar = document.getElementById('sys-level-bar');
 
     // --- Tabs ---
     const tabLinks = document.querySelectorAll('.tab-link');
@@ -71,6 +73,30 @@ document.addEventListener('DOMContentLoaded', function () {
             console.error('Error fetching status:', error);
             statusText.textContent = 'Ошибка соединения';
             statusIndicator.className = 'status-indicator stop';
+        }
+    }
+
+    async function updateAudioLevels() {
+        if (currentStatus === 'stop') {
+            micLevelBar.style.width = '0%';
+            sysLevelBar.style.width = '0%';
+            return;
+        }
+        try {
+            const response = await fetch('/audio_levels');
+            const levels = await response.json();
+
+            const updateBar = (bar, level) => {
+                const percentage = Math.min(level * 100 * 2, 100); // Усиление для лучшей видимости
+                bar.style.width = `${percentage}%`;
+                bar.classList.toggle('peak', percentage > 90);
+            };
+
+            updateBar(micLevelBar, levels.mic);
+            updateBar(sysLevelBar, levels.sys);
+
+        } catch (error) {
+            // console.error('Error fetching audio levels:', error);
         }
     }
 
@@ -834,7 +860,8 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Initialization ---
     function initialize() {
         updateStatus();
-        setInterval(updateStatus, 5000); // Poll status every 5 seconds
+        setInterval(updateStatus, 2000); // Poll status every 2 seconds
+        setInterval(updateAudioLevels, 100); // Poll audio levels frequently
         loadSettings();
         loadContactsAndSettings();
         setRandomGroupPlaceholder();

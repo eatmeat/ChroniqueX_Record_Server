@@ -583,6 +583,10 @@ is_post_processing = False  # Track if post-processing is happening
 post_process_file_path = ""  # Track the file being processed
 post_process_stage = ""  # Track the current stage (transcribe, protocol, etc.)
 
+# --- Глобальные переменные для уровней звука ---
+audio_levels = {"mic": 0.0, "sys": 0.0}
+
+
 # --- Server Lifecycle Management ---
 def start_server():
     global flask_thread
@@ -706,15 +710,13 @@ def open_main_window(icon=None, item=None):
             height = win.winfo_height()
 
             new_settings = {
+                # Сохраняем старые настройки, чтобы не перезаписать их
+                **settings, 
                 "port": new_port,
                 "server_enabled": server_enabled_var.get(),
                 "lan_accessible": lan_accessible_var.get(),
-                "use_custom_prompt": use_custom_prompt_var.get(),
-                "prompt_addition": prompt_addition_text.get("1.0", tk.END).strip(),
-                "include_html_files": include_html_files_var.get(),
                 "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
                 "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
-                "selected_contacts": [contact_id for contact_id, var in contact_vars.items() if var.get()],
                 "main_window_width": width,
                 "main_window_height": height,
                 "main_window_x": x,
@@ -726,21 +728,14 @@ def open_main_window(icon=None, item=None):
                 old_settings['server_enabled'] != new_settings['server_enabled'] or
                 old_settings['lan_accessible'] != new_settings['lan_accessible']
             )
-            
-            # Сохраняем старые настройки, которые не управляются из веб-интерфейса
-            new_settings['context_file_rules'] = old_settings.get('context_file_rules', [])
             save_settings(new_settings)
             if restart_needed:
                 messagebox.showinfo("Применение", "Настройки сохранены. Сервер будет перезапущен.", parent=win)
                 restart_server(old_settings)
-                mark_as_saved()
-                # Don't close the window, just update the tray menu
-                update_tray_menu()
+                mark_as_saved() # Mark as saved after restart
             else:
                 messagebox.showinfo("Сохранено", "Настройки сохранены.", parent=win)
                 mark_as_saved()
-                # Update the tray menu if needed
-                update_tray_menu()
 
         except ValueError as e:
             messagebox.showerror("Ошибка", f"Неверное значение для порта: {e}", parent=win)
@@ -797,7 +792,7 @@ def open_main_window(icon=None, item=None):
             win.title("ChroniqueX - Настройки *")
             save_button.config(text="Сохранить *")
         else:
-            win.title("ChroniqueX - Запись @ Транскрибация @ Протоколы")
+            win.title("ChroniqueX - Настройки")
             save_button.config(text="Сохранить")
 
     # Set window size and position from settings
@@ -820,498 +815,65 @@ def open_main_window(icon=None, item=None):
     win.grid_rowconfigure(0, weight=1)
     win.grid_columnconfigure(0, weight=1)
 
-    # --- Contacts Management UI ---
-    contacts_frame = tk.LabelFrame(win, text="Участники", padx=10, pady=10)
-    contacts_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=5)
-    contacts_frame.grid_columnconfigure(0, weight=1)
-
-    contacts_canvas = tk.Canvas(contacts_frame)
-    contacts_scrollbar = tk.Scrollbar(contacts_frame, orient="vertical", command=contacts_canvas.yview)
-    scrollable_contacts_frame = tk.Frame(contacts_canvas)
-
-    scrollable_contacts_frame.bind(
-        "<Configure>",
-        lambda e: contacts_canvas.configure(
-            scrollregion=contacts_canvas.bbox("all")
-        )
-    )
-
-    contacts_canvas.create_window((0, 0), window=scrollable_contacts_frame, anchor="nw")
-    contacts_canvas.configure(yscrollcommand=contacts_scrollbar.set)
-
-    contacts_canvas.pack(side="left", fill="both", expand=True)
-    contacts_scrollbar.pack(side="right", fill="y")
-
-    contact_vars = {}
-
-    def render_contacts_ui():
-        for widget in scrollable_contacts_frame.winfo_children():
-            widget.destroy()
-        contact_vars.clear()
-
-        selected_ids = set(settings.get("selected_contacts", []))
-
-        # Сортируем группы по имени для консистентного отображения
-        for group in sorted(contacts_data.get("groups", []), key=lambda g: g.get("name", "")):
-            group_frame = tk.LabelFrame(scrollable_contacts_frame, text=group.get("name", "Без имени"), padx=5, pady=5)
-            group_frame.pack(fill="x", expand=True, pady=5)
-            for contact in group.get("contacts", []):
-                contact_id = contact.get("id")
-                if contact_id:
-                    var = tk.BooleanVar(value=(contact_id in selected_ids))
-                    chk = tk.Checkbutton(group_frame, text=contact.get("name"), variable=var, command=mark_as_changed)
-                    chk.pack(anchor="w")
-                    contact_vars[contact_id] = var
-
-    def add_contact():
-        # Simple dialog to add a contact
-        dialog = tk.Toplevel(win)
-        dialog.title("Добавить участника")
-        dialog.transient(win); dialog.grab_set()
-        
-        tk.Label(dialog, text="Имя:").pack(padx=5, pady=5)
-        name_entry = tk.Entry(dialog, width=30)
-        name_entry.pack(padx=5, pady=5)
-        name_entry.focus()
-
-        tk.Label(dialog, text="Группа:").pack(padx=5, pady=5)
-        group_names = [g['name'] for g in contacts_data.get("groups", [])]
-        group_combo = ttk.Combobox(dialog, values=group_names)
-        group_combo.pack(padx=5, pady=5)
-
-        def on_add():
-            name = name_entry.get().strip()
-            group_name = group_combo.get().strip()
-            if not name:
-                messagebox.showerror("Ошибка", "Имя не может быть пустым.", parent=dialog)
-                return
-            if not group_name:
-                group_name = "Без группы"
-
-            new_contact = {"id": str(uuid.uuid4()), "name": name}
-            
-            # Find group or create new one
-            group_found = False
-            for group in contacts_data.get("groups", []):
-                if group['name'] == group_name:
-                    group.setdefault('contacts', []).append(new_contact)
-                    group_found = True
-                    break
-            if not group_found:
-                contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": [new_contact]})
-
-            save_contacts(contacts_data)
-            render_contacts_ui()
-            mark_as_changed()
-            dialog.destroy()
-
-        tk.Button(dialog, text="Добавить", command=on_add).pack(pady=10)
-
-    def manage_contacts():
-        """Opens a dedicated window for managing contacts (CRUD)."""
-        manager_win = tk.Toplevel(win)
-        manager_win.title("Управление участниками")
-        manager_win.transient(win); manager_win.grab_set()
-        manager_win.geometry("500x400")
-
-        # Main frame with scrollbar
-        main_frame = tk.Frame(manager_win)
-        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-        canvas = tk.Canvas(main_frame)
-        scrollbar = tk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas)
-
-        scrollable_frame.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
-
-        def populate_manager():
-            for widget in scrollable_frame.winfo_children():
-                widget.destroy()
-
-            # Сортируем группы по имени
-            for group in sorted(contacts_data.get("groups", []), key=lambda g: g.get("name", "")):
-                group_frame = tk.LabelFrame(scrollable_frame, text=group.get("name", "Без имени"), padx=10, pady=5)
-                group_frame.pack(fill="x", expand=True, pady=5, padx=5)
-
-                for contact_idx, contact in enumerate(group.get("contacts", [])):
-                    contact_frame = tk.Frame(group_frame)
-                    contact_frame.pack(fill="x", expand=True, pady=2)
-                    
-                    tk.Label(contact_frame, text=contact.get("name")).pack(side="left", fill="x", expand=True)
-                    
-                    delete_btn = tk.Button(contact_frame, text="Удалить", command=lambda c=contact: delete_contact_gui(c, manager_win))
-                    delete_btn.pack(side="right", padx=5)
-                    
-                    edit_btn = tk.Button(contact_frame, text="Изменить", command=lambda c=contact: edit_contact_gui(c, manager_win))
-                    edit_btn.pack(side="right")
-
-        def add_contact_gui():
-            add_contact() # Re-use the existing add_contact dialog
-            populate_manager() # Refresh the manager list
-            render_contacts_ui() # Refresh the main window list
-
-        def edit_contact_gui(contact, parent):
-            dialog = tk.Toplevel(parent)
-            dialog.title("Изменить участника")
-            dialog.transient(parent); dialog.grab_set()
-
-            tk.Label(dialog, text="Имя:").pack(padx=5, pady=5)
-            name_var = tk.StringVar(value=contact.get("name"))
-            name_entry = tk.Entry(dialog, width=30, textvariable=name_var)
-            name_entry.pack(padx=5, pady=5)
-            name_entry.focus()
-
-            def on_save_edit():
-                new_name = name_var.get().strip()
-                if not new_name:
-                    messagebox.showerror("Ошибка", "Имя не может быть пустым.", parent=dialog)
-                    return
-                
-                # Find and update the contact in the main data structure
-                for g in contacts_data.get("groups", []):
-                    for c in g.get("contacts", []):
-                        if c.get("id") == contact.get("id"):
-                            c["name"] = new_name
-                            break
-                
-                save_contacts(contacts_data)
-                populate_manager() # Refresh manager
-                render_contacts_ui() # Refresh main window
-                mark_as_changed()
-                dialog.destroy()
-
-            tk.Button(dialog, text="Сохранить", command=on_save_edit).pack(pady=10)
-
-        def delete_contact_gui(contact, parent):
-            if not messagebox.askyesno("Подтверждение", f"Вы уверены, что хотите удалить участника '{contact.get('name')}'?", parent=parent):
-                return
-            
-            contact_id_to_delete = contact.get("id")
-            
-            # Remove from contacts_data
-            for group in contacts_data.get("groups", []):
-                group["contacts"] = [c for c in group.get("contacts", []) if c.get("id") != contact_id_to_delete]
-            
-            # Remove empty groups
-            contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("contacts")]
-
-            save_contacts(contacts_data)
-            populate_manager()
-            render_contacts_ui()
-            mark_as_changed()
-
-        tk.Button(manager_win, text="Добавить участника", command=add_contact_gui).pack(pady=10)
-        populate_manager()
-
-    contacts_buttons_frame = tk.Frame(contacts_frame)
-    contacts_buttons_frame.pack(fill="x", pady=5)
-    tk.Button(contacts_buttons_frame, text="Добавить", command=add_contact).pack(side="left", padx=5)
-    tk.Button(contacts_buttons_frame, text="Управлять", command=manage_contacts).pack(side="left", padx=5)
-
-    render_contacts_ui()
-
     # Main frame
     main_frame = tk.Frame(win)
-    main_frame.grid(row=2, column=0, sticky="nsew", padx=10, pady=10)
-    main_frame.grid_rowconfigure(4, weight=1)  # Give row 4 (text area) weight to expand
-    main_frame.grid_rowconfigure(7, weight=0)  # Row for endpoints info
+    main_frame.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+    main_frame.grid_rowconfigure(1, weight=1)  # Give row 1 (endpoints) weight to expand
     main_frame.grid_columnconfigure(0, weight=1)
 
-    # Telegram bot link frame
-    telegram_frame = tk.Frame(main_frame)
-    telegram_frame.grid(row=0, column=0, sticky="ew", padx=5, pady=5)
-    telegram_frame.grid_columnconfigure(0, weight=1)
-    
-    # Telegram bot link label
-    telegram_label = tk.Label(telegram_frame, text="Telegram-бот: @ChroniqueX_bot", fg="blue", cursor="hand2", font=("Arial", 10, "underline"))
-    telegram_label.pack(side="left")
-    
-    # Function to handle clicking on the Telegram link
-    def open_telegram_bot():
-        import webbrowser
-        webbrowser.open("https://t.me/ChroniqueX_bot")
-    
-    # Bind click event to the label
-    telegram_label.bind("<Button-1>", lambda e: open_telegram_bot())
-
-    # Toolbar frame for recording controls
-    toolbar_frame = tk.Frame(main_frame)
-    toolbar_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
-    toolbar_frame.grid_columnconfigure(0, weight=1)
-    toolbar_frame.grid_columnconfigure(1, weight=1)
-    toolbar_frame.grid_columnconfigure(2, weight=1)
-    toolbar_frame.grid_columnconfigure(3, weight=1)
-
-    # Status label for post-processing
-    post_process_status_label = tk.Label(main_frame, text="", fg="blue", font=("Arial", 10))
-    post_process_status_label.grid(row=2, column=0, sticky="ew", padx=5, pady=5)
-    
-    # Function to update post-processing status display
-    def update_post_process_status():
-        if is_post_processing:
-            if post_process_stage == "transcribe":
-                status_text = f"Идет постобработка: транскрибация файла {os.path.basename(post_process_file_path)}"
-            elif post_process_stage == "protocol":
-                status_text = f"Идет постобработка: создание протокола из {os.path.basename(post_process_file_path)}"
-            else:
-                status_text = f"Идет постобработка: {os.path.basename(post_process_file_path)}"
-        else:
-            status_text = "Постобработка не выполняется"
-
-        post_process_status_label.config(text=status_text)
-        # Schedule next update, referencing the function via the window to prevent garbage collection
-        if win.winfo_exists():
-            job_id = win.after(1000, win.update_post_process_status)  # Update every second
-            win._after_jobs.append(job_id)
-    
-    # Start the status update loop
-    win.update_post_process_status = update_post_process_status
-    win.update_post_process_status()
-
-
-    # Create icons for buttons
-    def create_button_icon_with_text(shape, color, text, size=(60, 65), font_size=14):
-        """Create an icon for buttons with both shape and text centered"""
-        image = Image.new('RGBA', size, (0, 0, 0, 0))
-        dc = ImageDraw.Draw(image)
-        width, height = size
-        
-        # Calculate positions for centered icon and text
-        icon_y = 8  # Position icon lower to make space for text
-        text_y = height - 22  # Position text at the bottom, adjusted for larger font
-        
-        # Draw the icon shape
-        if shape == 'circle': 
-            dc.ellipse((width//2 - 8, icon_y, width//2 + 8, icon_y + 16), fill=color)
-        elif shape == 'pause':
-            # Draw two vertical bars for pause symbol
-            bar_width = 4
-            bar_height = 14
-            # Left bar
-            dc.rectangle([(width//2 - 6, icon_y), (width//2 - 6 + bar_width, icon_y + bar_height)], fill=color)
-            # Right bar
-            dc.rectangle([(width//2 + 2, icon_y), (width//2 + 2 + bar_width, icon_y + bar_height)], fill=color)
-        elif shape == 'square':
-            margin = 4
-            dc.rectangle((width//2 - 8, icon_y, width//2 + 8, icon_y + 16), fill=color)
-        
-        # Add text below the icon
-        try:
-            # Try to use a default font
-            font = ImageFont.truetype("arial.ttf", font_size)
-        except:
-            try:
-                font = ImageFont.truetype("Arial.ttf", font_size)  # Alternative capitalization
-            except:
-                # Fallback to default font if Arial is not available
-                font = ImageFont.load_default()
-        
-        # Calculate text position to be centered below the icon
-        text_bbox = dc.textbbox((0, 0), text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_x = (width - text_width) // 2  # Horizontally center the text
-        
-        dc.text((text_x, text_y), text, fill=(0, 0, 0, 255), font=font)
-        
-        # Convert to PhotoImage
-        photo = ImageTk.PhotoImage(image)
-        return photo
-
-    # Import ImageFont inside the function to avoid import issues
-    from PIL import ImageFont
-
-    # Create button icons with text
-    rec_icon = create_button_icon_with_text('circle', 'red', 'REC', font_size=12)
-    pause_icon = create_button_icon_with_text('pause', 'orange', 'PAUSE', font_size=12)
-    stop_icon = create_button_icon_with_text('square', 'gray', 'STOP', font_size=12)
-    # For open folder button, keep text since it's a different type of action
-
-    # Define button variables with icons
-    rec_button = tk.Button(toolbar_frame, image=rec_icon, width=65, height=65)
-    pause_button = tk.Button(toolbar_frame, image=pause_icon, width=65, height=65)
-    stop_button = tk.Button(toolbar_frame, image=stop_icon, width=65, height=65)
-    open_folder_button = tk.Button(toolbar_frame, text="Открыть папку с записями", width=30, height=2)
-    
-    # Keep references to images to prevent garbage collection
-    rec_button.image = rec_icon
-    pause_button.image = pause_icon
-    stop_button.image = stop_icon
-
-    # Pack buttons in the toolbar
-    rec_button.grid(row=0, column=0, padx=2, pady=2)
-    pause_button.grid(row=0, column=1, padx=2, pady=2)
-    stop_button.grid(row=0, column=2, padx=2, pady=2)
-    open_folder_button.grid(row=0, column=3, padx=2, pady=2)
-
-    # Update button states based on current recording status
-    def update_toolbar_buttons():
-        # Check local recording state first
-        if is_recording and not is_paused:
-            # Recording is active, show pause and stop buttons as enabled
-            rec_button.config(relief="sunken", state="disabled")  # Pressed appearance
-            pause_button.config(relief="raised", state="normal")
-            stop_button.config(relief="raised", state="normal")
-        elif is_recording and is_paused:
-            # Recording is paused, show resume and stop buttons
-            rec_button.config(relief="raised", state="normal")
-            pause_button.config(relief="sunken", state="disabled")  # Pressed appearance
-            stop_button.config(relief="raised", state="normal")
-        else:
-            # No active recording, show rec button enabled
-            rec_button.config(relief="raised", state="normal")
-            pause_button.config(relief="sunken", state="disabled")  # Pressed but disabled
-            stop_button.config(relief="sunken", state="disabled")  # Pressed but disabled
-
-            # Disable pause and stop buttons when not recording
-            pause_button.config(state="disabled")
-            stop_button.config(state="disabled")
-
-    # Configure button commands
-    rec_button.config(command=lambda: start_recording_from_tray(None, None))
-    pause_button.config(command=lambda: pause_recording_from_tray(None, None))
-    stop_button.config(command=lambda: stop_recording_from_tray(None, None))
-    open_folder_button.config(command=lambda: open_rec_folder(None, None))
-
-    # Initial update of button states
-    update_toolbar_buttons()
-    
-    # Schedule periodic updates of button states
-    def schedule_toolbar_update():
-        update_toolbar_buttons()
-        # Schedule next update, referencing the function via the window to prevent garbage collection
-        if win.winfo_exists():
-            job_id = win.after(1000, win.update_post_process_status)  # Update every second
-            win._after_jobs.append(job_id)
-    
-    # Start the status update loop
-    win.update_post_process_status = update_post_process_status
-    win.schedule_toolbar_update = schedule_toolbar_update
-
-    # Create StringVar for the text widget
-    prompt_addition_frame = tk.Frame(main_frame)
-    prompt_addition_frame.grid(row=3, column=0, sticky="ew", padx=10, pady=5)
-    main_frame.grid_columnconfigure(0, weight=1)
+    settings_container = tk.Frame(main_frame)
+    settings_container.grid(row=0, column=0, sticky="new", padx=10, pady=5)
+    settings_container.grid_columnconfigure(0, weight=1)
 
     # Переменные для виджетов настроек
     port_var = tk.StringVar(value=str(settings.get("port")))
     server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
     lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
-    use_custom_prompt_var = tk.BooleanVar(value=settings.get("use_custom_prompt", False))
-    include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
     mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
-
-    tk.Checkbutton(prompt_addition_frame, text="Использовать дополнение к промпту", variable=use_custom_prompt_var).pack(anchor="w")
-    # Checkbox for including HTML files
-    include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
-    include_html_check.pack(anchor="w")
 
     # --- Unsaved Changes Logic (continued) ---
     def capture_original_settings():
         original_settings['port'] = port_var.get()
         original_settings['server_enabled'] = server_enabled_var.get()
         original_settings['lan_accessible'] = lan_accessible_var.get()
-        original_settings['use_custom_prompt'] = use_custom_prompt_var.get()
-        # original_settings['include_html_files'] = include_html_files_var.get() # Удалено
-        original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
         original_settings['mic_volume_adjustment'] = mic_volume_var.get()
         original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
-        original_settings['selected_contacts'] = [contact_id for contact_id, var in contact_vars.items() if var.get()]
-
-    prompt_addition_label = tk.Label(prompt_addition_frame, text="Дополнение к промпту:")
-    prompt_addition_label.pack(anchor="w")
-
-    # Information label about {current_date} placeholder
-    info_label = tk.Label(prompt_addition_frame, text="Доступные плейсхолдеры: {current_data} - текущая дата в формате DD MMMMM YYYY", fg="gray", font=("Arial", 8))
-    info_label.pack(anchor="w")
-
-    # Information label about "//" comment lines
-    comment_info_label = tk.Label(prompt_addition_frame, text="Строки, начинающиеся с //, будут исключены при отправке задачи", fg="gray", font=("Arial", 8))
-    comment_info_label.pack(anchor="w")
 
     # Audio volume controls frame
-    volume_frame = tk.LabelFrame(prompt_addition_frame, text="Настройки громкости", padx=5, pady=5)
+    volume_frame = tk.LabelFrame(settings_container, text="Корректировка громкости", padx=5, pady=5)
     volume_frame.pack(anchor="w", fill="x", pady=(10, 0))
 
     # Microphone volume control
     def update_mic_label(value):
         val = float(value)
-        mic_volume_label_var.set(f"Громкость микрофона ({'+' if val > 0 else ''}{int(val)} dB):")
+        mic_volume_scale.label = f"Громкость микрофона ({'+' if val > 0 else ''}{int(val)} dB):"
     
-    mic_volume_label_var = tk.StringVar()
-    tk.Label(volume_frame, textvariable=mic_volume_label_var).pack(anchor="w")
+    tk.Label(volume_frame, text="Громкость микрофона:").pack(anchor="w")
     mic_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
     mic_volume_scale.pack(fill="x", expand=True, pady=(0, 5))
-    update_mic_label(mic_volume_var.get()) # Initial update
 
     # System audio volume control
     def update_sys_label(value):
         val = float(value)
-        sys_audio_label_var.set(f"Громкость системного аудио ({'+' if val > 0 else ''}{int(val)} dB):")
+        sys_audio_volume_scale.label = f"Громкость системного аудио ({'+' if val > 0 else ''}{int(val)} dB):"
     
-    sys_audio_label_var = tk.StringVar()
-    tk.Label(volume_frame, textvariable=sys_audio_label_var).pack(anchor="w")
+    tk.Label(volume_frame, text="Громкость системного аудио:").pack(anchor="w")
     sys_audio_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
     sys_audio_volume_scale.pack(fill="x", expand=True)
-    update_sys_label(sys_audio_volume_var.get()) # Initial update
     
-    # Listen for changes
-    settings_changed.trace_add("write", update_ui_for_changes)
-
-
-    # Create a text widget with scrollbar
-    text_frame = tk.Frame(main_frame)
-    text_frame.grid(row=4, column=0, sticky="nsew", padx=10, pady=5)
-    main_frame.grid_rowconfigure(4, weight=1)  # This row will expand vertically
-    main_frame.grid_columnconfigure(0, weight=1)
-
-    prompt_addition_text = tk.Text(text_frame, height=6, width=50)
-    scrollbar = tk.Scrollbar(text_frame, orient=tk.VERTICAL, command=prompt_addition_text.yview)
-    prompt_addition_text.configure(yscrollcommand=scrollbar.set)
-
-    prompt_addition_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-    prompt_addition_text.insert(tk.END, settings.get("prompt_addition", ""))
-
-    # Add context menu to the text widget
-    _add_context_menu_to_text_widget(prompt_addition_text)
-
-    # Field is always editable regardless of the checkbox state
-    prompt_addition_text.config(state=tk.NORMAL)
-
-    # Note: The checkbox state only affects whether the prompt is used during processing,
-    # not the editability of the field
-
-    frame = tk.Frame(main_frame, padx=10, pady=10)
-    frame.grid(row=6, column=0, sticky="ew", padx=10, pady=10)
-    frame.grid_columnconfigure(3, weight=1) # Let the last column expand
+    server_settings_frame = tk.Frame(settings_container, padx=10, pady=10)
+    server_settings_frame.pack(fill="x", expand=True)
+    server_settings_frame.grid_columnconfigure(3, weight=1) # Let the last column expand
 
     # Endpoints info frame
-    endpoints_frame = tk.Frame(main_frame)
-    endpoints_frame.grid(row=7, column=0, sticky="ew", padx=10, pady=10)
+    endpoints_frame = tk.LabelFrame(main_frame, text="Адреса и эндпоинты сервера", padx=10, pady=10)
+    endpoints_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
     endpoints_frame.grid_columnconfigure(0, weight=1)
-    
-    endpoints_label = tk.Label(endpoints_frame, text="Эндпоинты сервера:", font=("Arial", 10, "bold"))
-    endpoints_label.pack(anchor="w")
     
     # Create a frame for the endpoint links
     endpoints_links_frame = tk.Frame(endpoints_frame)
     endpoints_links_frame.pack(fill=tk.BOTH, expand=True)
-    
-    # Define endpoint information
-    endpoints_info = [
-        ("/", "веб-интерфейс"),
-        ("/rec", "начать запись"),
-        ("/stop", "остановить запись"),
-        ("/pause", "приостановить запись"),
-        ("/resume", "возобновить запись"),
-        ("/status", "получить статус записи")
-    ]
     
     # Dictionary to store label widgets for later updates
     endpoint_labels = {}
@@ -1326,6 +888,15 @@ def open_main_window(icon=None, item=None):
         # Get current port
         current_port = port_var.get() if port_var.get() else "8288"
         
+        endpoints_info = [
+            ("/", "веб-интерфейс"),
+            ("/rec", "начать запись"),
+            ("/stop", "остановить запись"),
+            ("/pause", "приостановить запись"),
+            ("/resume", "возобновить запись"),
+            ("/status", "получить статус записи")
+        ]
+
         for i, (endpoint, description) in enumerate(endpoints_info):
             # Create full URL
             full_url = f"http://localhost:{current_port}{endpoint}"
@@ -1383,36 +954,29 @@ def open_main_window(icon=None, item=None):
     
     port_var.trace_add("write", on_port_change)
 
-    tk.Label(frame, text="Порт:").grid(row=0, column=0, sticky="w", pady=5, padx=(0, 5))
-    port_edit = tk.Entry(frame, textvariable=port_var)
+    tk.Label(server_settings_frame, text="Порт:").grid(row=0, column=0, sticky="w", pady=5, padx=(0, 5))
+    port_edit = tk.Entry(server_settings_frame, textvariable=port_var)
     port_edit.grid(row=0, column=1, sticky="w", padx=5)
     _add_context_menu_to_text_widget(port_edit)
-    tk.Checkbutton(frame, text="Сервер запущен", variable=server_enabled_var).grid(row=0, column=2, sticky="w", padx=5)
-    tk.Checkbutton(frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=0, column=3, sticky="w", padx=5)
+    tk.Checkbutton(server_settings_frame, text="Сервер запущен", variable=server_enabled_var).grid(row=0, column=2, sticky="w", padx=5)
+    tk.Checkbutton(server_settings_frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=0, column=3, sticky="w", padx=5)
 
-    button_frame = tk.Frame(frame)
+    button_frame = tk.Frame(server_settings_frame)
     button_frame.grid(row=1, columnspan=4, pady=10)
     save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
     save_button.pack(side="left", padx=5)
     tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
 
-    win.schedule_toolbar_update()
-
     # --- Unsaved Changes Logic (final part) ---
     # Capture initial state
     capture_original_settings()
+    settings_changed.trace_add("write", update_ui_for_changes)
     # Trace changes on all variable-based widgets
     port_var.trace_add("write", mark_as_changed)
     server_enabled_var.trace_add("write", mark_as_changed)
-    # Trace changes on contact checkboxes (This seems to be missing, but let's keep the logic)
-    for var in contact_vars.values():
-        var.trace_add("write", mark_as_changed)
     lan_accessible_var.trace_add("write", mark_as_changed)
-    use_custom_prompt_var.trace_add("write", mark_as_changed)
-    include_html_files_var.trace_add("write", mark_as_changed)
     mic_volume_var.trace_add("write", mark_as_changed)
     sys_audio_volume_var.trace_add("write", mark_as_changed)
-    prompt_addition_text.bind("<<Modified>>", lambda e: (mark_as_changed(), prompt_addition_text.edit_modified(False)))
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
@@ -2168,6 +1732,11 @@ def status():
 
     return jsonify(recording_status)
 
+@app.route('/audio_levels', methods=['GET'])
+def get_audio_levels():
+    """Возвращает текущие уровни громкости для микрофона и системного аудио."""
+    return jsonify(audio_levels)
+
 @app.route('/recreate_transcription/<date>/<filename>', methods=['GET'])
 def recreate_transcription(date, filename):
     """Запускает задачу пересоздания транскрипции для аудиофайла."""
@@ -2701,6 +2270,7 @@ def resume_recording_from_tray(icon, item):
 
 def recorder_mic_to_file(device_index, stop_event, output_filename):
     """Records audio from microphone using sounddevice and writes to a file."""
+    global audio_levels
     try:
         q = queue.Queue()
 
@@ -2725,6 +2295,9 @@ def recorder_mic_to_file(device_index, stop_event, output_filename):
                 else:
                     try:
                         data = q.get(timeout=0.1)
+                        # Рассчитываем RMS для уровня громкости
+                        rms = np.sqrt(np.mean(np.square(data.astype(np.float32) / 32768.0)))
+                        audio_levels["mic"] = float(rms)
                         wf.writeframes(data)
                     except queue.Empty:
                         pass
@@ -2735,6 +2308,7 @@ def recorder_mic_to_file(device_index, stop_event, output_filename):
 
 def recorder_sys_to_file(stop_event, output_filename):
     """Records system audio using pyaudiowpatch and writes to a file."""
+    global audio_levels
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
@@ -2780,6 +2354,10 @@ def recorder_sys_to_file(stop_event, output_filename):
                     else:
                         try:
                             data = q.get(timeout=0.1)
+                            # Рассчитываем RMS для уровня громкости
+                            np_data = np.frombuffer(data, dtype=np.int16)
+                            rms = np.sqrt(np.mean(np.square(np_data.astype(np.float32) / 32768.0)))
+                            audio_levels["sys"] = float(rms)
                             wf.writeframes(data)
                         except queue.Empty:
                             # Если в очереди нет данных (например, системный звук не воспроизводится),
