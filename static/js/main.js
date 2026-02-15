@@ -137,16 +137,14 @@ document.addEventListener('DOMContentLoaded', function () {
     micVolumeSlider.addEventListener('input', updateVolumeLabels);
     sysAudioVolumeSlider.addEventListener('input', updateVolumeLabels);
 
-    settingsForm.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const formData = new FormData(settingsForm);
+    async function saveSettings() {
         const settings = {
-            use_custom_prompt: formData.get('use_custom_prompt') === 'on',
-            include_html_files: formData.get('include_html_files') === 'on',
-            prompt_addition: formData.get('prompt_addition'),
-            mic_volume_adjustment: parseFloat(formData.get('mic_volume_adjustment')),
-            system_audio_volume_adjustment: parseFloat(formData.get('system_audio_volume_adjustment')),
-            selected_contacts: getSelectedContacts()
+            use_custom_prompt: document.getElementById('use-custom-prompt').checked,
+            include_html_files: document.getElementById('include-html-files').checked,
+            prompt_addition: document.getElementById('prompt-addition').value,
+            mic_volume_adjustment: parseFloat(micVolumeSlider.value),
+            system_audio_volume_adjustment: parseFloat(sysAudioVolumeSlider.value),
+            // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
 
         const response = await fetch('/save_web_settings', {
@@ -154,12 +152,24 @@ document.addEventListener('DOMContentLoaded', function () {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(settings)
         });
+    
+        // По запросу пользователя убираем уведомление о сохранении
+        // const result = await response.json();
+        // settingsSaveStatus.textContent = result.message;
+        // settingsSaveStatus.style.color = response.ok ? 'green' : 'red';
+        // setTimeout(() => settingsSaveStatus.textContent = '', 3000);
+    }
 
-        const result = await response.json();
-        settingsSaveStatus.textContent = result.message;
-        settingsSaveStatus.style.color = response.ok ? 'green' : 'red';
-        setTimeout(() => settingsSaveStatus.textContent = '', 3000);
-    });
+    // Автосохранение при изменении настроек
+    document.getElementById('use-custom-prompt').addEventListener('change', saveSettings);
+    document.getElementById('include-html-files').addEventListener('change', saveSettings);
+    // Для textarea используем 'change', чтобы не отправлять запрос на каждое нажатие клавиши
+    document.getElementById('prompt-addition').addEventListener('change', saveSettings); 
+    // Для слайдеров используем 'change', чтобы отправлять запрос после отпускания мыши
+    micVolumeSlider.addEventListener('change', saveSettings);
+    sysAudioVolumeSlider.addEventListener('change', saveSettings);
+
+    settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы
 
     // --- Contacts Tab ---
     const contactsListContainer = document.getElementById('contacts-list-container');
