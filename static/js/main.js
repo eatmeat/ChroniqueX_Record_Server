@@ -360,6 +360,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Contacts Tab ---
     const contactsListContainer = document.getElementById('contacts-list-container');
+    const newGroupNameInput = document.getElementById('new-group-name');
+    const addGroupBtn = document.getElementById('add-group-btn');
 
     function setRandomGroupPlaceholder() {
         const adjectives = [
@@ -401,29 +403,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function renderContacts() {
         contactsListContainer.innerHTML = '';
-
-        // --- Создаем и добавляем строку для добавления новой группы в начало ---
-        const addGroupRow = document.createElement('div');
-        addGroupRow.className = 'add-item-row';
-        addGroupRow.style.marginBottom = '15px';
-        addGroupRow.style.paddingBottom = '15px';
-        addGroupRow.style.borderBottom = '1px solid #e0e0e0';
-
-        const newGroupNameInput = document.createElement('input');
-        newGroupNameInput.type = 'text';
-        newGroupNameInput.id = 'new-group-name';
-        newGroupNameInput.className = 'add-item-input';
-        setRandomGroupPlaceholder(); // Устанавливаем плейсхолдер
-
-        const addGroupBtn = document.createElement('button');
-        addGroupBtn.id = 'add-group-btn';
-        addGroupBtn.className = 'action-btn';
-        addGroupBtn.textContent = 'Добавить';
-
-        addGroupRow.appendChild(newGroupNameInput);
-        addGroupRow.appendChild(addGroupBtn);
-        contactsListContainer.appendChild(addGroupRow);
-        // --- Конец блока добавления группы ---
 
         if (!contactsData.groups || contactsData.groups.length === 0) {
             contactsListContainer.insertAdjacentHTML('beforeend', '<p>Список участников пуст. Создайте первую группу.</p>');
@@ -812,36 +791,37 @@ document.addEventListener('DOMContentLoaded', function () {
         if (updateCounterCallback) updateCounterCallback();
     }
 
-    // Используем делегирование событий, так как форма добавления группы пересоздается
-    contactsListContainer.addEventListener('click', async (e) => {
-        if (e.target.id === 'add-group-btn') {
-            const newGroupNameInput = document.getElementById('new-group-name');
-            const groupName = newGroupNameInput.value.trim();
-            if (!groupName) {
-                alert('Имя группы не может быть пустым.');
-                return;
-            }
-
-            // Просто добавляем контакт с пустым именем, чтобы сервер создал группу
-            await fetch('/contacts/add', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: `_init_group_`, group_name: groupName })
-            });
-
-            newGroupNameInput.value = '';
-            loadContactsAndSettings();
+    addGroupBtn.addEventListener('click', async () => {
+        const groupName = newGroupNameInput.value.trim();
+        if (!groupName) {
+            alert('Имя группы не может быть пустым.');
+            return;
         }
+
+        // Просто добавляем контакт с пустым именем, чтобы сервер создал группу
+        await fetch('/contacts/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: `_init_group_`, group_name: groupName })
+        });
+
+        newGroupNameInput.value = '';
+        loadContactsAndSettings();
     });
 
-    contactsListContainer.addEventListener('keydown', (e) => {
-        if (e.target.id === 'new-group-name' && e.key === 'Enter') {
-            const addGroupBtn = document.getElementById('add-group-btn');
-            if (addGroupBtn) {
-                addGroupBtn.click();
+    async function loadGroupNames() {
+        try {
+            const response = await fetch('/get_group_names');
+            const groupNames = await response.json();
+            const datalist = document.getElementById('group-names-list');
+            if (datalist) {
+                datalist.innerHTML = ''; // Очищаем старые опции
+                groupNames.forEach(name => {
+                    datalist.innerHTML += `<option value="${name}">`;
+                });
             }
-        }
-    });
+        } catch (error) { console.error('Error fetching group names:', error); }
+    }
 
     async function deleteContact(id, name) {
         if (!confirm(`Вы уверены, что хотите удалить участника "${name}"?`)) {
@@ -863,6 +843,12 @@ document.addEventListener('DOMContentLoaded', function () {
         loadContactsAndSettings();
     }
 
+    newGroupNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            addGroupBtn.click();
+        }
+    });
+
     // --- Initialization ---
     function initialize() {
         updateStatus();
@@ -870,6 +856,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setInterval(updateAudioLevels, 100); // Poll audio levels frequently
         loadSettings();
         loadContactsAndSettings();
+        setRandomGroupPlaceholder();
     }
 
     initialize();
