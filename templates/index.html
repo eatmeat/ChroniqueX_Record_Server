@@ -78,12 +78,6 @@
                         </label>
                     </div>
                     <div class="form-group">
-                        <label for="include-html-files">
-                            <input type="checkbox" id="include-html-files" name="include_html_files">
-                            Добавлять HTML файлы из папки с записью в контекст
-                        </label>
-                    </div>
-                    <div class="form-group">
                         <label for="prompt-addition">Дополнение к промпту:</label>
                         <div class="prompt-info">
                             <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
@@ -91,6 +85,14 @@
                         </div>
                         <textarea id="prompt-addition" name="prompt_addition" rows="20"></textarea>
                     </div>
+
+                    <h3>Правила для файлов контекста</h3>
+                    <div class="prompt-info">
+                        <p>Здесь можно настроить, какие файлы из папки с записью будут добавлены в контекст. Используйте <code>*</code> как шаблон.</p>
+                        <p>Доступные плейсхолдеры в "Добавке к промпту": <code>{filename}</code>, <code>{content}</code>.</p>
+                    </div>
+                    <div id="context-file-rules-container"></div>
+                    <button type="button" id="add-context-rule-btn" class="action-btn">Добавить правило</button>
 
                     <h3>Корректировка громкости</h3>
                     <div class="form-group slider-group">

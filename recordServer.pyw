@@ -471,7 +471,13 @@ DEFAULT_SETTINGS = {
     "lan_accessible": False,
     "use_custom_prompt": False,
     "prompt_addition": "",
-    "include_html_files": True,  # Default to True to maintain existing behavior
+    # Новая настройка для правил файлов контекста. Заменяет include_html_files.
+    "context_file_rules": [
+        {
+            "pattern": "*.html", 
+            "prompt": "\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n"
+        }
+    ],
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None,
@@ -712,9 +718,10 @@ def open_main_window(icon=None, item=None):
                 old_settings['server_enabled'] != new_settings['server_enabled'] or
                 old_settings['lan_accessible'] != new_settings['lan_accessible']
             )
-
+            
+            # Сохраняем старые настройки, которые не управляются из веб-интерфейса
+            new_settings['context_file_rules'] = old_settings.get('context_file_rules', [])
             save_settings(new_settings)
-
             if restart_needed:
                 messagebox.showinfo("Применение", "Настройки сохранены. Сервер будет перезапущен.", parent=win)
                 restart_server(old_settings)
@@ -1185,7 +1192,7 @@ def open_main_window(icon=None, item=None):
     port_var = tk.StringVar(value=str(settings.get("port")))
     server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
     lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
-    use_custom_prompt_var = tk.BooleanVar(value=settings.get("use_custom_prompt"))
+    use_custom_prompt_var = tk.BooleanVar(value=settings.get("use_custom_prompt", False))
     include_html_files_var = tk.BooleanVar(value=settings.get("include_html_files", True))
     mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
@@ -1201,7 +1208,7 @@ def open_main_window(icon=None, item=None):
         original_settings['server_enabled'] = server_enabled_var.get()
         original_settings['lan_accessible'] = lan_accessible_var.get()
         original_settings['use_custom_prompt'] = use_custom_prompt_var.get()
-        original_settings['include_html_files'] = include_html_files_var.get()
+        # original_settings['include_html_files'] = include_html_files_var.get() # Удалено
         original_settings['prompt_addition'] = prompt_addition_text.get("1.0", "end-1c")
         original_settings['mic_volume_adjustment'] = mic_volume_var.get()
         original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
@@ -1389,7 +1396,7 @@ def open_main_window(icon=None, item=None):
     # Trace changes on all variable-based widgets
     port_var.trace_add("write", mark_as_changed)
     server_enabled_var.trace_add("write", mark_as_changed)
-    # Trace changes on contact checkboxes
+    # Trace changes on contact checkboxes (This seems to be missing, but let's keep the logic)
     for var in contact_vars.values():
         var.trace_add("write", mark_as_changed)
     lan_accessible_var.trace_add("write", mark_as_changed)
@@ -1552,47 +1559,37 @@ def process_recording_tasks(file_path):
         current_date_formatted = format_date_russian(datetime.now())
         prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
 
-        # Check if HTML files should be included in the context
-        if settings.get("include_html_files", True):
-            # Check for HTML files in the same directory as the audio file
-            audio_path = Path(file_path)
-            html_files = sorted(list(audio_path.parent.glob('*.html')))
+        # --- Новая логика для файлов контекста ---
+        context_rules = settings.get("context_file_rules", [])
+        audio_path = Path(file_path)
+        for rule in context_rules:
+            pattern = rule.get("pattern")
+            prompt_template = rule.get("prompt")
+            if not pattern or not prompt_template:
+                continue
 
-            if html_files:
-                print(f"Найдено HTML-файлов: {len(html_files)}")
+            # Ищем файлы по шаблону в папке с аудиофайлом
+            found_files = sorted(list(audio_path.parent.glob(pattern)))
+            for found_file in found_files:
+                try:
+                    print(f"Обработка файла контекста: {found_file.name} по правилу '{pattern}'")
+                    with open(found_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
 
-                # Process each HTML file and add to prompt
-                for html_file in html_files:
-                    try:
-                        print(f"Обработка HTML-файла: {html_file.name}")
-                        with open(html_file, 'r', encoding='utf-8') as f:
-                            task_context_html = f.read()
-
-                        # Убираем HTML-теги, кроме табличных, для уменьшения контекста
+                    # Для HTML файлов применяем специальную обработку для уменьшения контекста
+                    if found_file.suffix.lower() == '.html':
                         allowed_tags = {'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot'}
-
                         def should_keep_tag(match):
-                            tag = match.group(0)
-                            try:
-                                is_closing = tag.startswith('</')
-                                tag_name = tag.strip('</>').split()[0].lower()
-                                if tag_name in allowed_tags:
-                                    return f'</{tag_name}>' if is_closing else f'<{tag_name}>'
-                                else:
-                                    return ' '
-                            except IndexError:
-                                return ' '  # Handle malformed tags like <>
+                            tag = match.group(0); is_closing = tag.startswith('</'); tag_name = tag.strip('</>').split()[0].lower()
+                            return f'</{tag_name}>' if is_closing and tag_name in allowed_tags else f'<{tag_name}>' if tag_name in allowed_tags else ' '
+                        content = re.sub(r'<[^>]+>', should_keep_tag, content).strip()
 
-                        task_context = re.sub(r'<[^>]+>', should_keep_tag, task_context_html).strip()
-
-                        if task_context:
-                            # Format the HTML content with file name markers
-                            html_content_formatted = f"\n--- НАЧАЛО файла @{html_file.name} ---\n{task_context}\n--- КОНЕЦ файла @{html_file.name} ---\n"
-                            prompt_addition += html_content_formatted
-                            print(f"Добавлен контент из HTML-файла: {html_file.name}")
-
-                    except Exception as e:
-                        print(f"Не удалось прочитать файл задач {html_file}: {e}")
+                    if content:
+                        formatted_prompt = prompt_template.replace("{filename}", found_file.name).replace("{content}", content)
+                        prompt_addition += formatted_prompt
+                        print(f"Добавлен контент из файла: {found_file.name}")
+                except Exception as e:
+                    print(f"Не удалось прочитать или обработать файл контекста {found_file}: {e}")
 
         # Filter out lines that start with "//" from prompt_addition
         filtered_prompt_addition = "\n".join([
@@ -1878,8 +1875,8 @@ def save_web_settings():
         # Update only the settings from the web UI
         # Use .get() to avoid errors if a key is missing in the request
         # This allows partial updates (e.g., only updating contacts)
-        for key in ['use_custom_prompt', 'include_html_files', 'prompt_addition', 
-                    'mic_volume_adjustment', 'system_audio_volume_adjustment', 'selected_contacts']:
+        for key in ['use_custom_prompt', 'prompt_addition', 'mic_volume_adjustment', 
+                    'system_audio_volume_adjustment', 'selected_contacts', 'context_file_rules']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1894,11 +1891,11 @@ def get_web_settings():
     """Возвращает текущие настройки для веб-интерфейса в формате JSON."""
     web_settings = {
         "use_custom_prompt": settings.get("use_custom_prompt", False),
-        "include_html_files": settings.get("include_html_files", True),
         "prompt_addition": settings.get("prompt_addition", ""),
         "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
         "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
         "selected_contacts": settings.get("selected_contacts", []),
+        "context_file_rules": settings.get("context_file_rules", []),
     }
     return jsonify(web_settings)
 

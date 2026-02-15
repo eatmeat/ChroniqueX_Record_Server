@@ -115,13 +115,12 @@ document.addEventListener('DOMContentLoaded', function () {
     const sysAudioVolumeSlider = document.getElementById('sys-audio-volume');
     const sysAudioVolumeValue = document.getElementById('sys-audio-volume-value');
     const settingsSaveStatus = document.getElementById('settings-save-status');
+    const addContextRuleBtn = document.getElementById('add-context-rule-btn');
 
     async function loadSettings() {
         const response = await fetch('/get_web_settings');
         const settings = await response.json();
-
         document.getElementById('use-custom-prompt').checked = settings.use_custom_prompt;
-        document.getElementById('include-html-files').checked = settings.include_html_files;
         document.getElementById('prompt-addition').value = settings.prompt_addition;
         micVolumeSlider.value = settings.mic_volume_adjustment;
         sysAudioVolumeSlider.value = settings.system_audio_volume_adjustment;
@@ -137,13 +136,28 @@ document.addEventListener('DOMContentLoaded', function () {
     micVolumeSlider.addEventListener('input', updateVolumeLabels);
     sysAudioVolumeSlider.addEventListener('input', updateVolumeLabels);
 
+    function getContextFileRulesFromDOM() {
+        const rules = [];
+        document.querySelectorAll('.context-rule-item').forEach(item => {
+            const pattern = item.querySelector('.context-rule-pattern').value.trim();
+            const prompt = item.querySelector('.context-rule-prompt').value.trim();
+            if (pattern && prompt) {
+                rules.push({ pattern, prompt });
+            }
+        });
+        return rules;
+    }
+
     async function saveSettings() {
+        // Собираем правила из DOM
+        const contextFileRules = getContextFileRulesFromDOM();
+
         const settings = {
             use_custom_prompt: document.getElementById('use-custom-prompt').checked,
-            include_html_files: document.getElementById('include-html-files').checked,
             prompt_addition: document.getElementById('prompt-addition').value,
             mic_volume_adjustment: parseFloat(micVolumeSlider.value),
             system_audio_volume_adjustment: parseFloat(sysAudioVolumeSlider.value),
+            context_file_rules: contextFileRules,
             // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
 
@@ -162,12 +176,51 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Автосохранение при изменении настроек
     document.getElementById('use-custom-prompt').addEventListener('change', saveSettings);
-    document.getElementById('include-html-files').addEventListener('change', saveSettings);
     // Для textarea используем 'change', чтобы не отправлять запрос на каждое нажатие клавиши
     document.getElementById('prompt-addition').addEventListener('change', saveSettings); 
     // Для слайдеров используем 'change', чтобы отправлять запрос после отпускания мыши
     micVolumeSlider.addEventListener('change', saveSettings);
     sysAudioVolumeSlider.addEventListener('change', saveSettings);
+
+    // --- Context File Rules ---
+    const contextRulesContainer = document.getElementById('context-file-rules-container');
+
+    function renderContextFileRules(rules = []) {
+        contextRulesContainer.innerHTML = '';
+        if (rules.length === 0) {
+            // Добавляем правило по умолчанию, если список пуст
+            rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n' });
+        }
+        rules.forEach(rule => {
+            addContextRuleRow(rule.pattern, rule.prompt);
+        });
+    }
+
+    function addContextRuleRow(pattern = '', prompt = '') {
+        const ruleItem = document.createElement('div');
+        ruleItem.className = 'context-rule-item';
+
+        ruleItem.innerHTML = `
+            <input type="text" class="context-rule-pattern" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
+            <textarea class="context-rule-prompt" rows="2" placeholder="Добавка к промпту...">${prompt}</textarea>
+            <button type="button" class="action-btn remove-rule-btn">&times;</button>
+        `;
+
+        ruleItem.querySelector('.remove-rule-btn').addEventListener('click', () => {
+            ruleItem.remove();
+            saveSettings();
+        });
+
+        // Автосохранение при изменении полей
+        ruleItem.querySelector('.context-rule-pattern').addEventListener('change', saveSettings);
+        ruleItem.querySelector('.context-rule-prompt').addEventListener('change', saveSettings);
+
+        contextRulesContainer.appendChild(ruleItem);
+    }
+
+    addContextRuleBtn.addEventListener('click', () => {
+        addContextRuleRow();
+    });
 
     settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы
 
@@ -209,6 +262,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = await settingsRes.json();
         selectedContactIds = settings.selected_contacts || [];
         renderContacts();
+        renderContextFileRules(settings.context_file_rules);
         updateSelectedContactsCount();
     }
 
