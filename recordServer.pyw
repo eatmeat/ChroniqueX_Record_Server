@@ -1191,6 +1191,10 @@ def open_main_window(icon=None, item=None):
     sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
 
     tk.Checkbutton(prompt_addition_frame, text="Использовать дополнение к промпту", variable=use_custom_prompt_var).pack(anchor="w")
+    # Checkbox for including HTML files
+    include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
+    include_html_check.pack(anchor="w")
+
     # --- Unsaved Changes Logic (continued) ---
     def capture_original_settings():
         original_settings['port'] = port_var.get()
@@ -1213,11 +1217,6 @@ def open_main_window(icon=None, item=None):
     # Information label about "//" comment lines
     comment_info_label = tk.Label(prompt_addition_frame, text="Строки, начинающиеся с //, будут исключены при отправке задачи", fg="gray", font=("Arial", 8))
     comment_info_label.pack(anchor="w")
-
-    # Checkbox for including HTML files
-    include_html_check = tk.Checkbutton(prompt_addition_frame, text="Добавлять HTML файлы в контекст (будут подписаны @имя_файла)", variable=include_html_files_var)
-    include_html_check.pack(anchor="w")
-
 
     # Audio volume controls frame
     volume_frame = tk.LabelFrame(prompt_addition_frame, text="Настройки громкости", padx=5, pady=5)
