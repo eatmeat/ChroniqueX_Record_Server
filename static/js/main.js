@@ -8,8 +8,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const pauseBtn = document.getElementById('pause-btn');
     const stopBtn = document.getElementById('stop-btn');
     const favicon = document.getElementById('favicon');
-    const micLevelBar = document.getElementById('mic-level-bar');
-    const sysLevelBar = document.getElementById('sys-level-bar');
 
     // --- Tabs ---
     const tabLinks = document.querySelectorAll('.tab-link');
@@ -76,27 +74,80 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // --- Audio Level Charts ---
+    const audioChartCanvas = document.getElementById('audio-chart');
+    const audioChartCtx = audioChartCanvas.getContext('2d');
+    
+    const chartHistorySize = 200; // Увеличим количество точек для более плавного сдвига
+    let micHistory = new Array(chartHistorySize).fill(0);
+    let sysHistory = new Array(chartHistorySize).fill(0);
+
+    function amplifyLevel(value) {
+        // Используем квадратный корень для нелинейного усиления.
+        // Это делает тихие звуки более заметными, не давая громким зашкаливать.
+        return Math.sqrt(value);
+    }
+
+    function updateChartWithScroll(micValue, sysValue) {
+        const canvas = audioChartCanvas;
+        const ctx = audioChartCtx;
+        const { width, height } = canvas;
+
+        // 1. Сдвигаем существующее изображение влево на 1 пиксель
+        const imageData = ctx.getImageData(1, 0, width - 1, height);
+        ctx.putImageData(imageData, 0, 0);
+
+        // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
+        ctx.clearRect(width - 1, 0, 1, height);
+
+        // 3. Рисуем сетку в последней колонке
+        ctx.strokeStyle = '#ecf0f1';
+        ctx.lineWidth = 0.5;
+        for (let i = 1; i < 4; i++) {
+            const y = height * (i / 4);
+            // Рисуем точку, если шаг сетки попадает в текущий пиксель
+            if (Date.now() % 50 < 20) { // Создаем пунктирную линию
+                ctx.beginPath();
+                ctx.moveTo(width - 1, y);
+                ctx.lineTo(width, y);
+                ctx.stroke();
+            }
+        }
+        ctx.lineWidth = 1.5; // Возвращаем толщину для основных линий
+
+        // 4. Рисуем новые сегменты линий
+        const drawNewSegment = (history, colorFunc) => {
+            const prevValue = history[history.length - 2] || 0;
+            const newValue = history[history.length - 1] || 0;
+
+            ctx.beginPath();
+            ctx.strokeStyle = colorFunc(newValue);
+            ctx.moveTo(width - 1, height - (prevValue * height));
+            ctx.lineTo(width, height - (newValue * height));
+            ctx.stroke();
+        };
+
+        drawNewSegment(sysHistory, () => '#3498db');
+        drawNewSegment(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
+    }
+
     async function updateAudioLevels() {
         try {
             const response = await fetch('/audio_levels');
             const levels = await response.json();
 
-            const updateBar = (bar, level) => {
-                const percentage = Math.min(level * 100 * 2, 100); // Усиление для лучшей видимости
-                bar.style.width = `${percentage}%`;
-                // Если уровень -1, это индикатор ошибки от бэкенда
-                if (level < 0) {
-                    bar.style.backgroundColor = '#ffc107'; // Желтый цвет для предупреждения
-                    return;
-                }
-                bar.classList.toggle('peak', percentage > 90);
-            };
+            // Add new level to history and remove the oldest
+            const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
+            const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
 
-            updateBar(micLevelBar, levels.mic);
-            updateBar(sysLevelBar, levels.sys);
+            micHistory.push(amplifiedMic);
+            sysHistory.push(amplifiedSys);
+            if (micHistory.length > chartHistorySize) micHistory.shift();
+            if (sysHistory.length > chartHistorySize) sysHistory.shift();
 
+            updateChartWithScroll(amplifiedMic, amplifiedSys);
         } catch (error) {
-            // console.error('Error fetching audio levels:', error);
+            // console.error('Error fetching audio levels:', error); // Keep this commented to avoid console spam
         }
     }
 
@@ -136,10 +187,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Settings Tab ---
     const settingsForm = document.getElementById('settings-form');
-    const micVolumeSlider = document.getElementById('mic-volume');
-    const micVolumeValue = document.getElementById('mic-volume-value');
-    const sysAudioVolumeSlider = document.getElementById('sys-audio-volume');
-    const sysAudioVolumeValue = document.getElementById('sys-audio-volume-value');
     const settingsSaveStatus = document.getElementById('settings-save-status');
     const addContextRuleBtn = document.getElementById('add-context-rule-btn');
     const addMeetingDateCheckbox = document.getElementById('add-meeting-date');
@@ -152,25 +199,13 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = await response.json();
         document.getElementById('use-custom-prompt').checked = settings.use_custom_prompt;
         document.getElementById('prompt-addition').value = settings.prompt_addition;
-        micVolumeSlider.value = settings.mic_volume_adjustment;
-        sysAudioVolumeSlider.value = settings.system_audio_volume_adjustment;
         addMeetingDateCheckbox.checked = settings.add_meeting_date;
         const dateSourceRadio = document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
         if (dateSourceRadio) dateSourceRadio.checked = true;
 
         renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         toggleMeetingDateSourceVisibility();
-
-        updateVolumeLabels();
     }
-
-    function updateVolumeLabels() {
-        micVolumeValue.textContent = micVolumeSlider.value > 0 ? `+${micVolumeSlider.value}` : micVolumeSlider.value;
-        sysAudioVolumeValue.textContent = sysAudioVolumeSlider.value > 0 ? `+${sysAudioVolumeSlider.value}` : sysAudioVolumeSlider.value;
-    }
-
-    micVolumeSlider.addEventListener('input', updateVolumeLabels);
-    sysAudioVolumeSlider.addEventListener('input', updateVolumeLabels);
 
     function getContextFileRulesFromDOM() {
         const rules = [];
@@ -207,8 +242,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = {
             use_custom_prompt: document.getElementById('use-custom-prompt').checked,
             prompt_addition: document.getElementById('prompt-addition').value,
-            mic_volume_adjustment: parseFloat(micVolumeSlider.value),
-            system_audio_volume_adjustment: parseFloat(sysAudioVolumeSlider.value),
             add_meeting_date: addMeetingDateCheckbox.checked,
             meeting_date_source: document.querySelector('input[name="meeting_date_source"]:checked').value,
             meeting_name_templates: getMeetingNameTemplatesFromDOM(),
@@ -234,9 +267,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.getElementById('use-custom-prompt').addEventListener('change', saveSettings);
     // Для textarea используем 'change', чтобы не отправлять запрос на каждое нажатие клавиши
     document.getElementById('prompt-addition').addEventListener('change', saveSettings); 
-    // Для слайдеров используем 'change', чтобы отправлять запрос после отпускания мыши
-    micVolumeSlider.addEventListener('change', saveSettings);
-    sysAudioVolumeSlider.addEventListener('change', saveSettings);
     addMeetingDateCheckbox.addEventListener('change', () => {
         toggleMeetingDateSourceVisibility();
         saveSettings();
@@ -853,7 +883,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function initialize() {
         updateStatus();
         setInterval(updateStatus, 2000); // Poll status every 2 seconds
-        setInterval(updateAudioLevels, 100); // Poll audio levels frequently
+        setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
         loadSettings();
         loadContactsAndSettings();
         setRandomGroupPlaceholder();

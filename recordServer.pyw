@@ -488,10 +488,8 @@ DEFAULT_SETTINGS = {
     "active_meeting_name_template_id": None,
     "main_window_width": 700,
     "main_window_height": 800,
-    "main_window_x": None,
-    "main_window_y": None, 
-    "mic_volume_adjustment": -3,  # Volume adjustment for microphone in dB
-    "system_audio_volume_adjustment": 0  # Volume adjustment for system audio in dB
+    "main_window_x": None, 
+    "main_window_y": None
 }
 DEFAULT_SETTINGS["selected_contacts"] = [] # List of selected contact IDs
 settings = {}
@@ -716,8 +714,6 @@ def open_main_window(icon=None, item=None):
                 "port": new_port,
                 "server_enabled": server_enabled_var.get(),
                 "lan_accessible": lan_accessible_var.get(),
-                "mic_volume_adjustment": mic_volume_var.get(),  # Microphone volume adjustment
-                "system_audio_volume_adjustment": sys_audio_volume_var.get(),  # System audio volume adjustment
                 "main_window_width": width,
                 "main_window_height": height,
                 "main_window_x": x,
@@ -830,38 +826,17 @@ def open_main_window(icon=None, item=None):
     port_var = tk.StringVar(value=str(settings.get("port")))
     server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
     lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
-    mic_volume_var = tk.DoubleVar(value=settings.get("mic_volume_adjustment", -3))
-    sys_audio_volume_var = tk.DoubleVar(value=settings.get("system_audio_volume_adjustment", 0))
 
     # --- Unsaved Changes Logic (continued) ---
     def capture_original_settings():
         original_settings['port'] = port_var.get()
         original_settings['server_enabled'] = server_enabled_var.get()
         original_settings['lan_accessible'] = lan_accessible_var.get()
-        original_settings['mic_volume_adjustment'] = mic_volume_var.get()
-        original_settings['system_audio_volume_adjustment'] = sys_audio_volume_var.get()
 
-    # Audio volume controls frame
-    volume_frame = tk.LabelFrame(settings_container, text="Корректировка громкости", padx=5, pady=5)
-    volume_frame.pack(anchor="w", fill="x", pady=(10, 0))
+    # Пустой фрейм для сохранения отступов
+    spacer_frame = tk.Frame(settings_container, height=20)
+    spacer_frame.pack()
 
-    # Microphone volume control
-    def update_mic_label(value):
-        val = float(value)
-        mic_volume_scale.label = f"Громкость микрофона ({'+' if val > 0 else ''}{int(val)} dB):"
-    
-    tk.Label(volume_frame, text="Громкость микрофона:").pack(anchor="w")
-    mic_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=mic_volume_var, showvalue=0, command=update_mic_label)
-    mic_volume_scale.pack(fill="x", expand=True, pady=(0, 5))
-
-    # System audio volume control
-    def update_sys_label(value):
-        val = float(value)
-        sys_audio_volume_scale.label = f"Громкость системного аудио ({'+' if val > 0 else ''}{int(val)} dB):"
-    
-    tk.Label(volume_frame, text="Громкость системного аудио:").pack(anchor="w")
-    sys_audio_volume_scale = tk.Scale(volume_frame, from_=-20, to=20, resolution=1, orient="horizontal", variable=sys_audio_volume_var, showvalue=0, command=update_sys_label)
-    sys_audio_volume_scale.pack(fill="x", expand=True)
     
     server_settings_frame = tk.Frame(settings_container, padx=10, pady=10)
     server_settings_frame.pack(fill="x", expand=True)
@@ -976,8 +951,6 @@ def open_main_window(icon=None, item=None):
     port_var.trace_add("write", mark_as_changed)
     server_enabled_var.trace_add("write", mark_as_changed)
     lan_accessible_var.trace_add("write", mark_as_changed)
-    mic_volume_var.trace_add("write", mark_as_changed)
-    sys_audio_volume_var.trace_add("write", mark_as_changed)
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
@@ -1483,8 +1456,7 @@ def save_web_settings():
         # Update only the settings from the web UI
         # Use .get() to avoid errors if a key is missing in the request
         # This allows partial updates (e.g., only updating contacts)
-        for key in ['use_custom_prompt', 'prompt_addition', 'mic_volume_adjustment', 
-                    'system_audio_volume_adjustment', 'selected_contacts', 'context_file_rules',
+        for key in ['use_custom_prompt', 'prompt_addition', 'selected_contacts', 'context_file_rules',
                     'add_meeting_date', 'meeting_date_source', 'meeting_name_templates',
                     'active_meeting_name_template_id']:
             if key in data:
@@ -1502,8 +1474,6 @@ def get_web_settings():
     web_settings = {
         "use_custom_prompt": settings.get("use_custom_prompt", False),
         "prompt_addition": settings.get("prompt_addition", ""),
-        "mic_volume_adjustment": settings.get("mic_volume_adjustment", -3),
-        "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
         "selected_contacts": settings.get("selected_contacts", []),
         "context_file_rules": settings.get("context_file_rules", []),
         "add_meeting_date": settings.get("add_meeting_date", True),
@@ -2136,17 +2106,9 @@ def stop_recording():
 
     if os.path.exists(mic_temp_file) and os.path.getsize(mic_temp_file) > 44:
         mic_audio = AudioSegment.from_wav(mic_temp_file)
-        mic_gain = settings.get("mic_volume_adjustment", 0)
-        if mic_gain != 0:
-            mic_audio += mic_gain
-            print(f"Applied gain of {mic_gain:.2f} dB to the microphone audio.")
 
     if os.path.exists(sys_temp_file) and os.path.getsize(sys_temp_file) > 44:
         sys_audio = AudioSegment.from_wav(sys_temp_file)
-        sys_gain = settings.get("system_audio_volume_adjustment", 0)
-        if sys_gain != 0:
-            sys_audio += sys_gain
-            print(f"Applied gain of {sys_gain:.2f} dB to the system audio.")
 
     if mic_audio and sys_audio:
         # Ensure both segments have the same frame rate before overlaying
@@ -2367,16 +2329,8 @@ def monitor_mic(stop_event):
         def callback(indata, frames, time, status):
             if status: print(status, file=sys.stderr)
             
-            gain_db = settings.get("mic_volume_adjustment", 0)
-            multiplier = 10 ** (gain_db / 20.0)
-
-            # Применяем усиление
-            adjusted_data = indata.astype(np.float32) * multiplier
-            # Ограничиваем, чтобы избежать зашкаливания при расчете RMS
-            adjusted_data = np.clip(adjusted_data, -32768, 32767)
-
             # Рассчитываем RMS для уровня громкости
-            rms = np.sqrt(np.mean(np.square(adjusted_data / 32768.0)))
+            rms = np.sqrt(np.mean(np.square(indata.astype(np.float32) / 32768.0)))
             audio_levels["mic"] = float(rms)
 
         with sd.InputStream(samplerate=samplerate, device=mic_device_index, channels=1, dtype='int16', callback=callback):
@@ -2404,13 +2358,8 @@ def monitor_sys(stop_event):
                 else: return
 
             def callback(in_data, frame_count, time_info, status):
-                gain_db = settings.get("system_audio_volume_adjustment", 0)
-                multiplier = 10 ** (gain_db / 20.0)
-
-                np_data = np.frombuffer(in_data, dtype=np.int16).astype(np.float32) * multiplier
-                np_data = np.clip(np_data, -32768, 32767)
-
-                rms = np.sqrt(np.mean(np.square(np_data / 32768.0)))
+                np_data = np.frombuffer(in_data, dtype=np.int16)
+                rms = np.sqrt(np.mean(np.square(np_data.astype(np.float32) / 32768.0)))
                 audio_levels["sys"] = float(rms)
                 return (None, pyaudio.paContinue)
 
