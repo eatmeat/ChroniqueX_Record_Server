@@ -287,14 +287,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.focus();
                 input.select();
 
+                // Создаем и добавляем кнопку удаления группы
+                const deleteGroupBtn = document.createElement('button');
+                deleteGroupBtn.textContent = 'Удалить группу';
+                deleteGroupBtn.className = 'action-btn delete-group-btn';
+                deleteGroupBtn.onmousedown = (e) => { // Используем mousedown, чтобы сработало до blur
+                    e.preventDefault(); // Предотвращаем потерю фокуса с инпута
+                    deleteGroup(oldName);
+                };
+                groupHeaderEl.appendChild(deleteGroupBtn);
+
                 const saveChanges = async () => {
                     const newName = input.value.trim();
+                    // Всегда удаляем кнопку при выходе из режима редактирования
+                    groupHeaderEl.removeChild(deleteGroupBtn);
                     // Если имя не изменилось или пустое, просто возвращаем h4
                     if (newName === oldName || !newName) {
                         groupHeaderLabel.replaceChild(groupNameEl, input);
                         return;
                     }
-
                     // Отправляем запрос на сервер
                     const response = await fetch(`/groups/update`, {
                         method: 'POST',
@@ -313,24 +324,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 };
 
                 input.addEventListener('blur', saveChanges);
-                input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        input.blur();
+                    } else if (e.key === 'Escape') {
+                        groupHeaderEl.removeChild(deleteGroupBtn); // Удаляем кнопку
+                        groupHeaderLabel.replaceChild(groupNameEl, input); // Возвращаем h4 без сохранения
+                    }
+                });
             });
 
             groupHeaderLabel.appendChild(groupCheckbox); // Чекбокс внутри label
             groupHeaderLabel.appendChild(groupNameEl);   // Имя группы внутри label
 
-            const deleteGroupBtn = document.createElement('button');
-            deleteGroupBtn.textContent = 'Удалить группу';
-            deleteGroupBtn.className = 'action-btn delete-group-btn';
-            deleteGroupBtn.dataset.groupName = group.name;
-            deleteGroupBtn.onclick = (e) => {
-                e.stopPropagation();
-                deleteGroup(e.target.dataset.groupName);
-            };
-
             groupHeaderEl.appendChild(groupHeaderLabel); // Label добавляется в заголовок
-            groupHeaderEl.appendChild(deleteGroupBtn);   // Кнопка добавляется в заголовок, но *вне* label
-
             groupEl.appendChild(groupHeaderEl);
 
             // Получаем все ID контактов в этой группе
@@ -406,16 +413,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 itemEl.appendChild(labelEl);
 
-                const buttonsContainer = document.createElement('div');
-                buttonsContainer.className = 'item-actions';
-
-                const deleteBtn = document.createElement('button');
-                deleteBtn.textContent = 'Удалить';
-                deleteBtn.className = 'action-btn';
-                deleteBtn.onclick = (e) => { e.stopPropagation(); deleteContact(contact.id, contact.name); };
-                buttonsContainer.appendChild(deleteBtn); // Кнопка теперь всегда в DOM
-                itemEl.appendChild(buttonsContainer);
-
                 listEl.appendChild(itemEl);
 
                 // Логика inline-редактирования
@@ -426,13 +423,30 @@ document.addEventListener('DOMContentLoaded', function () {
                     input.value = currentName;
                     input.className = 'contact-name-edit';
 
+                    // Создаем кнопку удаления и контейнер для нее
+                    const buttonsContainer = document.createElement('div');
+                    buttonsContainer.className = 'item-actions';
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = 'Удалить';
+                    deleteBtn.className = 'action-btn';
+                    // Используем mousedown, чтобы событие сработало до blur на поле ввода
+                    deleteBtn.onmousedown = (e) => {
+                        e.preventDefault(); // Предотвращаем потерю фокуса с поля ввода
+                        deleteContact(contact.id, contact.name);
+                    };
+                    buttonsContainer.appendChild(deleteBtn);
+
                     // Заменяем span на input
                     labelEl.replaceChild(input, nameSpan);
+                    // Вставляем контейнер с кнопкой после label
+                    itemEl.appendChild(buttonsContainer);
                     input.focus();
                     input.select();
 
                     const saveChanges = async () => {
                         const newName = input.value.trim();
+                        // Удаляем кнопку удаления
+                        itemEl.removeChild(buttonsContainer);
                         // Если имя не изменилось или пустое, просто возвращаем span
                         if (newName === currentName || !newName) {
                             labelEl.replaceChild(nameSpan, input);
@@ -459,6 +473,8 @@ document.addEventListener('DOMContentLoaded', function () {
                         if (e.key === 'Enter') {
                             input.blur();
                         } else if (e.key === 'Escape') {
+                            // Удаляем кнопку и возвращаем span без сохранения
+                            itemEl.removeChild(buttonsContainer);
                             labelEl.replaceChild(nameSpan, input);
                         }
                     });
@@ -559,36 +575,19 @@ document.addEventListener('DOMContentLoaded', function () {
         loadContactsAndSettings();
     }
 
-    // Удаляем временный контакт, если он остался после создания группы
-    async function cleanupInitialContact(groupName) {
-        const response = await fetch('/get_contacts');
-        const data = await response.json();
-        const group = data.groups.find(g => g.name === groupName);
-        if (group) {
-            const initContact = group.contacts.find(c => c.name === '_init_group_');
-            if (initContact) {
-                await fetch(`/contacts/delete/${initContact.id}`, { method: 'POST' });
-            }
+    newGroupNameInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            addGroupBtn.click();
         }
-        // Перезагружаем список, чтобы убрать временный контакт
-        loadContactsAndSettings();
-    }
+    });
 
     // --- Initialization ---
     function initialize() {
         updateStatus();
-        setInterval(updateStatus, 2000); // Update status every 2 seconds
-
-        // Load data for tabs
+        setInterval(updateStatus, 5000); // Poll status every 5 seconds
         loadSettings();
         loadContactsAndSettings();
         setRandomGroupPlaceholder();
-        // loadGroupNames(); // Больше не используется для datalist
-
-        // Обработчик для создания новой группы
-        newGroupNameInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') addGroupBtn.click();
-        });
     }
 
     initialize();

@@ -1974,6 +1974,12 @@ def delete_contact_web(contact_id):
     # Remove empty groups
     contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("contacts")]
 
+    # Также удаляем контакт из списка выбранных в настройках
+    if contact_id in settings.get("selected_contacts", []):
+        settings["selected_contacts"].remove(contact_id)
+        # Сохраняем обновленные настройки (без перезапуска сервера)
+        save_settings(settings)
+
     save_contacts(contacts_data)
     return jsonify({"status": "ok", "message": "Участник удален"})
 
@@ -2011,14 +2017,25 @@ def delete_group_web():
     if not group_name:
         return jsonify({"status": "error", "message": "Имя группы не может быть пустым"}), 400
 
-    original_group_count = len(contacts_data.get("groups", []))
+    # Находим группу для удаления, чтобы получить ID ее участников
+    group_to_delete = next((g for g in contacts_data.get("groups", []) if g.get("name") == group_name), None)
+
+    if not group_to_delete:
+        return jsonify({"status": "error", "message": "Группа не найдена"}), 404
+
+    # Собираем ID всех участников в удаляемой группе
+    contact_ids_to_remove = {c.get("id") for c in group_to_delete.get("contacts", []) if c.get("id")}
+
+    # Удаляем саму группу
     contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("name") != group_name]
 
-    if len(contacts_data.get("groups", [])) < original_group_count:
-        save_contacts(contacts_data)
-        return jsonify({"status": "ok", "message": "Группа удалена"})
-    else:
-        return jsonify({"status": "error", "message": "Группа не найдена"}), 404
+    # Также удаляем участников этой группы из списка выбранных в настройках
+    if contact_ids_to_remove and "selected_contacts" in settings:
+        settings["selected_contacts"] = [cid for cid in settings.get("selected_contacts", []) if cid not in contact_ids_to_remove]
+        save_settings(settings)
+
+    save_contacts(contacts_data)
+    return jsonify({"status": "ok", "message": "Группа удалена"})
 
 @app.route('/shutdown', methods=['POST'])
 def shutdown():
