@@ -1261,8 +1261,8 @@ def recorder_sys(stop_event, audio_queue):
     finally:
         print("System audio recording process finished.")
 
-@app.route('/')
-def index():    
+def get_recordings_data():
+    """Gathers and structures recording data from the 'rec' directory."""
     # Get all recordings from the 'rec' directory
     date_groups = []
     rec_dir = os.path.join(get_application_path(), 'rec')
@@ -1390,9 +1390,17 @@ def index():
     
     # Sort date groups by date (newest first)
     date_groups.sort(key=lambda x: x['date'], reverse=True)
-    
+    return date_groups
+
+@app.route('/')
+def index():    
+    date_groups = get_recordings_data()
     # Pass current settings to the template
     return render_template('index.html', date_groups=date_groups)
+
+@app.route('/get_recordings', methods=['GET'])
+def get_recordings():
+    return jsonify(get_recordings_data())
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')

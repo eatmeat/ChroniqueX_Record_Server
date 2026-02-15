@@ -200,30 +200,79 @@ document.addEventListener('DOMContentLoaded', function () {
         // Список записей обновится при следующем обновлении страницы вручную.
     });
 
-    // --- Action Buttons ---
-    document.querySelectorAll('.recreate-transcription-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const { date, filename } = e.target.dataset;
+    // --- Recordings List and Actions ---
+    const recordingsListContainer = document.getElementById('recordings-list');
+
+    async function updateRecordingsList() {
+        try {
+            const response = await fetch('/get_recordings');
+            const dateGroups = await response.json();
+            
+            recordingsListContainer.innerHTML = ''; // Очищаем старый список
+
+            if (dateGroups.length === 0) {
+                recordingsListContainer.innerHTML = '<p>Записей пока нет.</p>';
+                return;
+            }
+
+            dateGroups.forEach(group => {
+                const groupEl = document.createElement('div');
+                groupEl.className = 'date-group';
+
+                let recordingsHtml = '';
+                group.recordings.forEach(rec => {
+                    const sizeMb = (rec.size / 1024 / 1024).toFixed(2);
+                    const compressBtnHtml = rec.filename.toLowerCase().endsWith('.wav') 
+                        ? `<button class="action-btn compress-btn" data-date="${group.date}" data-filename="${rec.filename}">Сжать в MP3</button>` 
+                        : '';
+
+                    recordingsHtml += `
+                        <li class="recording-item">
+                            <div class="item-main">
+                                <span class="rec-time">${rec.time}</span>
+                                <a href="/files/${group.date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a>
+                                <span class="rec-size">(${sizeMb} MB)</span>
+                            </div>
+                            <div class="item-actions">
+                                ${compressBtnHtml}
+                                <a href="/files/${group.date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
+                                <a href="/files/${group.date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
+                                <button class="action-btn recreate-transcription-btn" data-date="${group.date}" data-filename="${rec.filename}">Пересоздать TXT</button>
+                                <button class="action-btn recreate-protocol-btn" data-date="${group.date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
+                            </div>
+                        </li>
+                    `;
+                });
+
+                groupEl.innerHTML = `
+                    <h3>${group.formatted_date} <span>(${group.day_of_week})</span></h3>
+                    <ul class="recording-items">${recordingsHtml}</ul>
+                `;
+                recordingsListContainer.appendChild(groupEl);
+            });
+
+        } catch (error) {
+            console.error('Error updating recordings list:', error);
+        }
+    }
+
+    // Используем делегирование событий для кнопок действий
+    recordingsListContainer.addEventListener('click', (e) => {
+        const target = e.target;
+        const { date, filename } = target.dataset;
+
+        if (target.classList.contains('recreate-transcription-btn')) {
             fetch(`/recreate_transcription/${date}/${filename}`);
             alert(`Задача пересоздания транскрипции для ${filename} запущена.`);
-        });
-    });
-
-    document.querySelectorAll('.recreate-protocol-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const { date, filename } = e.target.dataset;
+        } else if (target.classList.contains('recreate-protocol-btn')) {
             fetch(`/recreate_protocol/${date}/${filename}`);
             alert(`Задача пересоздания протокола для ${filename} запущена.`);
-        });
-    });
-
-    document.querySelectorAll('.compress-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const { date, filename } = e.target.dataset;
+        } else if (target.classList.contains('compress-btn')) {
             fetch(`/compress_to_mp3/${date}/${filename}`);
-            alert(`Процесс сжатия для ${filename} запущен. Страница перезагрузится через несколько секунд.`);
-            setTimeout(() => window.location.reload(), 5000);
-        });
+            alert(`Процесс сжатия для ${filename} запущен. Список обновится автоматически.`);
+            // Небольшая задержка перед обновлением, чтобы дать серверу время начать
+            setTimeout(updateRecordingsList, 1000);
+        }
     });
 
     // --- Settings Tab ---
@@ -924,6 +973,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function initialize() {
         updateStatus();
         setInterval(updateStatus, 2000); // Poll status every 2 seconds
+        setInterval(updateRecordingsList, 10000); // Обновляем список записей каждые 10 секунд
         setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
         loadSettings();
         loadContactsAndSettings();
