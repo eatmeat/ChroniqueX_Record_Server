@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const pauseBtn = document.getElementById('pause-btn');
     const stopBtn = document.getElementById('stop-btn');
     const favicon = document.getElementById('favicon');
+    const volumeMetersContainer = document.querySelector('.volume-meters-container');
 
     // --- Tabs ---
     const tabLinks = document.querySelectorAll('.tab-link');
@@ -41,13 +42,16 @@ document.addEventListener('DOMContentLoaded', function () {
             switch (data.status) {
                 case 'rec':
                     statusText.textContent = 'Запись';
+                    volumeMetersContainer.classList.add('recording');
                     break;
                 case 'pause':
                     statusText.textContent = 'Пауза';
+                    volumeMetersContainer.classList.remove('recording');
                     break;
                 case 'stop':
                 default:
                     statusText.textContent = 'Остановлено';
+                    volumeMetersContainer.classList.remove('recording');
                     break;
             }
 
@@ -78,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const audioChartCanvas = document.getElementById('audio-chart');
     const audioChartCtx = audioChartCanvas.getContext('2d');
     
-    const chartHistorySize = 6000; // 300 секунд * 20 обновлений/сек = 6000 точек
+    const chartHistorySize = 18000; // 300 секунд * 20 обновлений/сек = 6000 точек
     let micHistory = new Array(chartHistorySize).fill(0);
     let sysHistory = new Array(chartHistorySize).fill(0);
 
@@ -88,94 +92,68 @@ document.addEventListener('DOMContentLoaded', function () {
         return Math.sqrt(value);
     }
 
-    function drawCombinedChart() {
+    let frameCount = 0;
+
+    function updateChartWithScroll() {
         const canvas = audioChartCanvas;
         const ctx = audioChartCtx;
         const { width, height } = canvas;
         const chartHeight = height - 15; // Высота области для самого графика, оставляем место внизу для меток
-        const timeSpan = chartHistorySize * 50; // 6000 * 50ms = 300000ms = 300s
 
-        // 1. Очищаем холст
-        ctx.clearRect(0, 0, width, height);
+        // 1. Сдвигаем существующее изображение влево на 1 пиксель
+        const imageData = ctx.getImageData(1, 0, width - 1, height);
+        ctx.putImageData(imageData, 0, 0);
 
-        // 2. Рисуем сетку (горизонтальную и вертикальную) и временные метки
+        // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
+        ctx.clearRect(width - 1, 0, 1, height);
+
+        // 3. Рисуем сетку и временные метки в последней колонке
         ctx.strokeStyle = '#ecf0f1';
         ctx.lineWidth = 0.5;
         ctx.fillStyle = '#7f8c8d';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
 
-        // Горизонтальная сетка
+        // Горизонтальные линии сетки
         for (let i = 1; i < 4; i++) {
-            const y = chartHeight * (i / 4); // Рисуем сетку в пределах высоты графика
+            const y = chartHeight * (i / 4);
             ctx.beginPath();
-            ctx.moveTo(0, y);
+            ctx.moveTo(width - 1, y);
             ctx.lineTo(width, y);
             ctx.stroke();
         }
 
-        // Вертикальная сетка и метки времени (каждую секунду)
-        const pointsPerSecond = 1000 / 50; // 20 точек в секунду
-        const secondsOnChart = chartHistorySize / pointsPerSecond; // 300 секунд
-        const gridIntervalSeconds = 30; // Интервал сетки в секундах
-
-        for (let s = 0; s <= secondsOnChart; s += gridIntervalSeconds) {
-            const i = s * pointsPerSecond;
-            const x = (i / chartHistorySize) * width;
-            const timeInSeconds = s - secondsOnChart;
-
+        // Вертикальная линия сетки и метка времени каждые 30 секунд
+        const updatesPerSecond = 20; // 1000ms / 50ms
+        const gridIntervalSeconds = 30;
+        if (frameCount % (updatesPerSecond * gridIntervalSeconds) === 0) {
             ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, chartHeight); // Рисуем вертикальные линии только до низа графика
+            ctx.moveTo(width - 1, 0);
+            ctx.lineTo(width - 1, chartHeight);
             ctx.stroke();
 
-            let labelText;
-            if (timeInSeconds === 0) {
-                labelText = 'Сейчас';
-            } else {
-                const minutes = Math.floor(Math.abs(timeInSeconds) / 60);
-                const seconds = Math.abs(timeInSeconds) % 60;
-                labelText = `-${minutes}:${seconds.toString().padStart(2, '0')}`;
-            }
-            ctx.fillText(labelText, x, height - 5);
+            const totalSeconds = Math.floor(frameCount / updatesPerSecond);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const labelText = `-${minutes}:${seconds.toString().padStart(2, '0')}`;
+            ctx.fillText(frameCount === 0 ? 'Сейчас' : labelText, width - 15, height - 5);
         }
 
-        // 3. Рисуем линии уровней
+        // 4. Рисуем новые сегменты линий
         ctx.lineWidth = 1.5;
-        const drawLine = (history, colorFunc) => {
-            const pointsPerPixel = chartHistorySize / width;
+        const drawNewSegment = (history, colorFunc) => {
+            const prevValue = history[history.length - 2] || 0;
+            const newValue = history[history.length - 1] || 0;
+
             ctx.beginPath();
-
-            for (let x = 0; x < width; x++) {
-                const startIndex = Math.floor(x * pointsPerPixel);
-                const endIndex = Math.floor((x + 1) * pointsPerPixel);
-                
-                if (startIndex >= history.length) continue;
-
-                // Усредняем значения для одного пикселя, чтобы сгладить график
-                let sum = 0;
-                let count = 0;
-                for (let i = startIndex; i < endIndex && i < history.length; i++) {
-                    sum += history[i];
-                    count++;
-                }
-                const avgValue = count > 0 ? sum / count : 0;
-
-                const y = chartHeight - (avgValue * chartHeight);
-
-                if (x === 0) {
-                    ctx.moveTo(x, y); // Начинаем с первой точки
-                } else {
-                    ctx.lineTo(x, y);
-                }
-            }
-
-            ctx.strokeStyle = colorFunc(history[history.length - 1]); // Цвет всей линии по последнему значению
+            ctx.strokeStyle = colorFunc(newValue);
+            ctx.moveTo(width - 1, chartHeight - (prevValue * chartHeight));
+            ctx.lineTo(width, chartHeight - (newValue * chartHeight));
             ctx.stroke();
         };
 
-        drawLine(sysHistory, () => '#3498db');
-        drawLine(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
+        drawNewSegment(sysHistory, () => '#3498db');
+        drawNewSegment(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
     }
 
     async function updateAudioLevels() {
@@ -192,7 +170,9 @@ document.addEventListener('DOMContentLoaded', function () {
             if (micHistory.length > chartHistorySize) micHistory.shift();
             if (sysHistory.length > chartHistorySize) sysHistory.shift();
 
-            drawCombinedChart();
+            updateChartWithScroll();
+            frameCount++;
+
         } catch (error) {
             // console.error('Error fetching audio levels:', error); // Keep this commented to avoid console spam
         }
