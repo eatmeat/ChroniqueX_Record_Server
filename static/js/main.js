@@ -211,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 <input type="text" class="context-rule-pattern" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
                 <button type="button" class="action-btn remove-rule-btn">&times;</button>
             </div>
-            <textarea class="context-rule-prompt" rows="2" placeholder="Добавка к промпту...">${prompt}</textarea>
+            <textarea class="context-rule-prompt" rows="8" placeholder="Добавка к промпту...">${prompt}</textarea>
         `;
 
         ruleItem.querySelector('.remove-rule-btn').addEventListener('click', () => {
