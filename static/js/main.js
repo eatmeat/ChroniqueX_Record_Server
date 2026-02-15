@@ -116,6 +116,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const sysAudioVolumeValue = document.getElementById('sys-audio-volume-value');
     const settingsSaveStatus = document.getElementById('settings-save-status');
     const addContextRuleBtn = document.getElementById('add-context-rule-btn');
+    const addMeetingDateCheckbox = document.getElementById('add-meeting-date');
+    const meetingDateSourceGroup = document.getElementById('meeting-date-source-group');
 
     async function loadSettings() {
         const response = await fetch('/get_web_settings');
@@ -124,6 +126,9 @@ document.addEventListener('DOMContentLoaded', function () {
         document.getElementById('prompt-addition').value = settings.prompt_addition;
         micVolumeSlider.value = settings.mic_volume_adjustment;
         sysAudioVolumeSlider.value = settings.system_audio_volume_adjustment;
+        addMeetingDateCheckbox.checked = settings.add_meeting_date;
+        document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`).checked = true;
+        toggleMeetingDateSourceVisibility();
 
         updateVolumeLabels();
     }
@@ -158,6 +163,8 @@ document.addEventListener('DOMContentLoaded', function () {
             prompt_addition: document.getElementById('prompt-addition').value,
             mic_volume_adjustment: parseFloat(micVolumeSlider.value),
             system_audio_volume_adjustment: parseFloat(sysAudioVolumeSlider.value),
+            add_meeting_date: addMeetingDateCheckbox.checked,
+            meeting_date_source: document.querySelector('input[name="meeting_date_source"]:checked').value,
             context_file_rules: contextFileRules,
             // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
@@ -182,6 +189,15 @@ document.addEventListener('DOMContentLoaded', function () {
     // Для слайдеров используем 'change', чтобы отправлять запрос после отпускания мыши
     micVolumeSlider.addEventListener('change', saveSettings);
     sysAudioVolumeSlider.addEventListener('change', saveSettings);
+    addMeetingDateCheckbox.addEventListener('change', () => {
+        toggleMeetingDateSourceVisibility();
+        saveSettings();
+    });
+    document.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
+        radio.addEventListener('change', saveSettings);
+    });
+
+    function toggleMeetingDateSourceVisibility() { meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; }
 
     // --- Context File Rules ---
     const contextRulesContainer = document.getElementById('context-file-rules-container');

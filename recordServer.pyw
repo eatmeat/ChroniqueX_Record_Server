@@ -479,6 +479,8 @@ DEFAULT_SETTINGS = {
             "enabled": True
         }
     ],
+    "add_meeting_date": True,
+    "meeting_date_source": "current", # 'current' or 'folder'
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None,
@@ -1560,6 +1562,26 @@ def process_recording_tasks(file_path):
         current_date_formatted = format_date_russian(datetime.now())
         prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
 
+        # --- Date addition logic ---
+        date_prompt_addition = ""
+        if settings.get("add_meeting_date", False):
+            date_source = settings.get("meeting_date_source", "current")
+            meeting_date = None
+            if date_source == 'folder':
+                try:
+                    # file_path is like '.../rec/2023-10-27/somefile.mp3'
+                    date_str = Path(file_path).parent.name
+                    meeting_date = datetime.strptime(date_str, '%Y-%m-%d')
+                except (ValueError, IndexError):
+                    print(f"Could not parse date from folder name: {Path(file_path).parent.name}. Falling back to current date.")
+                    meeting_date = datetime.now()
+            else: # 'current'
+                meeting_date = datetime.now()
+            
+            if meeting_date:
+                formatted_date = format_date_russian(meeting_date)
+                date_prompt_addition = f"# Дата собрания: {formatted_date}\n\n"
+
         # --- Новая логика для файлов контекста ---
         context_rules = settings.get("context_file_rules", [])
         audio_path = Path(file_path)
@@ -1604,7 +1626,7 @@ def process_recording_tasks(file_path):
 
         # Update post-processing status for protocol stage
         post_process_stage = "protocol"
-        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=filtered_prompt_addition)
+        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=date_prompt_addition + filtered_prompt_addition)
         if protocol_task_id:
             protocol_output_path = base_name + "_protocol.pdf"
             poll_and_save_result(protocol_task_id, protocol_output_path)
@@ -1881,7 +1903,8 @@ def save_web_settings():
         # Use .get() to avoid errors if a key is missing in the request
         # This allows partial updates (e.g., only updating contacts)
         for key in ['use_custom_prompt', 'prompt_addition', 'mic_volume_adjustment', 
-                    'system_audio_volume_adjustment', 'selected_contacts', 'context_file_rules']:
+                    'system_audio_volume_adjustment', 'selected_contacts', 'context_file_rules',
+                    'add_meeting_date', 'meeting_date_source']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1901,6 +1924,8 @@ def get_web_settings():
         "system_audio_volume_adjustment": settings.get("system_audio_volume_adjustment", 0),
         "selected_contacts": settings.get("selected_contacts", []),
         "context_file_rules": settings.get("context_file_rules", []),
+        "add_meeting_date": settings.get("add_meeting_date", True),
+        "meeting_date_source": settings.get("meeting_date_source", "current"),
     }
     return jsonify(web_settings)
 
@@ -2263,6 +2288,26 @@ def process_protocol_task(txt_file_path):
     current_date_formatted = format_date_russian(datetime.now())
     prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
 
+    # --- Date addition logic ---
+    date_prompt_addition = ""
+    if settings.get("add_meeting_date", False):
+        date_source = settings.get("meeting_date_source", "current")
+        meeting_date = None
+        if date_source == 'folder':
+            try:
+                # txt_file_path is like '.../rec/2023-10-27/somefile.txt'
+                date_str = Path(txt_file_path).parent.name
+                meeting_date = datetime.strptime(date_str, '%Y-%m-%d')
+            except (ValueError, IndexError):
+                print(f"Could not parse date from folder name: {Path(txt_file_path).parent.name}. Falling back to current date.")
+                meeting_date = datetime.now()
+        else: # 'current'
+            meeting_date = datetime.now()
+        
+        if meeting_date:
+            formatted_date = format_date_russian(meeting_date)
+            date_prompt_addition = f"# Дата собрания: {formatted_date}\n\n"
+
     if settings.get("include_html_files", True):
         txt_path = Path(txt_file_path)
         html_files = sorted(list(txt_path.parent.glob('*.html')))
@@ -2284,7 +2329,7 @@ def process_protocol_task(txt_file_path):
             except Exception as e: print(f"Не удалось прочитать файл задач {html_file}: {e}")
 
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
-    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=filtered_prompt_addition)
+    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=date_prompt_addition + filtered_prompt_addition)
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"

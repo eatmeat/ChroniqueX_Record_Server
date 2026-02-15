@@ -71,6 +71,20 @@
 
             <div id="settings-tab" class="tab-content">
                 <form id="settings-form">
+                    <h3>Дата собрания</h3>
+                    <div class="form-group">
+                        <label>
+                            <input type="checkbox" id="add-meeting-date" name="add_meeting_date">
+                            Добавлять дату в начало промпта (в формате <code># Дата собрания: ...</code>)
+                        </label>
+                    </div>
+                    <div class="form-group" id="meeting-date-source-group">
+                        <label><input type="radio" name="meeting_date_source" value="current"> Текущая дата</label>
+                        <label><input type="radio" name="meeting_date_source" value="folder"> Дата из папки с записью</label>
+                    </div>
+
+
+                    <h3>Дополнение к промпту</h3>
                     <div class="form-group">
                         <label for="use-custom-prompt">
                             <input type="checkbox" id="use-custom-prompt" name="use_custom_prompt">
@@ -78,7 +92,6 @@
                         </label>
                     </div>
                     <div class="form-group">
-                        <label for="prompt-addition">Дополнение к промпту:</label>
                         <div class="prompt-info">
                             <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
                             <p>Строки, начинающиеся с <code>//</code>, будут проигнорированы.</p>
