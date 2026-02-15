@@ -491,7 +491,7 @@ input[type="text"], input[type="number"], textarea {
     width: 0%;
     background-color: #28a745;
     border-radius: 5px;
-    transition: width 0.05s linear, background-color 0.1s;
+    transition: width 0.05s linear, background-color 0.2s;
 }
 
 .meter-bar.peak {

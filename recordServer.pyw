@@ -585,6 +585,7 @@ post_process_stage = ""  # Track the current stage (transcribe, protocol, etc.)
 
 # --- Глобальные переменные для уровней звука ---
 audio_levels = {"mic": 0.0, "sys": 0.0}
+monitoring_stop_event = Event()
 
 
 # --- Server Lifecycle Management ---
@@ -1962,6 +1963,7 @@ def exit_action(icon, item):
         except requests.exceptions.RequestException as e:
             print(f"Info: Request to shutdown endpoint failed on exit: {e}")
     icon.stop()
+    monitoring_stop_event.set() # Останавливаем потоки мониторинга
     # A small delay to allow tray icon to disappear before the process exits
     time.sleep(0.1)
     os._exit(0)
@@ -2288,16 +2290,10 @@ def recorder_mic_to_file(device_index, stop_event, output_filename):
 
             while not stop_event.is_set():
                 if is_paused:
-                    # Write silence while paused to keep sync
-                    silence = np.zeros((stream.blocksize, 1), dtype=np.int16)
-                    wf.writeframes(silence.tobytes())
-                    time.sleep(stream.blocksize / stream.samplerate)
+                    time.sleep(0.1) # Просто ждем, если на паузе
                 else:
                     try:
                         data = q.get(timeout=0.1)
-                        # Рассчитываем RMS для уровня громкости
-                        rms = np.sqrt(np.mean(np.square(data.astype(np.float32) / 32768.0)))
-                        audio_levels["mic"] = float(rms)
                         wf.writeframes(data)
                     except queue.Empty:
                         pass
@@ -2308,7 +2304,6 @@ def recorder_mic_to_file(device_index, stop_event, output_filename):
 
 def recorder_sys_to_file(stop_event, output_filename):
     """Records system audio using pyaudiowpatch and writes to a file."""
-    global audio_levels
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
@@ -2346,24 +2341,15 @@ def recorder_sys_to_file(stop_event, output_filename):
                 print("System audio recording started.")
                 while not stop_event.is_set():
                     if is_paused:
-                        # Write silence while paused
-                        chunk_size = int(rate * 0.1) # 100ms of silence
-                        silence = b'\0' * (chunk_size * channels * 2)
-                        wf.writeframes(silence)
                         time.sleep(0.1)
                     else:
                         try:
                             data = q.get(timeout=0.1)
-                            # Рассчитываем RMS для уровня громкости
-                            np_data = np.frombuffer(data, dtype=np.int16)
-                            rms = np.sqrt(np.mean(np.square(np_data.astype(np.float32) / 32768.0)))
-                            audio_levels["sys"] = float(rms)
                             wf.writeframes(data)
                         except queue.Empty:
                             # Если в очереди нет данных (например, системный звук не воспроизводится),
-                            # записываем тишину, чтобы сохранить синхронизацию с другими потоками.
-                            silence_chunk = b'\0' * int(rate * 0.1 * channels * 2) # 100ms of silence
-                            wf.writeframes(silence_chunk)
+                            # просто ждем, чтобы не нагружать процессор.
+                            time.sleep(0.05)
                 stream.stop_stream()
                 stream.close()
     except Exception as e:
@@ -2371,6 +2357,79 @@ def recorder_sys_to_file(stop_event, output_filename):
     finally:
         print("System audio recording process finished.")
 
+def monitor_mic(stop_event):
+    """Постоянно отслеживает уровень громкости микрофона."""
+    global audio_levels
+    try:
+        mic_device_index = sd.default.device[0]
+        samplerate = sd.query_devices(mic_device_index, 'input')['default_samplerate']
+
+        def callback(indata, frames, time, status):
+            if status: print(status, file=sys.stderr)
+            
+            gain_db = settings.get("mic_volume_adjustment", 0)
+            multiplier = 10 ** (gain_db / 20.0)
+
+            # Применяем усиление
+            adjusted_data = indata.astype(np.float32) * multiplier
+            # Ограничиваем, чтобы избежать зашкаливания при расчете RMS
+            adjusted_data = np.clip(adjusted_data, -32768, 32767)
+
+            # Рассчитываем RMS для уровня громкости
+            rms = np.sqrt(np.mean(np.square(adjusted_data / 32768.0)))
+            audio_levels["mic"] = float(rms)
+
+        with sd.InputStream(samplerate=samplerate, device=mic_device_index, channels=1, dtype='int16', callback=callback):
+            print("Мониторинг микрофона запущен.")
+            stop_event.wait()
+
+    except Exception as e:
+        print(f"Ошибка мониторинга микрофона: {e}", file=sys.stderr)
+        audio_levels["mic"] = -1 # Индикатор ошибки
+    finally:
+        print("Мониторинг микрофона остановлен.")
+
+def monitor_sys(stop_event):
+    """Постоянно отслеживает уровень громкости системного аудио."""
+    global audio_levels
+    try:
+        with pyaudio.PyAudio() as p:
+            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+            if not default_speakers["isLoopbackDevice"]:
+                for loopback in p.get_loopback_device_info_generator():
+                    if default_speakers["name"] in loopback["name"]:
+                        default_speakers = loopback
+                        break
+                else: return
+
+            def callback(in_data, frame_count, time_info, status):
+                gain_db = settings.get("system_audio_volume_adjustment", 0)
+                multiplier = 10 ** (gain_db / 20.0)
+
+                np_data = np.frombuffer(in_data, dtype=np.int16).astype(np.float32) * multiplier
+                np_data = np.clip(np_data, -32768, 32767)
+
+                rms = np.sqrt(np.mean(np.square(np_data / 32768.0)))
+                audio_levels["sys"] = float(rms)
+                return (None, pyaudio.paContinue)
+
+            stream = p.open(format=pyaudio.paInt16,
+                            channels=default_speakers["maxInputChannels"],
+                            rate=int(default_speakers['defaultSampleRate']),
+                            input=True,
+                            input_device_index=default_speakers["index"],
+                            stream_callback=callback)
+            stream.start_stream()
+            print("Мониторинг системного аудио запущен.")
+            stop_event.wait()
+            stream.stop_stream()
+            stream.close()
+    except Exception as e:
+        print(f"Ошибка мониторинга системного аудио: {e}", file=sys.stderr)
+        audio_levels["sys"] = -1 # Индикатор ошибки
+    finally:
+        print("Мониторинг системного аудио остановлен.")
 
 def open_rec_folder(icon, item):
     rec_dir = os.path.join(get_application_path(), 'rec')
@@ -2462,6 +2521,14 @@ if __name__ == '__main__':
 
     update_thread = Thread(target=update_icon, args=(main_icon,), daemon=True)
     update_thread.start()
+
+    # --- Запуск потоков мониторинга звука ---
+    mic_monitor_thread = Thread(target=monitor_mic, args=(monitoring_stop_event,), daemon=True)
+    mic_monitor_thread.start()
+
+    if platform.system() == "Windows":
+        sys_monitor_thread = Thread(target=monitor_sys, args=(monitoring_stop_event,), daemon=True)
+        sys_monitor_thread.start()
 
     # Start periodic tray menu update thread
     menu_update_thread = Thread(target=periodic_tray_menu_update, daemon=True)
