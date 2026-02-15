@@ -203,56 +203,100 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Recordings List and Actions ---
     const recordingsListContainer = document.getElementById('recordings-list');
 
+    // Сохраняем состояние развернутых групп
+    let expandedGroups = new Set();
+
     async function updateRecordingsList() {
         try {
-            const response = await fetch('/get_recordings');
-            const dateGroups = await response.json();
-            
-            recordingsListContainer.innerHTML = ''; // Очищаем старый список
+            const response = await fetch('/get_date_dirs');
+            const newDateGroups = await response.json();
 
-            if (dateGroups.length === 0) {
+            if (newDateGroups.length === 0 && recordingsListContainer.children.length === 0) {
                 recordingsListContainer.innerHTML = '<p>Записей пока нет.</p>';
                 return;
             }
 
-            dateGroups.forEach(group => {
-                const groupEl = document.createElement('div');
-                groupEl.className = 'date-group';
+            const existingGroupDates = new Set([...recordingsListContainer.querySelectorAll('.date-group')].map(el => el.dataset.date));
+            const newGroupDates = new Set(newDateGroups.map(g => g.date));
 
-                let recordingsHtml = '';
-                group.recordings.forEach(rec => {
-                    const sizeMb = (rec.size / 1024 / 1024).toFixed(2);
-                    const compressBtnHtml = rec.filename.toLowerCase().endsWith('.wav') 
-                        ? `<button class="action-btn compress-btn" data-date="${group.date}" data-filename="${rec.filename}">Сжать в MP3</button>` 
-                        : '';
-
-                    recordingsHtml += `
-                        <li class="recording-item">
-                            <div class="item-main">
-                                <span class="rec-time">${rec.time}</span>
-                                <a href="/files/${group.date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a>
-                                <span class="rec-size">(${sizeMb} MB)</span>
-                            </div>
-                            <div class="item-actions">
-                                ${compressBtnHtml}
-                                <a href="/files/${group.date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
-                                <a href="/files/${group.date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
-                                <button class="action-btn recreate-transcription-btn" data-date="${group.date}" data-filename="${rec.filename}">Пересоздать TXT</button>
-                                <button class="action-btn recreate-protocol-btn" data-date="${group.date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
-                            </div>
-                        </li>
-                    `;
-                });
-
-                groupEl.innerHTML = `
-                    <h3>${group.formatted_date} <span>(${group.day_of_week})</span></h3>
-                    <ul class="recording-items">${recordingsHtml}</ul>
-                `;
-                recordingsListContainer.appendChild(groupEl);
+            // Удаляем группы, которых больше нет
+            existingGroupDates.forEach(date => {
+                if (!newGroupDates.has(date)) {
+                    recordingsListContainer.querySelector(`.date-group[data-date="${date}"]`)?.remove();
+                }
             });
+
+            // Добавляем новые группы или обновляем существующие развернутые
+            for (const groupData of newDateGroups) {
+                let groupEl = recordingsListContainer.querySelector(`.date-group[data-date="${groupData.date}"]`);
+                if (!groupEl) {
+                    // Создаем новую группу
+                    groupEl = document.createElement('div');
+                    groupEl.className = 'date-group collapsed';
+                    groupEl.dataset.date = groupData.date;
+                    groupEl.innerHTML = `
+                        <h3>${groupData.formatted_date} <span>(${groupData.day_of_week})</span></h3>
+                        <ul class="recording-items">
+                            <li class="loading-placeholder">Загрузка...</li>
+                        </ul>`;
+                    // Вставляем в правильное место (сохраняя сортировку по дате)
+                    const nextGroup = Array.from(recordingsListContainer.children).find(child => child.dataset.date < groupData.date);
+                    recordingsListContainer.insertBefore(groupEl, nextGroup || null);
+                }
+
+                // Если группа развернута, обновляем ее содержимое
+                if (expandedGroups.has(groupData.date)) {
+                    await loadRecordingsForGroup(groupEl, groupData.date);
+                }
+            }
 
         } catch (error) {
             console.error('Error updating recordings list:', error);
+        }
+    }
+
+    async function loadRecordingsForGroup(groupEl, date) {
+        const listEl = groupEl.querySelector('.recording-items');
+        listEl.innerHTML = '<li class="loading-placeholder">Загрузка...</li>'; // Показываем индикатор загрузки
+
+        try {
+            const response = await fetch(`/get_recordings_for_date/${date}`);
+            const recordings = await response.json();
+
+            listEl.innerHTML = ''; // Очищаем
+
+            if (recordings.length === 0) {
+                listEl.innerHTML = '<li class="loading-placeholder">В этой дате нет записей.</li>';
+                return;
+            }
+
+            recordings.forEach(rec => {
+                const sizeMb = (rec.size / 1024 / 1024).toFixed(2);
+                const compressBtnHtml = rec.filename.toLowerCase().endsWith('.wav')
+                    ? `<button class="action-btn compress-btn" data-date="${date}" data-filename="${rec.filename}">Сжать в MP3</button>`
+                    : '';
+
+                const itemEl = document.createElement('li');
+                itemEl.className = 'recording-item';
+                itemEl.innerHTML = `
+                    <div class="item-main">
+                        <span class="rec-time">${rec.time}</span>
+                        <a href="/files/${date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a>
+                        <span class="rec-size">(${sizeMb} MB)</span>
+                    </div>
+                    <div class="item-actions">
+                        ${compressBtnHtml}
+                        <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
+                        <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
+                        <button class="action-btn recreate-transcription-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать TXT</button>
+                        <button class="action-btn recreate-protocol-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
+                    </div>
+                `;
+                listEl.appendChild(itemEl);
+            });
+        } catch (error) {
+            listEl.innerHTML = '<li class="loading-placeholder">Ошибка загрузки записей.</li>';
+            console.error(`Error loading recordings for ${date}:`, error);
         }
     }
 
@@ -270,8 +314,22 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (target.classList.contains('compress-btn')) {
             fetch(`/compress_to_mp3/${date}/${filename}`);
             alert(`Процесс сжатия для ${filename} запущен. Список обновится автоматически.`);
-            // Небольшая задержка перед обновлением, чтобы дать серверу время начать
-            setTimeout(updateRecordingsList, 1000);
+            // Небольшая задержка перед обновлением, чтобы дать серверу время начать и обновить файлы
+            setTimeout(updateRecordingsList, 2000);
+        }
+
+        // Обработчик для разворачивания/сворачивания группы
+        const groupHeader = e.target.closest('.date-group > h3');
+        if (groupHeader) {
+            const groupEl = groupHeader.parentElement;
+            const date = groupEl.dataset.date;
+            groupEl.classList.toggle('collapsed');
+            if (!groupEl.classList.contains('collapsed')) {
+                expandedGroups.add(date);
+                loadRecordingsForGroup(groupEl, date);
+            } else {
+                expandedGroups.delete(date);
+            }
         }
     });
 

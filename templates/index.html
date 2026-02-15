@@ -52,27 +52,11 @@
             <div id="recordings-tab" class="tab-content active">
                 <div id="recordings-list">
                     {% for group in date_groups %}
-                    <div class="date-group">
+                    <div class="date-group collapsed" data-date="{{ group.date }}">
                         <h3>{{ group.formatted_date }} <span>({{ group.day_of_week }})</span></h3>
                         <ul class="recording-items">
-                            {% for rec in group.recordings %}
-                            <li class="recording-item">
-                                <div class="item-main">
-                                    <span class="rec-time">{{ rec.time }}</span>
-                                    <a href="/files/{{ group.date }}/{{ rec.filename }}" target="_blank" class="rec-filename">{{ rec.filename }}</a>
-                                    <span class="rec-size">({{ (rec.size / 1024 / 1024) | round(2) }} MB)</span>
-                                </div>
-                                <div class="item-actions">
-                                    {% if rec.filename.lower().endswith('.wav') %}
-                                        <button class="action-btn compress-btn" data-date="{{ group.date }}" data-filename="{{ rec.filename }}">Сжать в MP3</button>
-                                    {% endif %}
-                                    <a href="/files/{{ group.date }}/{{ rec.transcription_filename }}" target="_blank" class="action-btn transcription-link {{ 'exists' if rec.transcription_exists }}">Транскрипция</a>
-                                    <a href="/files/{{ group.date }}/{{ rec.protocol_filename }}" target="_blank" class="action-btn protocol-link {{ 'exists' if rec.protocol_exists }}">Протокол</a>
-                                    <button class="action-btn recreate-transcription-btn" data-date="{{ group.date }}" data-filename="{{ rec.filename }}">Пересоздать TXT</button>
-                                    <button class="action-btn recreate-protocol-btn" data-date="{{ group.date }}" data-filename="{{ rec.filename }}">Пересоздать Протокол</button>
-                                </div>
-                            </li>
-                            {% endfor %}
+                            <!-- Файлы будут загружены сюда динамически -->
+                            <li class="loading-placeholder">Загрузка...</li>
                         </ul>
                     </div>
                     {% else %}
