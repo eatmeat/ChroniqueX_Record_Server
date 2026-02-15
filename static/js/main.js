@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const audioChartCanvas = document.getElementById('audio-chart');
     const audioChartCtx = audioChartCanvas.getContext('2d');
     
-    const chartHistorySize = 200; // Увеличим количество точек для более плавного сдвига
+    const chartHistorySize = 6000; // 300 секунд * 20 обновлений/сек = 6000 точек
     let micHistory = new Array(chartHistorySize).fill(0);
     let sysHistory = new Array(chartHistorySize).fill(0);
 
@@ -88,47 +88,94 @@ document.addEventListener('DOMContentLoaded', function () {
         return Math.sqrt(value);
     }
 
-    function updateChartWithScroll(micValue, sysValue) {
+    function drawCombinedChart() {
         const canvas = audioChartCanvas;
         const ctx = audioChartCtx;
         const { width, height } = canvas;
+        const chartHeight = height - 15; // Высота области для самого графика, оставляем место внизу для меток
+        const timeSpan = chartHistorySize * 50; // 6000 * 50ms = 300000ms = 300s
 
-        // 1. Сдвигаем существующее изображение влево на 1 пиксель
-        const imageData = ctx.getImageData(1, 0, width - 1, height);
-        ctx.putImageData(imageData, 0, 0);
+        // 1. Очищаем холст
+        ctx.clearRect(0, 0, width, height);
 
-        // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
-        ctx.clearRect(width - 1, 0, 1, height);
-
-        // 3. Рисуем сетку в последней колонке
+        // 2. Рисуем сетку (горизонтальную и вертикальную) и временные метки
         ctx.strokeStyle = '#ecf0f1';
         ctx.lineWidth = 0.5;
-        for (let i = 1; i < 4; i++) {
-            const y = height * (i / 4);
-            // Рисуем точку, если шаг сетки попадает в текущий пиксель
-            if (Date.now() % 50 < 20) { // Создаем пунктирную линию
-                ctx.beginPath();
-                ctx.moveTo(width - 1, y);
-                ctx.lineTo(width, y);
-                ctx.stroke();
-            }
-        }
-        ctx.lineWidth = 1.5; // Возвращаем толщину для основных линий
+        ctx.fillStyle = '#7f8c8d';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
 
-        // 4. Рисуем новые сегменты линий
-        const drawNewSegment = (history, colorFunc) => {
-            const prevValue = history[history.length - 2] || 0;
-            const newValue = history[history.length - 1] || 0;
+        // Горизонтальная сетка
+        for (let i = 1; i < 4; i++) {
+            const y = chartHeight * (i / 4); // Рисуем сетку в пределах высоты графика
+            ctx.beginPath();
+            ctx.moveTo(0, y);
+            ctx.lineTo(width, y);
+            ctx.stroke();
+        }
+
+        // Вертикальная сетка и метки времени (каждую секунду)
+        const pointsPerSecond = 1000 / 50; // 20 точек в секунду
+        const secondsOnChart = chartHistorySize / pointsPerSecond; // 300 секунд
+        const gridIntervalSeconds = 30; // Интервал сетки в секундах
+
+        for (let s = 0; s <= secondsOnChart; s += gridIntervalSeconds) {
+            const i = s * pointsPerSecond;
+            const x = (i / chartHistorySize) * width;
+            const timeInSeconds = s - secondsOnChart;
 
             ctx.beginPath();
-            ctx.strokeStyle = colorFunc(newValue);
-            ctx.moveTo(width - 1, height - (prevValue * height));
-            ctx.lineTo(width, height - (newValue * height));
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, chartHeight); // Рисуем вертикальные линии только до низа графика
+            ctx.stroke();
+
+            let labelText;
+            if (timeInSeconds === 0) {
+                labelText = 'Сейчас';
+            } else {
+                const minutes = Math.floor(Math.abs(timeInSeconds) / 60);
+                const seconds = Math.abs(timeInSeconds) % 60;
+                labelText = `-${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+            ctx.fillText(labelText, x, height - 5);
+        }
+
+        // 3. Рисуем линии уровней
+        ctx.lineWidth = 1.5;
+        const drawLine = (history, colorFunc) => {
+            const pointsPerPixel = chartHistorySize / width;
+            ctx.beginPath();
+
+            for (let x = 0; x < width; x++) {
+                const startIndex = Math.floor(x * pointsPerPixel);
+                const endIndex = Math.floor((x + 1) * pointsPerPixel);
+                
+                if (startIndex >= history.length) continue;
+
+                // Усредняем значения для одного пикселя, чтобы сгладить график
+                let sum = 0;
+                let count = 0;
+                for (let i = startIndex; i < endIndex && i < history.length; i++) {
+                    sum += history[i];
+                    count++;
+                }
+                const avgValue = count > 0 ? sum / count : 0;
+
+                const y = chartHeight - (avgValue * chartHeight);
+
+                if (x === 0) {
+                    ctx.moveTo(x, y); // Начинаем с первой точки
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+
+            ctx.strokeStyle = colorFunc(history[history.length - 1]); // Цвет всей линии по последнему значению
             ctx.stroke();
         };
 
-        drawNewSegment(sysHistory, () => '#3498db');
-        drawNewSegment(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
+        drawLine(sysHistory, () => '#3498db');
+        drawLine(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
     }
 
     async function updateAudioLevels() {
@@ -145,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (micHistory.length > chartHistorySize) micHistory.shift();
             if (sysHistory.length > chartHistorySize) sysHistory.shift();
 
-            updateChartWithScroll(amplifiedMic, amplifiedSys);
+            drawCombinedChart();
         } catch (error) {
             // console.error('Error fetching audio levels:', error); // Keep this commented to avoid console spam
         }
