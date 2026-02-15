@@ -251,36 +251,53 @@ document.addEventListener('DOMContentLoaded', function () {
         const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
         sortedGroups.forEach(group => {
             const groupEl = document.createElement('div');
-            groupEl.className = 'contact-group';
+            // Добавляем класс 'collapsed', чтобы группа была свернута по умолчанию
+            groupEl.className = 'contact-group collapsed';
 
             const groupHeaderEl = document.createElement('div');
             groupHeaderEl.className = 'contact-group-header';
 
             const groupHeaderLabel = document.createElement('label');
-            groupHeaderLabel.style.display = 'flex';
-            groupHeaderLabel.style.alignItems = 'center';
-            groupHeaderLabel.style.gap = '10px';
-            groupHeaderLabel.style.cursor = 'pointer';
-
+            groupHeaderLabel.className = 'contact-group-header-label'; // Новый класс для стилизации
             const groupNameEl = document.createElement('h4');
             groupNameEl.className = 'contact-group-name';
             groupNameEl.textContent = group.name;
+
+            // Создаем обертку для иконки, чтобы увеличить кликабельную область
+            const expandIconWrapper = document.createElement('div');
+            expandIconWrapper.className = 'expand-icon-wrapper';
+
+            // Создаем саму иконку
+            const expandIcon = document.createElement('span');
+            expandIcon.className = 'expand-icon';
+            expandIconWrapper.appendChild(expandIcon);
+            groupHeaderEl.appendChild(expandIconWrapper);
+
             groupNameEl.style.cursor = 'text'; // Указываем, что текст можно редактировать
 
             const groupCheckbox = document.createElement('input');
             groupCheckbox.type = 'checkbox';
             groupCheckbox.title = 'Выбрать/снять всех в группе';
-
-
             
+            // --- Счетчик участников ---
+            const contactIdsInGroup = group.contacts.map(c => c.id);
+            const totalCount = contactIdsInGroup.length;
+            const selectedCount = contactIdsInGroup.filter(id => selectedContactIds.includes(id)).length;
+
+            const groupCounterEl = document.createElement('span');
+            groupCounterEl.className = 'group-counter';
+            groupCounterEl.textContent = `${selectedCount} / ${totalCount}`;
+            // --- Конец счетчика ---
+
             // Логика inline-редактирования для названия группы
             groupNameEl.addEventListener('click', () => {
                 const oldName = group.name;
                 const input = document.createElement('input');
-                input.type = 'text';
                 input.value = oldName;
                 input.className = 'contact-name-edit'; // Используем тот же стиль, что и для участника
-                input.style.flexGrow = '1'; // Занимает все доступное место
+
+                // Скрываем счетчик при редактировании
+                if (groupHeaderEl.contains(groupCounterEl)) groupHeaderEl.removeChild(groupCounterEl);
 
                 // Заменяем h4 на input
                 groupHeaderLabel.replaceChild(input, groupNameEl);
@@ -299,11 +316,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 const saveChanges = async () => {
                     const newName = input.value.trim();
-                    // Всегда удаляем кнопку при выходе из режима редактирования
+                    // Удаляем кнопку и возвращаем счетчик
                     groupHeaderEl.removeChild(deleteGroupBtn);
+                    groupHeaderEl.appendChild(groupCounterEl);
+
                     // Если имя не изменилось или пустое, просто возвращаем h4
                     if (newName === oldName || !newName) {
                         groupHeaderLabel.replaceChild(groupNameEl, input);
+                        updateGroupCounter(); // Обновляем счетчик на всякий случай
                         return;
                     }
                     // Отправляем запрос на сервер
@@ -327,7 +347,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.addEventListener('keydown', (e) => {
                     if (e.key === 'Enter') {
                         input.blur();
-                    } else if (e.key === 'Escape') {
+                    } else if (e.key === 'Escape') { 
+                        // Возвращаем все как было
+                        groupHeaderEl.appendChild(groupCounterEl);
                         groupHeaderEl.removeChild(deleteGroupBtn); // Удаляем кнопку
                         groupHeaderLabel.replaceChild(groupNameEl, input); // Возвращаем h4 без сохранения
                     }
@@ -338,10 +360,8 @@ document.addEventListener('DOMContentLoaded', function () {
             groupHeaderLabel.appendChild(groupNameEl);   // Имя группы внутри label
 
             groupHeaderEl.appendChild(groupHeaderLabel); // Label добавляется в заголовок
+            groupHeaderEl.appendChild(groupCounterEl);   // Счетчик добавляется в заголовок
             groupEl.appendChild(groupHeaderEl);
-
-            // Получаем все ID контактов в этой группе
-            const contactIdsInGroup = group.contacts.map(c => c.id);
 
             // Функция для обновления состояния группового чекбокса
             const updateGroupCheckboxState = () => {
@@ -350,8 +370,16 @@ document.addEventListener('DOMContentLoaded', function () {
                 groupCheckbox.indeterminate = checkedInGroup.length > 0 && checkedInGroup.length < contactIdsInGroup.length;
             };
 
+            // Функция для обновления текста счетчика
+            const updateGroupCounter = () => {
+                const currentSelectedCount = contactIdsInGroup.filter(id => selectedContactIds.includes(id)).length;
+                groupCounterEl.textContent = `${currentSelectedCount} / ${totalCount}`;
+            };
+
             // Обработчик для группового чекбокса
-            groupCheckbox.addEventListener('change', () => handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup));
+            groupCheckbox.addEventListener('change', () => {
+                handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup, updateGroupCounter);
+            });
 
             const listEl = document.createElement('ul');
             listEl.className = 'contact-group-list';
@@ -401,6 +429,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 checkbox.addEventListener('change', () => {
                     saveContactSelection(); // Сохраняем выбор
                     updateGroupCheckboxState(); // Обновляем состояние группового чекбокса
+                    updateGroupCounter(); // Обновляем счетчик
                 });
 
                 labelEl.appendChild(checkbox);
@@ -486,6 +515,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Устанавливаем начальное состояние группового чекбокса
             updateGroupCheckboxState();
+
+            // Обработчик для сворачивания/разворачивания только по клику на иконку
+            expandIconWrapper.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем всплытие события до других элементов
+                groupEl.classList.toggle('collapsed');
+            });
+
+            // Обработчик для клика по label (включая название группы), чтобы переключать чекбокс
+            groupHeaderLabel.addEventListener('click', (e) => {
+                // Игнорируем клики по самому чекбоксу (чтобы избежать двойного срабатывания) и полю редактирования
+                if (e.target.tagName === 'INPUT' || e.target.classList.contains('contact-name-edit')) {
+                    return;
+                }
+
+                // Определяем, нужно ли выбрать всех (true) или снять выбор (false).
+                // Если выбраны не все (включая 0), то мы выбираем всех.
+                // Если выбраны уже все, то мы снимаем выбор.
+                const shouldBeChecked = groupCheckbox.indeterminate || !groupCheckbox.checked;
+                handleGroupCheckboxChange(shouldBeChecked, contactIdsInGroup, updateGroupCounter);
+            });
         });
     }
 
@@ -509,13 +558,14 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
-    async function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
+    async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCounterCallback) {
         const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"]`);
         let selectionChanged = false;
         groupCheckboxes.forEach(cb => {
             if (contactIdsInGroup.includes(cb.value)) {
                 if (cb.checked !== isChecked) {
                     cb.checked = isChecked;
+                    // Обновляем глобальный массив ID
                     selectionChanged = true;
                 }
             }
@@ -523,6 +573,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Сохраняем изменения, только если они были
         if (selectionChanged) await saveContactSelection();
+
+        // Обновляем счетчик после всех изменений
+        if (updateCounterCallback) updateCounterCallback();
     }
 
     addGroupBtn.addEventListener('click', async () => {

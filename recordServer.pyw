@@ -1415,12 +1415,27 @@ def post_task(file_path, task_type, prompt_addition_str=None):
             
             participants_prompt = ""
             if num_speakers_from_contacts > 0:
-                all_contacts = [contact for group in contacts_data.get("groups", []) for contact in group.get("contacts", [])]
-                selected_names = [c['name'] for c in all_contacts if c.get('id') in selected_contact_ids]
+                # Группируем выбранных участников по их группам
+                participants_by_group = {}
+                for group in contacts_data.get("groups", []):
+                    group_name = group.get("name", "Без группы")
+                    for contact in group.get("contacts", []):
+                        if contact.get("id") in selected_contact_ids:
+                            if group_name not in participants_by_group:
+                                participants_by_group[group_name] = []
+                            participants_by_group[group_name].append(contact.get("name"))
                 
-                if selected_names:
-                    participants_list = "\n".join(f"- {name}" for name in selected_names)
-                    participants_prompt = f"# Список участников:\n{participants_list}\n\n"
+                if participants_by_group:
+                    prompt_lines = ["# Список участников:\n"]
+                    # Сортируем группы по имени для консистентности
+                    for group_name in sorted(participants_by_group.keys()):
+                        prompt_lines.append(f"# Группа: {group_name}")
+                        # Сортируем участников внутри группы
+                        for participant_name in sorted(participants_by_group[group_name]):
+                            prompt_lines.append(f"- {participant_name}")
+                        prompt_lines.append("") # Пустая строка после каждой группы
+                    
+                    participants_prompt = "\n".join(prompt_lines)
 
             # Add prompt_addition if it's a protocol task and prompt_addition is provided
             if task_type == 'protocol' and (prompt_addition_str or participants_prompt):
