@@ -99,7 +99,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const canvas = audioChartCanvas;
         const ctx = audioChartCtx;
         const { width, height } = canvas;
-        const chartHeight = height - 15; // Высота области для самого графика, оставляем место внизу для меток
+        const chartHeight = height - 25; // Увеличим место для подписей
 
         if (frameCount % scrollInterval === 0) {
             // 1. Сдвигаем существующее изображение влево на 1 пиксель
@@ -144,10 +144,10 @@ document.addEventListener('DOMContentLoaded', function () {
             const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
             const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk' });
 
-            ctx.textAlign = 'center';
+            ctx.textAlign = 'right'; // Выравниваем по правому краю, чтобы текст не обрезался
             ctx.fillStyle = '#7f8c8d';
-            ctx.fillText(`МСК: ${mskTime}`, width - 30, height - 12); // Верхняя строка
-            ctx.fillText(`ИРК: ${irkTime}`, width - 30, height - 2);  // Нижняя строка
+            ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 15); // Рисуем у правого края
+            ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 5);  // Рисуем у правого края
         }
 
         // 4. Рисуем новые сегменты линий
@@ -196,8 +196,8 @@ document.addEventListener('DOMContentLoaded', function () {
     pauseBtn.addEventListener('click', () => fetch('/pause'));
     stopBtn.addEventListener('click', () => {
         fetch('/stop');
-        // Optimistically reload the page to show the new file
-        setTimeout(() => window.location.reload(), 2000);
+        // Страница больше не перезагружается, чтобы не сбрасывать график.
+        // Список записей обновится при следующем обновлении страницы вручную.
     });
 
     // --- Action Buttons ---
