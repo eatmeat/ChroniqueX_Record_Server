@@ -83,6 +83,11 @@
                         <label><input type="radio" name="meeting_date_source" value="folder"> Дата из папки с записью</label>
                     </div>
 
+                    <h3>Название собрания</h3>
+                    <div id="meeting-name-templates-container">
+                        <!-- Шаблоны будут отрисованы здесь с помощью JS -->
+                    </div>
+                    <button type="button" id="add-meeting-name-template-btn" class="action-btn">Добавить шаблон</button>
 
                     <h3>Дополнение к промпту</h3>
                     <div class="form-group">
@@ -92,7 +97,6 @@
                         </label>
                     </div>
                     <div class="form-group">
-                        <div class="prompt-info">
                             <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
                             <p>Строки, начинающиеся с <code>//</code>, будут проигнорированы.</p>
                         </div>

@@ -481,6 +481,11 @@ DEFAULT_SETTINGS = {
     ],
     "add_meeting_date": True,
     "meeting_date_source": "current", # 'current' or 'folder'
+    "meeting_name_templates": [
+        {"id": "default1", "template": "Еженедельное собрание команды"},
+        {"id": "default2", "template": "Планирование спринта"}
+    ],
+    "active_meeting_name_template_id": None,
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None,
@@ -1562,6 +1567,17 @@ def process_recording_tasks(file_path):
         current_date_formatted = format_date_russian(datetime.now())
         prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
 
+        # --- Meeting Name addition logic ---
+        meeting_name_prompt_addition = ""
+        active_template_id = settings.get("active_meeting_name_template_id")
+        if active_template_id:
+            templates = settings.get("meeting_name_templates", [])
+            active_template = next((t for t in templates if t.get("id") == active_template_id), None)
+            if active_template:
+                template_text = active_template.get("template", "")
+                if template_text:
+                    meeting_name_prompt_addition = f"# Название собрания: {template_text}\n\n"
+
         # --- Date addition logic ---
         date_prompt_addition = ""
         if settings.get("add_meeting_date", False):
@@ -1626,7 +1642,7 @@ def process_recording_tasks(file_path):
 
         # Update post-processing status for protocol stage
         post_process_stage = "protocol"
-        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=date_prompt_addition + filtered_prompt_addition)
+        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition)
         if protocol_task_id:
             protocol_output_path = base_name + "_protocol.pdf"
             poll_and_save_result(protocol_task_id, protocol_output_path)
@@ -1904,7 +1920,8 @@ def save_web_settings():
         # This allows partial updates (e.g., only updating contacts)
         for key in ['use_custom_prompt', 'prompt_addition', 'mic_volume_adjustment', 
                     'system_audio_volume_adjustment', 'selected_contacts', 'context_file_rules',
-                    'add_meeting_date', 'meeting_date_source']:
+                    'add_meeting_date', 'meeting_date_source', 'meeting_name_templates',
+                    'active_meeting_name_template_id']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1926,6 +1943,8 @@ def get_web_settings():
         "context_file_rules": settings.get("context_file_rules", []),
         "add_meeting_date": settings.get("add_meeting_date", True),
         "meeting_date_source": settings.get("meeting_date_source", "current"),
+        "meeting_name_templates": settings.get("meeting_name_templates", []),
+        "active_meeting_name_template_id": settings.get("active_meeting_name_template_id", None),
     }
     return jsonify(web_settings)
 
@@ -2288,6 +2307,17 @@ def process_protocol_task(txt_file_path):
     current_date_formatted = format_date_russian(datetime.now())
     prompt_addition = prompt_addition.replace("{current_date}", current_date_formatted)
 
+    # --- Meeting Name addition logic ---
+    meeting_name_prompt_addition = ""
+    active_template_id = settings.get("active_meeting_name_template_id")
+    if active_template_id:
+        templates = settings.get("meeting_name_templates", [])
+        active_template = next((t for t in templates if t.get("id") == active_template_id), None)
+        if active_template:
+            template_text = active_template.get("template", "")
+            if template_text:
+                meeting_name_prompt_addition = f"# Название собрания: {template_text}\n\n"
+
     # --- Date addition logic ---
     date_prompt_addition = ""
     if settings.get("add_meeting_date", False):
@@ -2329,7 +2359,7 @@ def process_protocol_task(txt_file_path):
             except Exception as e: print(f"Не удалось прочитать файл задач {html_file}: {e}")
 
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
-    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=date_prompt_addition + filtered_prompt_addition)
+    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition)
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"

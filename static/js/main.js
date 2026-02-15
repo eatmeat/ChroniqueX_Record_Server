@@ -118,6 +118,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const addContextRuleBtn = document.getElementById('add-context-rule-btn');
     const addMeetingDateCheckbox = document.getElementById('add-meeting-date');
     const meetingDateSourceGroup = document.getElementById('meeting-date-source-group');
+    const meetingNameTemplatesContainer = document.getElementById('meeting-name-templates-container');
+    const addMeetingNameTemplateBtn = document.getElementById('add-meeting-name-template-btn');
 
     async function loadSettings() {
         const response = await fetch('/get_web_settings');
@@ -127,7 +129,10 @@ document.addEventListener('DOMContentLoaded', function () {
         micVolumeSlider.value = settings.mic_volume_adjustment;
         sysAudioVolumeSlider.value = settings.system_audio_volume_adjustment;
         addMeetingDateCheckbox.checked = settings.add_meeting_date;
-        document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`).checked = true;
+        const dateSourceRadio = document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
+        if (dateSourceRadio) dateSourceRadio.checked = true;
+
+        renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         toggleMeetingDateSourceVisibility();
 
         updateVolumeLabels();
@@ -154,6 +159,21 @@ document.addEventListener('DOMContentLoaded', function () {
         return rules;
     }
 
+    function getMeetingNameTemplatesFromDOM() {
+        const templates = [];
+        document.querySelectorAll('.meeting-name-template-item').forEach(item => {
+            const id = item.dataset.id;
+            const templateInput = item.querySelector('.meeting-name-template-input');
+            if (id && templateInput) {
+                const template = templateInput.value.trim();
+                if (template) {
+                    templates.push({ id, template });
+                }
+            }
+        });
+        return templates;
+    }
+
     async function saveSettings() {
         // Собираем правила из DOM
         const contextFileRules = getContextFileRulesFromDOM();
@@ -165,6 +185,8 @@ document.addEventListener('DOMContentLoaded', function () {
             system_audio_volume_adjustment: parseFloat(sysAudioVolumeSlider.value),
             add_meeting_date: addMeetingDateCheckbox.checked,
             meeting_date_source: document.querySelector('input[name="meeting_date_source"]:checked').value,
+            meeting_name_templates: getMeetingNameTemplatesFromDOM(),
+            active_meeting_name_template_id: document.querySelector('input[name="active_meeting_name_template"]:checked')?.value || null,
             context_file_rules: contextFileRules,
             // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
@@ -247,6 +269,67 @@ document.addEventListener('DOMContentLoaded', function () {
         addContextRuleRow('', '', true);
     });
 
+    // --- Meeting Name Templates ---
+    function renderMeetingNameTemplates(templates = [], activeId = null) {
+        meetingNameTemplatesContainer.innerHTML = '';
+
+        // "Не добавлять" option
+        const noneOption = createMeetingNameTemplateRow({ id: 'null', template: 'Не добавлять' }, activeId, false);
+        meetingNameTemplatesContainer.appendChild(noneOption);
+
+        templates.forEach(template => {
+            const templateRow = createMeetingNameTemplateRow(template, activeId, true);
+            meetingNameTemplatesContainer.appendChild(templateRow);
+        });
+    }
+
+    function createMeetingNameTemplateRow(template, activeId, isEditable) {
+        const item = document.createElement('div');
+        item.className = 'meeting-name-template-item';
+        item.dataset.id = template.id;
+
+        const radioId = `template-radio-${template.id}`;
+        const isChecked = template.id === activeId || (activeId === null && template.id === 'null');
+
+        item.innerHTML = `
+            <input type="radio" id="${radioId}" name="active_meeting_name_template" value="${template.id}" ${isChecked ? 'checked' : ''}>
+            <label for="${radioId}" class="meeting-name-template-label"></label>
+        `;
+
+        const label = item.querySelector('label');
+        if (isEditable) {
+            label.innerHTML = `
+                <input type="text" class="meeting-name-template-input" value="${template.template}">
+                <button type="button" class="action-btn remove-rule-btn">&times;</button>
+            `;
+            const input = label.querySelector('input');
+            const removeBtn = label.querySelector('button');
+
+            input.addEventListener('change', saveSettings);
+            removeBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                item.remove();
+                saveSettings();
+            });
+        } else {
+            label.textContent = template.template;
+        }
+
+        item.querySelector('input[type="radio"]').addEventListener('change', saveSettings);
+
+        return item;
+    }
+
+    addMeetingNameTemplateBtn.addEventListener('click', () => {
+        const newId = `template-${Date.now()}`;
+        const newTemplate = { id: newId, template: '' };
+        const newRow = createMeetingNameTemplateRow(newTemplate, null, true);
+        meetingNameTemplatesContainer.appendChild(newRow);
+        // Focus on the new input
+        newRow.querySelector('.meeting-name-template-input').focus();
+    });
+
+
     settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы
 
     // --- Contacts Tab ---
@@ -287,6 +370,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = await settingsRes.json();
         selectedContactIds = settings.selected_contacts || [];
         renderContacts();
+        renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         renderContextFileRules(settings.context_file_rules);
         updateSelectedContactsCount();
     }

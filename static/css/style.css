@@ -426,3 +426,31 @@ input[type="text"], input[type="number"], textarea {
 .remove-rule-btn {
     padding: 5px 10px;
 }
+
+/* Стили для шаблонов названий собраний */
+#meeting-name-templates-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.meeting-name-template-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.meeting-name-template-label {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    gap: 10px;
+}
+
+.meeting-name-template-input {
+    flex-grow: 1;
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
