@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     let frameCount = 0;
-    const scrollInterval = 2; // Сдвигать график каждый 5-й кадр, чтобы замедлить его в 5 раз
+    const scrollInterval = 3; // Сдвигать график каждый 3-й кадр, чтобы замедлить его
 
     function updateChartWithScroll() {
         const canvas = audioChartCanvas;
@@ -110,14 +110,14 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.clearRect(width - 1, 0, 1, height);
         }
 
-        // 3. Рисуем сетку и временные метки в последней колонке
+        // 3. Рисуем сетку и временные метки в последней колонке (которая только что была очищена)
         ctx.strokeStyle = '#ecf0f1';
         ctx.lineWidth = 0.5;
         ctx.fillStyle = '#7f8c8d';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
-        
-        // Горизонтальные линии сетки
+
+        // Горизонтальные линии сетки (рисуем только в новой колонке)
         for (let i = 1; i < 4; i++) {
             const y = chartHeight * (i / 4);
             ctx.beginPath();
@@ -126,32 +126,41 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.stroke();
         }
 
-        // Вертикальная линия сетки и метки времени
-        const updatesPerSecond = 1000 / 50; // 20
-        const gridIntervalSeconds = 30; // Интервал для вертикальных линий и меток
-        const totalUpdatesForGrid = updatesPerSecond * gridIntervalSeconds;
-
-        if (frameCount % totalUpdatesForGrid === 0) {
+        // Вертикальная линия сетки и метка времени, когда наступает :00 или :30 секунд
+        const now = new Date();
+        const seconds = now.getSeconds();
+        const milliseconds = now.getMilliseconds();
+        
+        // Проверяем, что мы находимся в начале секунды, чтобы нарисовать метку только один раз
+        if ((seconds === 0 || seconds === 30) && milliseconds < (50 * scrollInterval)) {
+            ctx.strokeStyle = '#bdc3c7'; // Более заметная линия сетки
+            ctx.lineWidth = 0.5;
             ctx.beginPath();
             ctx.moveTo(width - 1, 0);
             ctx.lineTo(width - 1, chartHeight);
             ctx.stroke();
 
-            // Рисуем метку времени
-            const timeLabel = new Date().toLocaleTimeString('ru-RU');
+            // Рисуем метки времени для МСК и ИРК
+            const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
+            const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk' });
+
             ctx.textAlign = 'center';
             ctx.fillStyle = '#7f8c8d';
-            ctx.fillText(timeLabel, width - 20, height - 5);
+            ctx.fillText(`МСК: ${mskTime}`, width - 30, height - 12); // Верхняя строка
+            ctx.fillText(`ИРК: ${irkTime}`, width - 30, height - 2);  // Нижняя строка
         }
 
         // 4. Рисуем новые сегменты линий
         ctx.lineWidth = 1.5;
         const drawNewSegment = (history, colorFunc) => {
+            // Берем две последние точки из истории для отрисовки сегмента.
+            // +1, т.к. history.length-1 это текущая точка, а нам нужна предыдущая.
             const prevValue = history[history.length - 2] || 0;
             const newValue = history[history.length - 1] || 0;
 
             ctx.beginPath();
             ctx.strokeStyle = colorFunc(newValue);
+            // Рисуем новый сегмент в последнем пикселе холста
             ctx.moveTo(width - 1, chartHeight - (prevValue * chartHeight));
             ctx.lineTo(width, chartHeight - (newValue * chartHeight));
             ctx.stroke();
