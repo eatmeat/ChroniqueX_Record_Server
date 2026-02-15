@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const audioChartCanvas = document.getElementById('audio-chart');
     const audioChartCtx = audioChartCanvas.getContext('2d');
     
-    const chartHistorySize = 18000; // 300 секунд * 20 обновлений/сек = 6000 точек
+    const chartHistorySize = 6000; // 300 секунд * 20 обновлений/сек = 6000 точек
     let micHistory = new Array(chartHistorySize).fill(0);
     let sysHistory = new Array(chartHistorySize).fill(0);
 
@@ -93,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     let frameCount = 0;
+    const scrollInterval = 2; // Сдвигать график каждый 5-й кадр, чтобы замедлить его в 5 раз
 
     function updateChartWithScroll() {
         const canvas = audioChartCanvas;
@@ -100,12 +101,14 @@ document.addEventListener('DOMContentLoaded', function () {
         const { width, height } = canvas;
         const chartHeight = height - 15; // Высота области для самого графика, оставляем место внизу для меток
 
-        // 1. Сдвигаем существующее изображение влево на 1 пиксель
-        const imageData = ctx.getImageData(1, 0, width - 1, height);
-        ctx.putImageData(imageData, 0, 0);
+        if (frameCount % scrollInterval === 0) {
+            // 1. Сдвигаем существующее изображение влево на 1 пиксель
+            const imageData = ctx.getImageData(1, 0, width - 1, height);
+            ctx.putImageData(imageData, 0, 0);
 
-        // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
-        ctx.clearRect(width - 1, 0, 1, height);
+            // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
+            ctx.clearRect(width - 1, 0, 1, height);
+        }
 
         // 3. Рисуем сетку и временные метки в последней колонке
         ctx.strokeStyle = '#ecf0f1';
@@ -113,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
         ctx.fillStyle = '#7f8c8d';
         ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
-
+        
         // Горизонтальные линии сетки
         for (let i = 1; i < 4; i++) {
             const y = chartHeight * (i / 4);
@@ -123,20 +126,22 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.stroke();
         }
 
-        // Вертикальная линия сетки и метка времени каждые 30 секунд
-        const updatesPerSecond = 20; // 1000ms / 50ms
-        const gridIntervalSeconds = 30;
-        if (frameCount % (updatesPerSecond * gridIntervalSeconds) === 0) {
+        // Вертикальная линия сетки и метки времени
+        const updatesPerSecond = 1000 / 50; // 20
+        const gridIntervalSeconds = 30; // Интервал для вертикальных линий и меток
+        const totalUpdatesForGrid = updatesPerSecond * gridIntervalSeconds;
+
+        if (frameCount % totalUpdatesForGrid === 0) {
             ctx.beginPath();
             ctx.moveTo(width - 1, 0);
             ctx.lineTo(width - 1, chartHeight);
             ctx.stroke();
 
-            const totalSeconds = Math.floor(frameCount / updatesPerSecond);
-            const minutes = Math.floor(totalSeconds / 60);
-            const seconds = totalSeconds % 60;
-            const labelText = `-${minutes}:${seconds.toString().padStart(2, '0')}`;
-            ctx.fillText(frameCount === 0 ? 'Сейчас' : labelText, width - 15, height - 5);
+            // Рисуем метку времени
+            const timeLabel = new Date().toLocaleTimeString('ru-RU');
+            ctx.textAlign = 'center';
+            ctx.fillStyle = '#7f8c8d';
+            ctx.fillText(timeLabel, width - 20, height - 5);
         }
 
         // 4. Рисуем новые сегменты линий
