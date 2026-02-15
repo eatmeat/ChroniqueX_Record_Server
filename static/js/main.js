@@ -522,6 +522,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 groupEl.classList.toggle('collapsed');
             });
 
+            // Добавляем такой же обработчик на счетчик, чтобы по нему тоже можно было сворачивать
+            groupCounterEl.addEventListener('click', (e) => {
+                e.stopPropagation(); // Предотвращаем всплытие события
+                groupEl.classList.toggle('collapsed');
+            });
+
             // Обработчик для клика по label (включая название группы), чтобы переключать чекбокс
             groupHeaderLabel.addEventListener('click', (e) => {
                 // Игнорируем клики по самому чекбоксу (чтобы избежать двойного срабатывания) и полю редактирования
