@@ -981,7 +981,7 @@ def post_task(file_path, task_type, prompt_addition_str=None, add_participants_p
                     prompt_lines = ["# Список участников:\n"]
                     # Сортируем группы по имени для консистентности
                     for group_name in sorted(participants_by_group.keys()):
-                        prompt_lines.append(f"# Группа: {group_name}")
+                        prompt_lines.append(f"## Группа: {group_name}")
                         # Сортируем участников внутри группы
                         for participant_name in sorted(participants_by_group[group_name]):
                             prompt_lines.append(f"- {participant_name}")
@@ -1193,7 +1193,7 @@ def process_recording_tasks(file_path):
             if participants_by_group:
                 prompt_lines = ["# Список участников:\n"]
                 for group_name in sorted(participants_by_group.keys()):
-                    prompt_lines.append(f"# Группа: {group_name}")
+                    prompt_lines.append(f"## Группа: {group_name}")
                     for participant_name in sorted(participants_by_group[group_name]):
                         prompt_lines.append(f"- {participant_name}")
                     prompt_lines.append("")
@@ -1467,6 +1467,98 @@ def get_recordings_for_date(date_str):
 def recordings_state():
     """Возвращает время последнего изменения в папке с записями."""
     return jsonify({"last_modified": get_recordings_last_modified()})
+
+@app.route('/preview_prompt_addition', methods=['GET'])
+def preview_prompt_addition():
+    """
+    Генерирует и возвращает предпросмотр "добавки к промпту"
+    на основе текущих настроек.
+    """
+    try:
+        # Загружаем самые свежие настройки и контакты
+        load_settings()
+        load_contacts()
+
+        # --- Логика сборки промпта (аналогично process_protocol_task) ---
+
+        # 1. Добавка из textarea
+        prompt_addition = settings.get("prompt_addition", "") if settings.get("use_custom_prompt", False) else ""
+        prompt_addition = prompt_addition.replace("{current_date}", format_date_russian(datetime.now()))
+
+        # 2. Название собрания
+        meeting_name_prompt_addition = ""
+        active_template_id = settings.get("active_meeting_name_template_id")
+        if active_template_id:
+            templates = settings.get("meeting_name_templates", [])
+            active_template = next((t for t in templates if t.get("id") == active_template_id), None)
+            if active_template and active_template.get("template"):
+                meeting_name_prompt_addition = f"# Название собрания: {active_template.get('template')}\n\n"
+
+        # 3. Дата собрания
+        date_prompt_addition = ""
+        if settings.get("add_meeting_date", False):
+            # Для предпросмотра всегда используем текущую дату, т.к. папки еще нет
+            formatted_date = format_date_russian(datetime.now())
+            date_prompt_addition = f"# Дата собрания: {formatted_date}\n\n"
+
+        # 4. Файлы контекста
+        context_files_prompt_addition = ""
+        context_rules = settings.get("context_file_rules", [])
+        # Для предпросмотра ищем файлы в корневой папке 'rec'
+        rec_dir = Path(os.path.join(get_application_path(), 'rec'))
+        if rec_dir.exists() and context_rules:
+            for rule in context_rules:
+                if not rule.get("enabled", False):
+                    continue
+                pattern = rule.get("pattern")
+                prompt_template = rule.get("prompt")
+                if not pattern or not prompt_template:
+                    continue
+
+                found_files = sorted(list(rec_dir.glob(pattern)))
+                for found_file in found_files:
+                    try:
+                        with open(found_file, 'r', encoding='utf-8') as f:
+                            # Читаем только первые 500 символов + запас для безопасности
+                            content = f.read(550)
+                            if len(content) > 500:
+                                content = content[:500] + "..."
+                        if content:
+                            formatted_prompt = prompt_template.replace("{filename}", found_file.name).replace("{content}", content)
+                            context_files_prompt_addition += formatted_prompt
+                    except Exception as e:
+                        print(f"Не удалось прочитать файл контекста для предпросмотра {found_file}: {e}")
+        
+        # Объединяем добавку из textarea и из файлов
+        combined_prompt_addition = prompt_addition + context_files_prompt_addition
+        filtered_prompt_addition = "\n".join([line for line in combined_prompt_addition.splitlines() if not line.strip().startswith("//")])
+
+        # 5. Список участников
+        participants_prompt = ""
+        selected_contact_ids = set(settings.get("selected_contacts", []))
+        if selected_contact_ids:
+            participants_by_group = {}
+            for group in contacts_data.get("groups", []):
+                group_name = group.get("name", "Без группы")
+                for contact in group.get("contacts", []):
+                    if contact.get("id") in selected_contact_ids:
+                        if group_name not in participants_by_group:
+                            participants_by_group[group_name] = []
+                        participants_by_group[group_name].append(contact.get("name"))
+            if participants_by_group:
+                prompt_lines = ["# Список участников:\n"]
+                for group_name in sorted(participants_by_group.keys()):
+                    prompt_lines.append(f"## Группа: {group_name}")
+                    for participant_name in sorted(participants_by_group[group_name]):
+                        prompt_lines.append(f"- {participant_name}")
+                    prompt_lines.append("")
+                participants_prompt = "\n".join(prompt_lines)
+
+        # Собираем финальную строку в правильном порядке
+        final_prompt_text = date_prompt_addition + meeting_name_prompt_addition + participants_prompt + filtered_prompt_addition
+        return jsonify({"prompt_text": final_prompt_text})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/update_metadata/<date_str>/<filename>', methods=['POST'])
 def update_metadata(date_str, filename):
@@ -2017,7 +2109,7 @@ def process_protocol_task(txt_file_path):
         if participants_by_group:
             prompt_lines = ["# Список участников:\n"]
             for group_name in sorted(participants_by_group.keys()):
-                prompt_lines.append(f"# Группа: {group_name}")
+                prompt_lines.append(f"## Группа: {group_name}")
                 for participant_name in sorted(participants_by_group[group_name]):
                     prompt_lines.append(f"- {participant_name}")
                 prompt_lines.append("")

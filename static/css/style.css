@@ -690,3 +690,25 @@ input[type="text"], input[type="number"], textarea {
 .prompt-display-row .prompt-addition-display {
     margin-top: 0; /* Убираем верхний отступ, так как он уже есть у строки */
 }
+
+/* Стили для блока предпросмотра промпта */
+.prompt-preview-container {
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 5px;
+}
+
+.prompt-preview-container h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+#prompt-preview-content {
+    white-space: pre-wrap; /* Позволяет переносить длинные строки */
+    word-wrap: break-word; /* Переносит слова, которые не помещаются */
+    font-size: 0.9em;
+    color: #495057;
+}

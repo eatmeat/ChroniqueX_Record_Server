@@ -527,15 +527,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Автосохранение при изменении настроек
-    document.getElementById('use-custom-prompt').addEventListener('change', saveSettings);
+    document.getElementById('use-custom-prompt').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
     // Для textarea используем 'change', чтобы не отправлять запрос на каждое нажатие клавиши
-    document.getElementById('prompt-addition').addEventListener('change', saveSettings); 
+    document.getElementById('prompt-addition').addEventListener('change', () => { saveSettings().then(updatePromptPreview); }); 
     addMeetingDateCheckbox.addEventListener('change', () => {
         toggleMeetingDateSourceVisibility();
-        saveSettings();
+        saveSettings().then(updatePromptPreview);
     });
     document.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
-        radio.addEventListener('change', saveSettings);
+        radio.addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
     });
 
     function toggleMeetingDateSourceVisibility() { meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; }
@@ -572,16 +572,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
         ruleItem.querySelector('.remove-rule-btn').addEventListener('click', () => {
             ruleItem.remove();
-            saveSettings();
+            saveSettings().then(updatePromptPreview);
         });
 
         // Автосохранение при изменении полей
-        ruleItem.querySelector('.context-rule-enabled').addEventListener('change', saveSettings);
-        ruleItem.querySelector('.context-rule-pattern').addEventListener('change', saveSettings);
-        ruleItem.querySelector('.context-rule-prompt').addEventListener('change', saveSettings);
+        ruleItem.querySelector('.context-rule-enabled').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
+        ruleItem.querySelector('.context-rule-pattern').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
+        ruleItem.querySelector('.context-rule-prompt').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
 
         contextRulesContainer.appendChild(ruleItem);
     }
+    
+    // --- Prompt Preview ---
+    const promptPreviewContainer = document.getElementById('prompt-preview-container');
+    const promptPreviewContent = document.getElementById('prompt-preview-content');
+
+    async function updatePromptPreview() {
+        try {
+            const response = await fetch('/preview_prompt_addition');
+            const data = await response.json();
+            if (data.prompt_text) {
+                promptPreviewContent.textContent = data.prompt_text;
+                promptPreviewContainer.style.display = 'block';
+            } else {
+                promptPreviewContainer.style.display = 'none';
+            }
+        } catch (error) { console.error('Error fetching prompt preview:', error); }
+    }
+
+    
 
     addContextRuleBtn.addEventListener('click', () => {
         addContextRuleRow('', '', true);
@@ -623,17 +642,17 @@ document.addEventListener('DOMContentLoaded', function () {
             const input = label.querySelector('input');
             const removeBtn = label.querySelector('button');
 
-            input.addEventListener('change', saveSettings);
+            input.addEventListener('change', () => { saveSettings(); updatePromptPreview(); });
             removeBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 item.remove();
-                saveSettings();
+                saveSettings().then(updatePromptPreview);
             });
         } else {
             label.textContent = template.template;
         }
 
-        item.querySelector('input[type="radio"]').addEventListener('change', saveSettings);
+        item.querySelector('input[type="radio"]').addEventListener('change', () => { saveSettings(); updatePromptPreview(); });
 
         return item;
     }
@@ -649,7 +668,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
     settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы
-
+    
     // --- Contacts Tab ---
     const contactsListContainer = document.getElementById('contacts-list-container');
     const newGroupNameInput = document.getElementById('new-group-name');
@@ -658,7 +677,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function setRandomGroupPlaceholder() {
         const adjectives = [
             'Лысый', 'Грустный', 'Танцующий', 'Летающий', 'Пьяный',
-            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий',
+            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий', 'Смеющийся',
             'Голодный', 'Задумчивый', 'Испуганный', 'Счастливый',
             'Прыгающий', 'Влюблённый', 'Уставший', 'Безумный',
             'Сердитый', 'Летающий задом наперёд', 'Танцующий ламбаду'
@@ -690,6 +709,7 @@ document.addEventListener('DOMContentLoaded', function () {
         renderContacts();
         renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         renderContextFileRules(settings.context_file_rules);
+        updatePromptPreview();
         updateSelectedContactsCount();
     }
 
@@ -910,7 +930,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 checkbox.value = contact.id;
                 checkbox.checked = selectedContactIds.includes(contact.id);
                 checkbox.addEventListener('change', () => {
-                    saveContactSelection(); // Сохраняем выбор
+                    saveContactSelection().then(updatePromptPreview); // Сохраняем выбор и обновляем предпросмотр
                     updateGroupCheckboxState(); // Обновляем состояние группового чекбокса
                     updateGroupCounter(); // Обновляем счетчик
                 });
@@ -1148,6 +1168,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setInterval(checkForRecordingUpdates, 3000); // Проверяем наличие обновлений каждые 3 секунды
         setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
         loadSettings();
+        updatePromptPreview();
         loadContactsAndSettings();
         setRandomGroupPlaceholder();
     }
