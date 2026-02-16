@@ -1424,6 +1424,26 @@ def get_recordings_for_date_data(date_dir):
     recordings_in_group.sort(key=lambda x: x['time'], reverse=True)
     return recordings_in_group
 
+def get_recordings_last_modified():
+    """Возвращает время последнего изменения в папке с записями."""
+    rec_dir = os.path.join(get_application_path(), 'rec')
+    if not os.path.exists(rec_dir):
+        return 0
+    
+    latest_mtime = 0
+    for root, _, files in os.walk(rec_dir):
+        for file in files:
+            # Consider only relevant file types
+            if file.endswith(('.wav', '.mp3', '.txt', '.pdf', '.json')):
+                try:
+                    file_path = os.path.join(root, file)
+                    mtime = os.path.getmtime(file_path)
+                    if mtime > latest_mtime:
+                        latest_mtime = mtime
+                except OSError:
+                    continue
+    return latest_mtime
+
 @app.route('/')
 def index():    
     date_groups = get_date_dirs_data()
@@ -1441,6 +1461,11 @@ def get_recordings_for_date(date_str):
         return jsonify({"error": "Invalid date format"}), 400
     recordings = get_recordings_for_date_data(date_str)
     return jsonify(recordings)
+
+@app.route('/recordings_state', methods=['GET'])
+def recordings_state():
+    """Возвращает время последнего изменения в папке с записями."""
+    return jsonify({"last_modified": get_recordings_last_modified()})
 
 @app.route('/update_metadata/<date_str>/<filename>', methods=['POST'])
 def update_metadata(date_str, filename):

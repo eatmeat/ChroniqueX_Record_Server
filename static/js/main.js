@@ -206,6 +206,22 @@ document.addEventListener('DOMContentLoaded', function () {
     // Сохраняем состояние развернутых групп
     let expandedGroups = new Set();
 
+    // --- Оптимизированное обновление списка записей ---
+    let lastRecordingsState = 0;
+
+    async function checkForRecordingUpdates() {
+        try {
+            const response = await fetch('/recordings_state');
+            const state = await response.json();
+            if (state.last_modified > lastRecordingsState) {
+                console.log('Обнаружены изменения в записях, обновляю список...');
+                lastRecordingsState = state.last_modified;
+                await updateRecordingsList();
+            }
+        } catch (error) {
+            console.error('Ошибка при проверке состояния записей:', error);
+        }
+    }
     async function updateRecordingsList() {
         try {
             const response = await fetch('/get_date_dirs');
@@ -1122,7 +1138,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function initialize() {
         updateStatus();
         setInterval(updateStatus, 2000); // Poll status every 2 seconds
-        setInterval(updateRecordingsList, 10000); // Обновляем список записей каждые 10 секунд
+        setInterval(checkForRecordingUpdates, 3000); // Проверяем наличие обновлений каждые 3 секунды
         setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
         loadSettings();
         loadContactsAndSettings();
