@@ -1387,6 +1387,10 @@ def get_date_dirs_data():
             try:
                 date_obj = datetime.strptime(date_dir, '%Y-%m-%d')
                 day_of_week = day_names[date_obj.weekday()]
+                # Используем strftime('%W') для нумерации недель с понедельника.
+                # Неделя 0 - это дни до первого понедельника года.
+                # Добавляем 1, чтобы нумерация была с 1, а не с 0.
+                week_number = int(date_obj.strftime('%W')) + 1
                 
                 months = {
                     1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля', 5: 'Мая', 6: 'Июня',
@@ -1398,6 +1402,7 @@ def get_date_dirs_data():
                     'date': date_dir,
                     'day_of_week': day_of_week,
                     'formatted_date': formatted_date,
+                    'week_number': week_number,
                 })
             except ValueError:
                 # If parsing fails, skip this directory
@@ -1516,9 +1521,7 @@ def get_recordings_last_modified():
 
 @app.route('/')
 def index():    
-    date_groups = get_date_dirs_data()
-    # Pass current settings to the template
-    return render_template('index.html', date_groups=date_groups)
+    return render_template('index.html')
 
 @app.route('/get_date_dirs', methods=['GET'])
 def get_date_dirs():

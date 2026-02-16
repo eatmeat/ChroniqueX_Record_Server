@@ -277,6 +277,22 @@ h1, h2, h3, h4 {
     display: none;
 }
 
+/* Стили для группы недель */
+.week-group {
+    margin-bottom: 25px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background-color: #fdfdfd;
+}
+
+.week-group h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
+}
+
 .loading-placeholder {
     color: #7f8c8d;
     padding: 15px;

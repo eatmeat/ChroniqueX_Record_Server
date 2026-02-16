@@ -225,53 +225,75 @@ document.addEventListener('DOMContentLoaded', function () {
     async function updateRecordingsList() {
         try {
             const response = await fetch('/get_date_dirs');
-            const newDateGroups = await response.json();
+            const dateGroupsData = await response.json();
 
-            if (newDateGroups.length === 0 && recordingsListContainer.children.length === 0) {
+            if (dateGroupsData.length === 0 && recordingsListContainer.children.length === 0) {
                 recordingsListContainer.innerHTML = '<p>Записей пока нет.</p>';
                 return;
             }
 
-            const existingGroupDates = new Set([...recordingsListContainer.querySelectorAll('.date-group')].map(el => el.dataset.date));
-            const newGroupDates = new Set(newDateGroups.map(g => g.date));
-
-            // Удаляем группы, которых больше нет
-            existingGroupDates.forEach(date => {
-                if (!newGroupDates.has(date)) {
-                    recordingsListContainer.querySelector(`.date-group[data-date="${date}"]`)?.remove();
+            // Группируем даты по неделям
+            const weeks = {};
+            dateGroupsData.forEach(group => {
+                const year = new Date(group.date).getFullYear();
+                const weekId = `${year}-W${group.week_number}`;
+                if (!weeks[weekId]) {
+                    weeks[weekId] = {
+                        id: weekId,
+                        year: year,
+                        number: group.week_number,
+                        dates: []
+                    };
                 }
+                weeks[weekId].dates.push(group);
             });
 
-            // Добавляем новые группы или обновляем существующие развернутые
-            for (const groupData of newDateGroups) {
-                let groupEl = recordingsListContainer.querySelector(`.date-group[data-date="${groupData.date}"]`);
-                if (!groupEl) {
-                    // Создаем новую группу
-                    groupEl = document.createElement('div');
-                    groupEl.className = 'date-group collapsed';
-                    groupEl.dataset.date = groupData.date;
-                    groupEl.innerHTML = `
-                        <h3>${groupData.formatted_date} <span>(${groupData.day_of_week})</span></h3>
-                        <div class="recording-table">
-                            <div class="recording-table-header">
-                                <div class="recording-cell cell-time">Начало</div>
-                                <div class="recording-cell cell-duration">Длительность</div>
-                                <div class="recording-cell cell-title">Наименование</div>
-                                <div class="recording-cell cell-files">Файлы</div>
-                            </div>
-                            <div class="recording-table-body"></div>
-                        </div>`;
-                    // Вставляем в правильное место (сохраняя сортировку по дате)
-                    const nextGroup = Array.from(recordingsListContainer.children).find(child => child.dataset.date < groupData.date);
-                    recordingsListContainer.insertBefore(groupEl, nextGroup || null);
-                }
+            // Очищаем контейнер и рендерим заново. Это проще, чем сложная логика сравнения.
+            recordingsListContainer.innerHTML = '';
 
-                // Если группа развернута, обновляем ее содержимое
-                if (expandedGroups.has(groupData.date)) {
-                    await loadRecordingsForGroup(groupEl, groupData.date);
+            // Сортируем недели по убыванию
+            const sortedWeekKeys = Object.keys(weeks).sort().reverse();
+
+            for (const weekId of sortedWeekKeys) {
+                const weekData = weeks[weekId];
+                const weekGroupEl = document.createElement('div');
+                weekGroupEl.className = 'week-group';
+                weekGroupEl.dataset.weekId = weekId;
+                weekGroupEl.innerHTML = `<h4>Неделя ${weekData.number} (${weekData.year})</h4>`;
+                recordingsListContainer.appendChild(weekGroupEl);
+
+                // Сортируем даты внутри недели по возрастанию
+                weekData.dates.sort((a, b) => a.date.localeCompare(b.date));
+
+                // Рендерим группы дат внутри недели
+                for (const groupData of weekData.dates) {
+                    let groupEl = document.createElement('div');
+                    groupEl.className = 'date-group';
+                    // Если группа была развернута, сохраняем это состояние
+                    if (expandedGroups.has(groupData.date)) {
+                        groupEl.classList.remove('collapsed');
+                    } else {
+                        groupEl.classList.add('collapsed');
+                    }
+                    groupEl.dataset.date = groupData.date;
+                    groupEl.innerHTML = `<h3>${groupData.formatted_date} <span>(${groupData.day_of_week})</span></h3>`;
+                    
+                    // Добавляем пустую таблицу, которая заполнится при раскрытии
+                    const tableContainer = document.createElement('div');
+                    tableContainer.innerHTML = `<div class="recording-table"><div class="recording-table-header"><div class="recording-cell cell-time">Начало</div><div class="recording-cell cell-duration">Длительность</div><div class="recording-cell cell-title">Наименование</div><div class="recording-cell cell-files">Файлы</div></div><div class="recording-table-body"></div></div>`;
+                    groupEl.appendChild(tableContainer);
+                    weekGroupEl.appendChild(groupEl);
+                }
+                
+                // После рендеринга всех групп дат для недели, проходимся по ним еще раз,
+                // чтобы загрузить данные для тех, что были развернуты.
+                for (const groupData of weekData.dates) {
+                    if (expandedGroups.has(groupData.date)) {
+                        const groupEl = weekGroupEl.querySelector(`.date-group[data-date="${groupData.date}"]`);
+                        if (groupEl) await loadRecordingsForGroup(groupEl, groupData.date);
+                    }
                 }
             }
-
         } catch (error) {
             console.error('Error updating recordings list:', error);
         }
@@ -1189,6 +1211,7 @@ document.addEventListener('DOMContentLoaded', function () {
         setInterval(updateStatus, 2000); // Poll status every 2 seconds
         setInterval(checkForRecordingUpdates, 3000); // Проверяем наличие обновлений каждые 3 секунды
         setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
+        updateRecordingsList(); // Загружаем список записей при инициализации
         loadSettings();
         updatePromptPreview();
         loadContactsAndSettings();
