@@ -568,7 +568,7 @@ input[type="text"], input[type="number"], textarea {
 
 .recording-table-header, .recording-table-row {
     display: grid;
-    grid-template-columns: 80px 100px 1fr 300px;
+    grid-template-columns: 80px 100px 1fr 250px;
     gap: 10px;
     align-items: center;
     padding: 10px;
