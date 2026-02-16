@@ -953,6 +953,95 @@ def open_main_window(icon=None, item=None):
     lan_accessible_var.trace_add("write", mark_as_changed)
     win.mainloop()
 
+def build_final_prompt_addition(base_path, recording_date, is_preview=False):
+    """
+    Универсальная функция для сборки "добавки к промпту" на основе текущих настроек.
+
+    :param base_path: Pathlib.Path, директория для поиска файлов контекста.
+    :param recording_date: datetime, дата для использования в плейсхолдерах и заголовках.
+    :param is_preview: bool, если True, обрезает контент файлов до 500 символов.
+    :return: str, собранная строка для добавки к промпту.
+    """
+    # Загружаем самые свежие настройки и контакты на всякий случай
+    load_settings()
+    load_contacts()
+
+    # 1. Добавка из textarea
+    prompt_addition = settings.get("prompt_addition", "") if settings.get("use_custom_prompt", False) else ""
+    prompt_addition = prompt_addition.replace("{current_date}", format_date_russian(recording_date))
+
+    # 2. Название собрания
+    meeting_name_prompt_addition = ""
+    active_template_id = settings.get("active_meeting_name_template_id")
+    if active_template_id:
+        templates = settings.get("meeting_name_templates", [])
+        active_template = next((t for t in templates if t.get("id") == active_template_id), None)
+        if active_template and active_template.get("template"):
+            meeting_name_prompt_addition = f"# Название собрания: {active_template.get('template')}\n\n"
+
+    # 3. Дата собрания
+    date_prompt_addition = ""
+    if settings.get("add_meeting_date", False):
+        date_source = settings.get("meeting_date_source", "current")
+        # Если источник - папка, используем переданную дату, иначе - текущую
+        date_to_format = recording_date if date_source == 'folder' else datetime.now()
+        formatted_date = format_date_russian(date_to_format)
+        date_prompt_addition = f"# Дата собрания: {formatted_date}\n\n"
+
+    # 4. Файлы контекста
+    context_files_prompt_addition = ""
+    context_rules = settings.get("context_file_rules", [])
+    if base_path.exists() and context_rules:
+        for rule in context_rules:
+            if not rule.get("enabled", False):
+                continue
+            pattern = rule.get("pattern")
+            prompt_template = rule.get("prompt")
+            if not pattern or not prompt_template:
+                continue
+
+            found_files = sorted(list(base_path.glob(pattern)))
+            for found_file in found_files:
+                try:
+                    with open(found_file, 'r', encoding='utf-8') as f:
+                        content = f.read(550) if is_preview else f.read()
+                        if is_preview and len(content) > 500:
+                            content = content[:500] + "..."
+                    if content:
+                        formatted_prompt = prompt_template.replace("{filename}", found_file.name).replace("{content}", content)
+                        context_files_prompt_addition += formatted_prompt
+                except Exception as e:
+                    print(f"Не удалось прочитать файл контекста {found_file}: {e}")
+
+    # Объединяем добавку из textarea и из файлов
+    combined_prompt_addition = prompt_addition + context_files_prompt_addition
+    filtered_prompt_addition = "\n".join([line for line in combined_prompt_addition.splitlines() if not line.strip().startswith("//")])
+
+    # 5. Список участников
+    participants_prompt = ""
+    selected_contact_ids = set(settings.get("selected_contacts", []))
+    if selected_contact_ids:
+        participants_by_group = {}
+        for group in contacts_data.get("groups", []):
+            group_name = group.get("name", "Без группы")
+            for contact in group.get("contacts", []):
+                if contact.get("id") in selected_contact_ids:
+                    if group_name not in participants_by_group:
+                        participants_by_group[group_name] = []
+                    participants_by_group[group_name].append(contact.get("name"))
+        if participants_by_group:
+            prompt_lines = ["# Список участников:\n"]
+            for group_name in sorted(participants_by_group.keys()):
+                prompt_lines.append(f"## Группа: {group_name}")
+                for participant_name in sorted(participants_by_group[group_name]):
+                    prompt_lines.append(f"- {participant_name}")
+                prompt_lines.append("")
+            participants_prompt = "\n".join(prompt_lines)
+
+    # Собираем финальную строку в правильном порядке
+    final_prompt_text = date_prompt_addition + meeting_name_prompt_addition + participants_prompt + filtered_prompt_addition
+    return final_prompt_text
+
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
 def post_task(file_path, task_type, prompt_addition_str=None, add_participants_prompt=False):
     if not API_URL or not API_KEY: return None
@@ -992,6 +1081,8 @@ def post_task(file_path, task_type, prompt_addition_str=None, add_participants_p
             # Add prompt_addition if it's a protocol task and prompt_addition is provided
             if task_type == 'protocol' and (prompt_addition_str or (add_participants_prompt and participants_prompt)):
                 data['prompt_addition'] = (participants_prompt if add_participants_prompt else "") + (prompt_addition_str or "")
+            if task_type == 'protocol' and prompt_addition_str:
+                data['prompt_addition'] = prompt_addition_str
 
             # Количество спикеров определяется по количеству выбранных контактов
             if task_type == 'transcribe':
@@ -1087,6 +1178,7 @@ def process_recording_tasks(file_path):
     post_process_stage = "transcribe"
     
     base_name, _ = os.path.splitext(file_path)
+    audio_path = Path(file_path)
     txt_output_path = base_name + ".txt"
     transcription_task_id = post_task(file_path, "transcribe")
     if transcription_task_id and poll_and_save_result(transcription_task_id, txt_output_path):
@@ -1204,6 +1296,7 @@ def process_recording_tasks(file_path):
         
         # Собираем финальную строку для промпта в правильном порядке
         final_prompt_addition = date_prompt_addition + meeting_name_prompt_addition + participants_prompt_for_metadata + filtered_prompt_addition
+        final_prompt_addition = build_final_prompt_addition(base_path=audio_path.parent, recording_date=datetime.now())
         
         protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=final_prompt_addition, add_participants_prompt=False) # add_participants_prompt=False, так как они уже в строке
         if protocol_task_id:
@@ -1556,6 +1649,7 @@ def preview_prompt_addition():
 
         # Собираем финальную строку в правильном порядке
         final_prompt_text = date_prompt_addition + meeting_name_prompt_addition + participants_prompt + filtered_prompt_addition
+        final_prompt_text = build_final_prompt_addition(base_path=rec_dir, recording_date=datetime.now(), is_preview=True)
         return jsonify({"prompt_text": final_prompt_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -2117,8 +2211,10 @@ def process_protocol_task(txt_file_path):
 
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
     
+    txt_path = Path(txt_file_path)
     # Собираем финальную строку для промпта в правильном порядке
     final_prompt_addition = date_prompt_addition + meeting_name_prompt_addition + participants_prompt_for_metadata + filtered_prompt_addition
+    final_prompt_addition = build_final_prompt_addition(base_path=txt_path.parent, recording_date=datetime.now())
 
     protocol_task_id = post_task(
         txt_file_path, "protocol", 
