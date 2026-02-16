@@ -615,18 +615,25 @@ input[type="text"], input[type="number"], textarea {
     justify-content: center;
     flex-shrink: 0; /* Запрещаем кнопкам сжиматься */
 }
-
+/* Контейнер для пары кнопок (например, TXT + кнопка пересоздания) */
+.file-action-pair {
+    display: inline-flex;
+    align-items: center;
+}
+/* По умолчанию скрываем кнопку пересоздания */
 .recreate-actions-container {
     display: inline-flex;
-    gap: 8px;
-    transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out;
-    opacity: 1;
-    max-width: 100px; /* Достаточно для двух кнопок */
-}
-.recreate-actions-container.hidden {
+    transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
     opacity: 0;
     max-width: 0;
     overflow: hidden;
+    margin-left: 0;
+}
+/* Показываем кнопку пересоздания при наведении на пару */
+.file-action-pair:hover .recreate-actions-container {
+    opacity: 1;
+    max-width: 50px; /* Достаточно для одной кнопки */
+    margin-left: 4px; /* Добавляем отступ при появлении */
 }
 
 .cell-transcription .action-btn,

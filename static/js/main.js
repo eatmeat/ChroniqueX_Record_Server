@@ -296,10 +296,14 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="recording-cell cell-title"><span class="editable-title" data-date="${date}" data-filename="${rec.filename}" data-prompt-addition="${escapeHtml(rec.promptAddition)}">${rec.title}</span></div>
                     <div class="recording-cell cell-files">
                         <a href="/files/${date}/${rec.filename}" target="_blank" class="action-btn audio-link">${audioExtension}</a>
-                        <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">TXT</a>
-                        <span class="recreate-actions-container hidden"><button class="action-btn recreate-transcription-btn" title="Пересоздать транскрипцию" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
-                        <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">PDF</a>
-                        <span class="recreate-actions-container hidden"><button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
+                        <span class="file-action-pair">
+                            <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">TXT</a>
+                            <span class="recreate-actions-container"><button class="action-btn recreate-transcription-btn" title="Пересоздать транскрипцию" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
+                        </span>
+                        <span class="file-action-pair">
+                            <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">PDF</a>
+                            <span class="recreate-actions-container"><button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
+                        </span>
                     </div>
                 `;
                 tableBody.appendChild(rowEl);
@@ -330,10 +334,6 @@ document.addEventListener('DOMContentLoaded', function () {
             const { date, filename, promptAddition } = target.dataset;
             const currentTitle = target.textContent;
             const row = target.closest('.recording-table-row');
-            const recreateContainer = row.querySelector('.recreate-actions-container');
-            recreateContainer.classList.remove('hidden');
-            const recreateContainers = row.querySelectorAll('.recreate-actions-container');
-            recreateContainers.forEach(c => c.classList.remove('hidden'));
 
             const input = document.createElement('input');
             input.type = 'text';
@@ -389,8 +389,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     target.textContent = currentTitle;
                 }
-                recreateContainer.classList.add('hidden');
-                recreateContainers.forEach(c => c.classList.add('hidden'));
                 input.replaceWith(target);
                 if (promptRow) promptRow.remove();
                 // Убедимся, что глобальный обработчик удален при выходе
@@ -402,8 +400,6 @@ document.addEventListener('DOMContentLoaded', function () {
                     input.blur();
                 } else if (e.key === 'Escape') {
                     target.textContent = currentTitle;
-                    recreateContainer.classList.add('hidden');
-                    recreateContainers.forEach(c => c.classList.add('hidden'));
                     if (promptRow) promptRow.remove();
                     // Убедимся, что глобальный обработчик удален при выходе
                     document.removeEventListener('mousedown', handleOutsideClick);
