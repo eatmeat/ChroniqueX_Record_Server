@@ -252,9 +252,15 @@ document.addEventListener('DOMContentLoaded', function () {
                     groupEl.dataset.date = groupData.date;
                     groupEl.innerHTML = `
                         <h3>${groupData.formatted_date} <span>(${groupData.day_of_week})</span></h3>
-                        <ul class="recording-items">
-                            <li class="loading-placeholder">Загрузка...</li>
-                        </ul>`;
+                        <div class="recording-table">
+                            <div class="recording-table-header">
+                                <div class="recording-cell cell-time">Начало</div>
+                                <div class="recording-cell cell-duration">Длительность</div>
+                                <div class="recording-cell cell-title">Наименование</div>
+                                <div class="recording-cell cell-files">Файлы</div>
+                            </div>
+                            <div class="recording-table-body"></div>
+                        </div>`;
                     // Вставляем в правильное место (сохраняя сортировку по дате)
                     const nextGroup = Array.from(recordingsListContainer.children).find(child => child.dataset.date < groupData.date);
                     recordingsListContainer.insertBefore(groupEl, nextGroup || null);
