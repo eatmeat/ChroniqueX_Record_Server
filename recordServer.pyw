@@ -1180,8 +1180,8 @@ def process_recording_tasks(file_path):
 
         # Update post-processing status for protocol stage
         post_process_stage = "protocol"
-        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition)
-        if protocol_task_id:
+        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition, add_participants_prompt=True)
+        if protocol_task_id and poll_and_save_result(protocol_task_id, txt_output_path):
             protocol_output_path = base_name + "_protocol.pdf"
             poll_and_save_result(protocol_task_id, protocol_output_path)
     
@@ -1860,7 +1860,7 @@ def process_transcription_task(file_path):
 
     base_name, _ = os.path.splitext(file_path)
     txt_output_path = base_name + ".txt"
-    transcription_task_id = post_task(file_path, "transcribe")
+    transcription_task_id = post_task(file_path, "transcribe", add_participants_prompt=False) # add_participants_prompt=False, но num_speakers будет добавлен
     if transcription_task_id:
         poll_and_save_result(transcription_task_id, txt_output_path)
 
@@ -1913,28 +1913,35 @@ def process_protocol_task(txt_file_path):
             formatted_date = format_date_russian(meeting_date)
             date_prompt_addition = f"# Дата собрания: {formatted_date}\n\n"
 
-    if settings.get("include_html_files", True):
+    # --- Новая логика для файлов контекста (исправлено) ---
+    context_rules = settings.get("context_file_rules", [])
+    if context_rules:
         txt_path = Path(txt_file_path)
-        html_files = sorted(list(txt_path.parent.glob('*.html')))
-        for html_file in html_files:
-            try:
-                with open(html_file, 'r', encoding='utf-8') as f:
-                    task_context_html = f.read()
-                allowed_tags = {'table', 'tr', 'td', 'th', 'tbody', 'thead', 'tfoot'}
-                def should_keep_tag(match):
-                    tag = match.group(0)
-                    try:
-                        is_closing = tag.startswith('</')
-                        tag_name = tag.strip('</>').split()[0].lower()
-                        return f'</{tag_name}>' if is_closing and tag_name in allowed_tags else f'<{tag_name}>' if tag_name in allowed_tags else ' '
-                    except IndexError: return ' '
-                task_context = re.sub(r'<[^>]+>', should_keep_tag, task_context_html).strip()
-                if task_context:
-                    prompt_addition += f"\n--- НАЧАЛО файла @{html_file.name} ---\n{task_context}\n--- КОНЕЦ файла @{html_file.name} ---\n"
-            except Exception as e: print(f"Не удалось прочитать файл задач {html_file}: {e}")
+        for rule in context_rules:
+            if not rule.get("enabled", False):
+                continue
+            pattern = rule.get("pattern")
+            prompt_template = rule.get("prompt")
+            if not pattern or not prompt_template:
+                continue
+
+            found_files = sorted(list(txt_path.parent.glob(pattern)))
+            for found_file in found_files:
+                try:
+                    with open(found_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                    if content:
+                        formatted_prompt = prompt_template.replace("{filename}", found_file.name).replace("{content}", content)
+                        prompt_addition += formatted_prompt
+                except Exception as e:
+                    print(f"Не удалось прочитать или обработать файл контекста {found_file}: {e}")
 
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
-    protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition)
+    protocol_task_id = post_task(
+        txt_file_path, "protocol", 
+        prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition,
+        add_participants_prompt=True  # Добавлено для включения участников
+    )
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"

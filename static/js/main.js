@@ -256,14 +256,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     async function loadRecordingsForGroup(groupEl, date) {
-        const listEl = groupEl.querySelector('.recording-items');
-        listEl.innerHTML = '<li class="loading-placeholder">Загрузка...</li>'; // Показываем индикатор загрузки
+        const tableBody = groupEl.querySelector('.recording-table-body');
+        tableBody.innerHTML = '<div class="loading-placeholder">Загрузка...</div>'; // Показываем индикатор загрузки
 
         try {
             const response = await fetch(`/get_recordings_for_date/${date}`);
             const recordings = await response.json();
 
-            listEl.innerHTML = ''; // Очищаем
+            tableBody.innerHTML = ''; // Очищаем
 
             if (recordings.length === 0) {
                 listEl.innerHTML = '<li class="loading-placeholder">В этой дате нет записей.</li>';
@@ -271,40 +271,25 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             recordings.forEach(rec => {
-                const sizeMb = (rec.size / 1024 / 1024).toFixed(2);
-                const compressBtnHtml = rec.filename.toLowerCase().endsWith('.wav')
-                    ? `<button class="action-btn compress-btn" data-date="${date}" data-filename="${rec.filename}">Сжать в MP3</button>`
-                    : '';
-
-                const itemEl = document.createElement('li');
-                itemEl.className = 'recording-item';
-                itemEl.innerHTML = `
-                    <div class="recording-item-header">
-                        <div class="item-main">
-                            <span class="rec-time">${rec.time}</span>
-                            <span class="editable-title rec-title" data-date="${date}" data-filename="${rec.filename}">${rec.title}</span>
-                            <span class="rec-size">(${sizeMb} MB)</span>
-                        </div>
-                        <div class="item-actions">
-                            ${compressBtnHtml}
-                        </div>
-                    </div>
-                    <div class="recording-details">
-                        <p><strong>Файл:</strong> <a href="/files/${date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a></p>
-                        <p><strong>Начало:</strong> ${new Date(rec.startTime).toLocaleString('ru-RU')}</p>
-                        <p><strong>Длительность:</strong> ${Math.floor(rec.duration / 60)} м ${Math.round(rec.duration % 60)} с</p>
-                        <div class="details-actions">
-                             <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
-                             <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
-                             <button class="action-btn recreate-transcription-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать TXT</button>
-                             <button class="action-btn recreate-protocol-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
-                        </div>
+                const audioExtension = rec.filename.split('.').pop().toUpperCase();
+                const rowEl = document.createElement('div');
+                rowEl.className = 'recording-table-row';
+                rowEl.innerHTML = `
+                    <div class="recording-cell cell-time">${rec.time}</div>
+                    <div class="recording-cell cell-duration">${Math.floor(rec.duration / 60)} м ${Math.round(rec.duration % 60)} с</div>
+                    <div class="recording-cell cell-title"><span class="editable-title" data-date="${date}" data-filename="${rec.filename}">${rec.title}</span></div>
+                    <div class="recording-cell cell-files">
+                        <a href="/files/${date}/${rec.filename}" target="_blank" class="action-btn audio-link">${audioExtension}</a>
+                        <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">TXT</a>
+                        <button class="action-btn recreate-transcription-btn" title="Пересоздать транскрипцию" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button>
+                        <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">PDF</a>
+                        <button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button>
                     </div>
                 `;
-                listEl.appendChild(itemEl);
+                tableBody.appendChild(rowEl);
             });
         } catch (error) {
-            listEl.innerHTML = '<li class="loading-placeholder">Ошибка загрузки записей.</li>';
+            tableBody.innerHTML = '<div class="loading-placeholder">Ошибка загрузки записей.</div>';
             console.error(`Error loading recordings for ${date}:`, error);
         }
     }
@@ -312,15 +297,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Используем делегирование событий для кнопок действий
     recordingsListContainer.addEventListener('click', (e) => {
         const target = e.target;
-        const { date, filename } = target.dataset;
-
-        // --- Обработчик для открытия/закрытия деталей записи ---
-        const itemHeader = target.closest('.recording-item-header');
-        if (itemHeader) {
-            const item = itemHeader.closest('.recording-item');
-            item.classList.toggle('details-visible');
-            return; // Прекращаем обработку, чтобы не сработали другие клики
-        }
+        const { date, filename } = target.dataset;        
 
         // --- Обработчик для редактирования названия ---
         if (target.classList.contains('editable-title')) {
@@ -367,14 +344,8 @@ document.addEventListener('DOMContentLoaded', function () {
         } else if (target.classList.contains('recreate-protocol-btn')) {
             fetch(`/recreate_protocol/${date}/${filename}`);
             alert(`Задача пересоздания протокола для ${filename} запущена.`);
-        } else if (target.classList.contains('compress-btn')) {
-            fetch(`/compress_to_mp3/${date}/${filename}`);
-            alert(`Процесс сжатия для ${filename} запущен. Список обновится автоматически.`);
-            // Небольшая задержка перед обновлением, чтобы дать серверу время начать и обновить файлы
-            setTimeout(updateRecordingsList, 2000);
-        }
-
-        // Обработчик для разворачивания/сворачивания группы
+        } else if (target.closest('.date-group > h3')) {
+        // Обработчик для разворачивания/сворачивания группы (теперь по клику на заголовок)
         const groupHeader = e.target.closest('.date-group > h3');
         if (groupHeader) {
             const groupEl = groupHeader.parentElement;
@@ -387,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 expandedGroups.delete(date);
             }
         }
+    }
     });
 
     // --- Settings Tab ---

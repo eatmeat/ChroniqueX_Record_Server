@@ -238,8 +238,8 @@ h1, h2, h3, h4 {
 }
 
 .action-btn {
-    margin-left: 10px;
-    padding: 4px 8px;
+    margin-left: 2px;
+    padding: 4px 4px;
     font-size: 0.8em;
     border-radius: 4px;
     border: 1px solid #bdc3c7;
@@ -311,6 +311,14 @@ h1, h2, h3, h4 {
     color: #34495e;
 }
 
+.rec-title {
+    font-weight: 500;
+    color: #2c3e50;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
 .rec-filename {
     color: #3498db;
     text-decoration: none;
@@ -322,6 +330,11 @@ h1, h2, h3, h4 {
 .rec-size {
     font-size: 0.9em;
     color: #7f8c8d;
+}
+
+.title-edit-input {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .item-actions {
@@ -349,6 +362,7 @@ h1, h2, h3, h4 {
 }
 .recreate-transcription-btn, .recreate-protocol-btn {
     border-color: #e67e22;
+    font-size: 0.8em; /* Делаем символ пересоздания крупнее */
 }
 
 /* Стили для форм */
@@ -528,4 +542,100 @@ input[type="text"], input[type="number"], textarea {
 
 .legend-item.sys .legend-color {
     background-color: #3498db;
+}
+
+/* --- Новые стили для таблицы записей --- */
+.recording-table {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    overflow: hidden; /* Для скругления углов */
+    margin-top: 10px;
+}
+
+/* Скрываем таблицу, когда группа свернута */
+.date-group.collapsed .recording-table {
+    display: none;
+}
+
+.audio-link {
+    color: #3498db;
+    border-color: #aed6f1;
+    background-color: #eaf2f8;
+    text-decoration: none;
+}
+
+.recording-table-header, .recording-table-row {
+    display: grid;
+    grid-template-columns: 80px 100px 1fr 300px;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.recording-table-header {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #495057;
+    font-size: 0.9em;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.recording-table-row:last-child {
+    border-bottom: none;
+}
+
+.recording-table-row:hover {
+    background-color: #f9f9f9;
+}
+
+.recording-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cell-title {
+    white-space: normal; /* Разрешаем перенос для длинных названий */
+}
+
+.cell-files {
+    justify-content: flex-start; /* Выравниваем кнопки по левому краю */
+    flex-wrap: wrap; /* Разрешаем перенос кнопок на новую строку */
+}
+
+.cell-files .action-btn {
+    min-width: 45px; /* Фиксированная ширина для кнопок */
+    text-align: center;
+    justify-content: center;
+    flex-shrink: 0; /* Запрещаем кнопкам сжиматься */
+}
+
+.cell-transcription .action-btn,
+.cell-protocol .action-btn {
+    min-width: 45px; /* Фиксированная ширина для кнопок TXT/PDF */
+    text-align: center;
+    justify-content: center;
+}
+
+.cell-transcription .recreate-transcription-btn,
+.cell-protocol .recreate-protocol-btn {
+    min-width: auto;
+}
+
+.editable-title {
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+
+.editable-title:hover {
+    background-color: #ecf0f1;
 }

@@ -35,7 +35,7 @@
                 <canvas id="audio-chart" width="600" height="200"></canvas>
                 <div class="chart-legend">
                     <span class="legend-item mic"><span class="legend-color"></span>Микрофон</span>
-                    <span class="legend-item sys"><span class="legend-color"></span>Системное аудио</span>
+                    <span class="legend-item sys"><span class="legend-color"></span>Аудио</span>
                 </div>
             </div>
         </div>
@@ -54,10 +54,17 @@
                     {% for group in date_groups %}
                     <div class="date-group collapsed" data-date="{{ group.date }}">
                         <h3>{{ group.formatted_date }} <span>({{ group.day_of_week }})</span></h3>
-                        <ul class="recording-items">
-                            <!-- Файлы будут загружены сюда динамически -->
-                            <li class="loading-placeholder">Загрузка...</li>
-                        </ul>
+                        <div class="recording-table">
+                            <div class="recording-table-header">
+                                <div class="recording-cell cell-time">Начало</div>
+                                <div class="recording-cell cell-duration">Длительность</div>
+                                <div class="recording-cell cell-title">Наименование</div>
+                                <div class="recording-cell cell-files">Файлы</div>
+                            </div>
+                            <div class="recording-table-body">
+                                <!-- Строки таблицы будут загружены сюда динамически -->
+                            </div>
+                        </div>
                     </div>
                     {% else %}
                     <p>Записей пока нет.</p>
