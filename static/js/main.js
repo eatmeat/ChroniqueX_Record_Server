@@ -359,6 +359,21 @@ document.addEventListener('DOMContentLoaded', function () {
                 row.parentNode.insertBefore(promptRow, row.nextSibling);
             }
 
+            // --- Глобальный обработчик для выхода из режима редактирования ---
+            const handleOutsideClick = (event) => {
+                // Проверяем, был ли клик вне инпута, строки и блока с промптом
+                const isClickInsideRow = row.contains(event.target);
+                const isClickInsidePrompt = promptRow ? promptRow.contains(event.target) : false;
+
+                if (!isClickInsideRow && !isClickInsidePrompt) {
+                    saveTitle(); // Сохраняем и выходим из режима редактирования
+                    // Удаляем обработчик после использования
+                    document.removeEventListener('mousedown', handleOutsideClick);
+                }
+            };
+            // Добавляем обработчик, когда входим в режим редактирования
+            document.addEventListener('mousedown', handleOutsideClick);
+
             const saveTitle = async () => {
                 const newTitle = input.value.trim();
                 if (newTitle && newTitle !== currentTitle) {
@@ -377,17 +392,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 recreateContainer.classList.add('hidden');
                 recreateContainers.forEach(c => c.classList.add('hidden'));
                 input.replaceWith(target);
-                if (promptRow) promptRow.remove(); // Удаляем строку с промптом
+                if (promptRow) promptRow.remove();
+                // Убедимся, что глобальный обработчик удален при выходе
+                document.removeEventListener('mousedown', handleOutsideClick);
             };
 
-            input.addEventListener('blur', (e) => {
-                // Если фокус уходит на одну из кнопок пересоздания, не сохраняем сразу,
-                // позволяя клику по кнопке сработать. `saveTitle` будет вызван принудительно.
-                if (e.relatedTarget && e.relatedTarget.closest('.recreate-actions-container')) {
-                    return;
-                }
-                saveTitle();
-            });
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     input.blur();
@@ -396,6 +405,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     recreateContainer.classList.add('hidden');
                     recreateContainers.forEach(c => c.classList.add('hidden'));
                     if (promptRow) promptRow.remove();
+                    // Убедимся, что глобальный обработчик удален при выходе
+                    document.removeEventListener('mousedown', handleOutsideClick);
                     input.replaceWith(target);
                 }
             });
@@ -412,7 +423,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Вызываем blur(), чтобы сработал обработчик сохранения
                 input.blur();
             }
-            alert(`Задача пересоздания транскрипции для ${filename} запущена.`);
+            alert(`Задача пересоздания транскрипции для ${filename} отправлена.`);
         } else if (target.classList.contains('recreate-protocol-btn')) {
             fetch(`/recreate_protocol/${date}/${filename}`);
             // Если мы были в режиме редактирования, выходим из него
@@ -423,7 +434,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Вызываем blur(), чтобы сработал обработчик сохранения
                 input.blur();
             }
-            alert(`Задача пересоздания протокола для ${filename} запущена.`);
+            alert(`Задача пересоздания протокола для ${filename} отправлена.`);
         } else if (target.closest('.date-group > h3')) {
         // Обработчик для разворачивания/сворачивания группы (теперь по клику на заголовок)
         const groupHeader = e.target.closest('.date-group > h3');

@@ -1206,14 +1206,14 @@ def process_recording_tasks(file_path):
         final_prompt_addition = date_prompt_addition + meeting_name_prompt_addition + participants_prompt_for_metadata + filtered_prompt_addition
         
         protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=final_prompt_addition, add_participants_prompt=False) # add_participants_prompt=False, так как они уже в строке
-        if protocol_task_id and poll_and_save_result(protocol_task_id, txt_output_path):
+        if protocol_task_id:
             protocol_output_path = base_name + "_protocol.pdf"
 
             # --- Сохранение добавки к промпту в метаданные ---
             json_path = base_name + '.json'
             if os.path.exists(json_path):
                 try:
-                    with open(json_path, 'r+', encoding='utf-8') as f:
+                    with open(json_path, 'r+', encoding='utf-8') as f: # Открываем для чтения и записи
                         metadata = json.load(f)
                         metadata['promptAddition'] = final_prompt_addition
                         f.seek(0)
@@ -1222,6 +1222,7 @@ def process_recording_tasks(file_path):
                 except Exception as e:
                     print(f"Не удалось обновить метаданные с промптом для {json_path}: {e}")
 
+            # Теперь результат сохраняется только в правильный PDF файл
             poll_and_save_result(protocol_task_id, protocol_output_path)
     
     # Reset post-processing status
@@ -1820,7 +1821,7 @@ def recreate_transcription(date, filename):
     # Запускаем задачу в фоновом потоке
     Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
 
-    return jsonify({"status": "ok", "message": f"Задача транскрибации для {filename} запущена."})
+    return jsonify({"status": "ok", "message": f"Задача транскрибации для {filename} отправлена."})
 
 @app.route('/recreate_protocol/<date>/<filename>', methods=['GET'])
 def recreate_protocol(date, filename):
@@ -1836,7 +1837,7 @@ def recreate_protocol(date, filename):
     # Запускаем задачу в фоновом потоке
     Thread(target=process_protocol_task, args=(txt_file_path,), daemon=True).start()
 
-    return jsonify({"status": "ok", "message": f"Задача создания протокола для {filename} запущена."})
+    return jsonify({"status": "ok", "message": f"Задача создания протокола для {filename} отправлена."})
 
 @app.route('/compress_to_mp3/<date>/<filename>', methods=['GET'])
 def compress_to_mp3(date, filename):
