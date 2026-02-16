@@ -593,15 +593,31 @@ document.addEventListener('DOMContentLoaded', function () {
     const promptPreviewContainer = document.getElementById('prompt-preview-container');
     const promptPreviewContent = document.getElementById('prompt-preview-content');
 
+    // --- Логика сворачивания/разворачивания предпросмотра ---
+    if (promptPreviewContainer) {
+        const header = promptPreviewContainer.querySelector('h4');
+        if (header) {
+            // Добавляем иконку-стрелочку в заголовок
+            header.insertAdjacentHTML('afterbegin', '<span class="expand-icon"></span>');
+            // Сворачиваем по умолчанию
+            promptPreviewContainer.classList.add('collapsed');
+
+            header.addEventListener('click', () => {
+                promptPreviewContainer.classList.toggle('collapsed');
+            });
+        }
+    }
+
     async function updatePromptPreview() {
         try {
             const response = await fetch('/preview_prompt_addition');
             const data = await response.json();
             if (data.prompt_text) {
+                // Если есть текст, показываем контейнер (но он может быть свернут)
                 promptPreviewContent.textContent = data.prompt_text;
-                promptPreviewContainer.style.display = 'block';
+                promptPreviewContainer.style.display = 'block'; // Показываем контейнер
             } else {
-                promptPreviewContainer.style.display = 'none';
+                promptPreviewContainer.style.display = 'none'; // Скрываем, если текста нет
             }
         } catch (error) { console.error('Error fetching prompt preview:', error); }
     }

@@ -489,6 +489,7 @@ input[type="text"], input[type="number"], textarea {
     padding: 15px;
     background-color: #f8f9fa;
     border-radius: 5px;
+    border: 1px solid #e9ecef;
     transition: background-color 0.3s ease;
 }
 
@@ -702,8 +703,34 @@ input[type="text"], input[type="number"], textarea {
 }
 
 .prompt-preview-container h4 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-top: 0;
     margin-bottom: 10px;
+    cursor: pointer;
+}
+
+/* Убираем нижний отступ у заголовка, когда блок свернут, для симметрии */
+.prompt-preview-container.collapsed h4 {
+    margin-bottom: 0;
+}
+
+/* Иконка для сворачивания/разворачивания предпросмотра */
+.prompt-preview-container .expand-icon {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #333;
+    transition: transform 0.2s ease-in-out;
+    transform: rotate(-90deg);
+}
+
+/* Поворачиваем иконку, когда блок развернут */
+.prompt-preview-container:not(.collapsed) .expand-icon {
+    transform: rotate(0deg);
 }
 
 #prompt-preview-content {
@@ -711,4 +738,9 @@ input[type="text"], input[type="number"], textarea {
     word-wrap: break-word; /* Переносит слова, которые не помещаются */
     font-size: 0.9em;
     color: #495057;
+}
+
+/* Скрываем контент, когда блок свернут */
+.prompt-preview-container.collapsed #prompt-preview-content {
+    display: none;
 }
