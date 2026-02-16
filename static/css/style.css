@@ -259,22 +259,21 @@ h1, h2, h3, h4 {
 
 /* Стили для списка записей */
 .date-group h3 {
-    border-bottom: 1px solid #eee;
-    padding-bottom: 5px;
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 10px;
     cursor: pointer;
     margin-top: 20px;
+    /* Добавляем flex для выравнивания стрелки */
+    display: flex;
+    align-items: center;
 }
 .date-group h3 span {
     color: #7f8c8d;
-    font-size: 0.8em;
 }
 
 .recording-items {
     list-style: none;
     padding: 0;
-}
-.date-group.collapsed .recording-items {
-    display: none;
 }
 
 /* Стили для группы недель */
@@ -291,6 +290,42 @@ h1, h2, h3, h4 {
     margin-bottom: 15px;
     border-bottom: 2px solid #e9ecef;
     padding-bottom: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 1.17em; /* Стандартный размер для h3 */
+}
+
+/* Убираем нижний отступ у заголовка, когда неделя свернута, для симметрии */
+.week-group.collapsed h4 {
+    margin-bottom: 0;
+}
+
+/* Общие стили для иконки-стрелки */
+.week-group h4 .expand-icon, .date-group h3 .expand-icon {
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #333;
+    transition: transform 0.2s ease-in-out;
+    margin-right: 10px;    
+    transform: rotate(-90deg); /* По умолчанию стрелка повернута вбок */
+}
+
+/* Когда неделя или дата развернута, поворачиваем стрелку вниз */
+.week-group:not(.collapsed) h4 .expand-icon {
+    transform: rotate(0deg);
+}
+
+.date-group:not(.collapsed) h3 .expand-icon {
+    transform: rotate(0deg);
+}
+
+/* Скрываем дочерние элементы .date-group, когда неделя свернута */
+.week-group.collapsed .date-group {
+    display: none;
 }
 
 .loading-placeholder {

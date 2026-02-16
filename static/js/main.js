@@ -254,12 +254,18 @@ document.addEventListener('DOMContentLoaded', function () {
             // Сортируем недели по убыванию
             const sortedWeekKeys = Object.keys(weeks).sort().reverse();
 
-            for (const weekId of sortedWeekKeys) {
+            for (const [index, weekId] of sortedWeekKeys.entries()) {
                 const weekData = weeks[weekId];
                 const weekGroupEl = document.createElement('div');
                 weekGroupEl.className = 'week-group';
                 weekGroupEl.dataset.weekId = weekId;
-                weekGroupEl.innerHTML = `<h4>Неделя ${weekData.number} (${weekData.year})</h4>`;
+
+                // Сворачиваем все недели, кроме первой (самой новой)
+                if (index > 0) {
+                    weekGroupEl.classList.add('collapsed');
+                }
+
+                weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span>Неделя ${weekData.number} (${weekData.year})</h4>`;
                 recordingsListContainer.appendChild(weekGroupEl);
 
                 // Сортируем даты внутри недели по возрастанию
@@ -276,7 +282,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         groupEl.classList.add('collapsed');
                     }
                     groupEl.dataset.date = groupData.date;
-                    groupEl.innerHTML = `<h3>${groupData.formatted_date} <span>(${groupData.day_of_week})</span></h3>`;
+                    groupEl.innerHTML = `<h3><span class="expand-icon"></span>${groupData.formatted_date}&nbsp;<span>(${groupData.day_of_week})</span></h3>`;
                     
                     // Добавляем пустую таблицу, которая заполнится при раскрытии
                     const tableContainer = document.createElement('div');
@@ -354,7 +360,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Используем делегирование событий для кнопок действий
-    recordingsListContainer.addEventListener('click', (e) => {
+    recordingsListContainer.addEventListener('click', async (e) => {
         const target = e.target;
 
         // --- Обработчик для редактирования названия ---
@@ -459,8 +465,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 input.blur();
             }
             alert(`Задача пересоздания протокола для ${filename} отправлена.`);
-        } else if (target.closest('.date-group > h3')) {
-        // Обработчик для разворачивания/сворачивания группы (теперь по клику на заголовок)
+        }
+
+        // Обработчик для разворачивания/сворачивания группы ДНЯ
         const groupHeader = e.target.closest('.date-group > h3');
         if (groupHeader) {
             const groupEl = groupHeader.parentElement;
@@ -468,12 +475,18 @@ document.addEventListener('DOMContentLoaded', function () {
             groupEl.classList.toggle('collapsed');
             if (!groupEl.classList.contains('collapsed')) {
                 expandedGroups.add(date);
-                loadRecordingsForGroup(groupEl, date);
+                await loadRecordingsForGroup(groupEl, date);
             } else {
                 expandedGroups.delete(date);
             }
         }
-    }
+
+        // Обработчик для сворачивания/разворачивания НЕДЕЛИ
+        const weekHeader = e.target.closest('.week-group > h4');
+        if (weekHeader) {
+            const weekGroupEl = weekHeader.parentElement;
+            weekGroupEl.classList.toggle('collapsed');
+        }
     });
 
     // --- Settings Tab ---
