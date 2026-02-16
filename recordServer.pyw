@@ -1338,15 +1338,46 @@ def get_recordings_for_date_data(date_dir):
             # ... (rest of the protocol file checking logic can be added here if needed)
             
             file_time = datetime.fromtimestamp(os.path.getctime(audio_filepath))
+            json_path = os.path.join(date_path, base_name + '.json')
+            
+            # Load metadata from JSON if it exists
+            metadata = {}
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                except (json.JSONDecodeError, TypeError):
+                    print(f"  - Warning: Could not decode JSON for {audio_filename}")
+            
+            # Получаем данные из JSON, если он есть, иначе используем фолбэки
+            title = metadata.get('title', base_name)
+            if 'startTime' in metadata:
+                start_time_obj = datetime.fromisoformat(metadata['startTime'])
+                display_time = start_time_obj.strftime('%H:%M:%S')
+            else:
+                start_time_obj = file_time
+                display_time = file_time.strftime('%H:%M:%S')
+            
+            duration = metadata.get('duration')
+            if duration is None and os.path.exists(audio_filepath):
+                try:
+                    duration = len(AudioSegment.from_file(audio_filepath)) / 1000.0
+                except Exception:
+                    duration = 0
+            elif duration is None:
+                duration = 0
             
             recording_info = {
                 'filename': audio_filename,
                 'size': os.path.getsize(audio_filepath),
-                'time': file_time.strftime('%H:%M:%S'),
+                'time': display_time,
                 'transcription_exists': os.path.exists(txt_filepath),
                 'transcription_filename': txt_filename,
                 'protocol_exists': protocol_filepath is not None,
-                'protocol_filename': protocol_filename
+                'protocol_filename': protocol_filename,
+                'title': title,
+                'startTime': start_time_obj.isoformat(),
+                'duration': duration
             }
             recordings_in_group.append(recording_info)
     
@@ -1370,6 +1401,33 @@ def get_recordings_for_date(date_str):
         return jsonify({"error": "Invalid date format"}), 400
     recordings = get_recordings_for_date_data(date_str)
     return jsonify(recordings)
+
+@app.route('/update_metadata/<date_str>/<filename>', methods=['POST'])
+def update_metadata(date_str, filename):
+    """Updates the title in the metadata JSON file."""
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
+        return jsonify({"error": "Invalid date format"}), 400
+
+    data = request.get_json()
+    new_title = data.get('title')
+    if not new_title:
+        return jsonify({"error": "Title cannot be empty"}), 400
+
+    rec_dir = os.path.join(get_application_path(), 'rec')
+    base_name, _ = os.path.splitext(filename)
+    json_path = os.path.join(rec_dir, date_str, base_name + '.json')
+
+    if not os.path.exists(json_path):
+        return jsonify({"error": "Metadata file not found"}), 404
+
+    with open(json_path, 'r+', encoding='utf-8') as f:
+        metadata = json.load(f)
+        metadata['title'] = new_title
+        f.seek(0)
+        json.dump(metadata, f, indent=4, ensure_ascii=False)
+        f.truncate()
+
+    return jsonify({"status": "ok", "message": "Metadata updated successfully."})
 
 # Route to serve recorded files
 @app.route('/files/<path:filepath>')

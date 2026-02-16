@@ -279,17 +279,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 const itemEl = document.createElement('li');
                 itemEl.className = 'recording-item';
                 itemEl.innerHTML = `
-                    <div class="item-main">
-                        <span class="rec-time">${rec.time}</span>
-                        <a href="/files/${date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a>
-                        <span class="rec-size">(${sizeMb} MB)</span>
+                    <div class="recording-item-header">
+                        <div class="item-main">
+                            <span class="rec-time">${rec.time}</span>
+                            <span class="editable-title rec-title" data-date="${date}" data-filename="${rec.filename}">${rec.title}</span>
+                            <span class="rec-size">(${sizeMb} MB)</span>
+                        </div>
+                        <div class="item-actions">
+                            ${compressBtnHtml}
+                        </div>
                     </div>
-                    <div class="item-actions">
-                        ${compressBtnHtml}
-                        <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
-                        <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
-                        <button class="action-btn recreate-transcription-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать TXT</button>
-                        <button class="action-btn recreate-protocol-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
+                    <div class="recording-details">
+                        <p><strong>Файл:</strong> <a href="/files/${date}/${rec.filename}" target="_blank" class="rec-filename">${rec.filename}</a></p>
+                        <p><strong>Начало:</strong> ${new Date(rec.startTime).toLocaleString('ru-RU')}</p>
+                        <p><strong>Длительность:</strong> ${Math.floor(rec.duration / 60)} м ${Math.round(rec.duration % 60)} с</p>
+                        <div class="details-actions">
+                             <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">Транскрипция</a>
+                             <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">Протокол</a>
+                             <button class="action-btn recreate-transcription-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать TXT</button>
+                             <button class="action-btn recreate-protocol-btn" data-date="${date}" data-filename="${rec.filename}">Пересоздать Протокол</button>
+                        </div>
                     </div>
                 `;
                 listEl.appendChild(itemEl);
@@ -304,6 +313,53 @@ document.addEventListener('DOMContentLoaded', function () {
     recordingsListContainer.addEventListener('click', (e) => {
         const target = e.target;
         const { date, filename } = target.dataset;
+
+        // --- Обработчик для открытия/закрытия деталей записи ---
+        const itemHeader = target.closest('.recording-item-header');
+        if (itemHeader) {
+            const item = itemHeader.closest('.recording-item');
+            item.classList.toggle('details-visible');
+            return; // Прекращаем обработку, чтобы не сработали другие клики
+        }
+
+        // --- Обработчик для редактирования названия ---
+        if (target.classList.contains('editable-title')) {
+            const currentTitle = target.textContent;
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = currentTitle;
+            input.className = 'title-edit-input';
+
+            target.replaceWith(input);
+            input.focus();
+            input.select();
+
+            const saveTitle = async () => {
+                const newTitle = input.value.trim();
+                if (newTitle && newTitle !== currentTitle) {
+                    // Отправляем запрос на сервер
+                    await fetch(`/update_metadata/${date}/${filename}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ title: newTitle })
+                    });
+                    target.textContent = newTitle;
+                } else {
+                    target.textContent = currentTitle;
+                }
+                input.replaceWith(target);
+            };
+
+            input.addEventListener('blur', saveTitle);
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    input.blur();
+                } else if (e.key === 'Escape') {
+                    target.textContent = currentTitle;
+                    input.replaceWith(target);
+                }
+            });
+        }
 
         if (target.classList.contains('recreate-transcription-btn')) {
             fetch(`/recreate_transcription/${date}/${filename}`);
