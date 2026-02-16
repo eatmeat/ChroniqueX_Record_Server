@@ -954,7 +954,7 @@ def open_main_window(icon=None, item=None):
     win.mainloop()
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
-def post_task(file_path, task_type, prompt_addition_str=None):
+def post_task(file_path, task_type, prompt_addition_str=None, add_participants_prompt=False):
     if not API_URL or not API_KEY: return None
     try:
         with open(file_path, 'rb') as f:
@@ -990,8 +990,8 @@ def post_task(file_path, task_type, prompt_addition_str=None):
                     participants_prompt = "\n".join(prompt_lines)
 
             # Add prompt_addition if it's a protocol task and prompt_addition is provided
-            if task_type == 'protocol' and (prompt_addition_str or participants_prompt):
-                data['prompt_addition'] = participants_prompt + (prompt_addition_str or "")
+            if task_type == 'protocol' and (prompt_addition_str or (add_participants_prompt and participants_prompt)):
+                data['prompt_addition'] = (participants_prompt if add_participants_prompt else "") + (prompt_addition_str or "")
 
             # Количество спикеров определяется по количеству выбранных контактов
             if task_type == 'transcribe':

@@ -616,6 +616,19 @@ input[type="text"], input[type="number"], textarea {
     flex-shrink: 0; /* Запрещаем кнопкам сжиматься */
 }
 
+.recreate-actions-container {
+    display: inline-flex;
+    gap: 8px;
+    transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out;
+    opacity: 1;
+    max-width: 100px; /* Достаточно для двух кнопок */
+}
+.recreate-actions-container.hidden {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+}
+
 .cell-transcription .action-btn,
 .cell-protocol .action-btn {
     min-width: 45px; /* Фиксированная ширина для кнопок TXT/PDF */

@@ -281,9 +281,9 @@ document.addEventListener('DOMContentLoaded', function () {
                     <div class="recording-cell cell-files">
                         <a href="/files/${date}/${rec.filename}" target="_blank" class="action-btn audio-link">${audioExtension}</a>
                         <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">TXT</a>
-                        <button class="action-btn recreate-transcription-btn" title="Пересоздать транскрипцию" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button>
+                        <span class="recreate-actions-container hidden"><button class="action-btn recreate-transcription-btn" title="Пересоздать транскрипцию" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
                         <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">PDF</a>
-                        <button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button>
+                        <span class="recreate-actions-container hidden"><button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
                     </div>
                 `;
                 tableBody.appendChild(rowEl);
@@ -302,6 +302,12 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Обработчик для редактирования названия ---
         if (target.classList.contains('editable-title')) {
             const currentTitle = target.textContent;
+            const row = target.closest('.recording-table-row');
+            const recreateContainer = row.querySelector('.recreate-actions-container');
+            recreateContainer.classList.remove('hidden');
+            const recreateContainers = row.querySelectorAll('.recreate-actions-container');
+            recreateContainers.forEach(c => c.classList.remove('hidden'));
+
             const input = document.createElement('input');
             input.type = 'text';
             input.value = currentTitle;
@@ -324,15 +330,26 @@ document.addEventListener('DOMContentLoaded', function () {
                 } else {
                     target.textContent = currentTitle;
                 }
+                recreateContainer.classList.add('hidden');
+                recreateContainers.forEach(c => c.classList.add('hidden'));
                 input.replaceWith(target);
             };
 
-            input.addEventListener('blur', saveTitle);
+            input.addEventListener('blur', (e) => {
+                // Если фокус уходит на одну из кнопок пересоздания, не сохраняем сразу,
+                // позволяя клику по кнопке сработать. `saveTitle` будет вызван принудительно.
+                if (e.relatedTarget && e.relatedTarget.closest('.recreate-actions-container')) {
+                    return;
+                }
+                saveTitle();
+            });
             input.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     input.blur();
                 } else if (e.key === 'Escape') {
                     target.textContent = currentTitle;
+                    recreateContainer.classList.add('hidden');
+                    recreateContainers.forEach(c => c.classList.add('hidden'));
                     input.replaceWith(target);
                 }
             });
@@ -340,9 +357,25 @@ document.addEventListener('DOMContentLoaded', function () {
 
         if (target.classList.contains('recreate-transcription-btn')) {
             fetch(`/recreate_transcription/${date}/${filename}`);
+            // Если мы были в режиме редактирования, выходим из него
+            // Принудительно выходим из режима редактирования, если он был активен
+            const input = target.closest('.recording-table-row').querySelector('.title-edit-input');
+            if (input) input.blur();
+            if (input) {
+                // Вызываем blur(), чтобы сработал обработчик сохранения
+                input.blur();
+            }
             alert(`Задача пересоздания транскрипции для ${filename} запущена.`);
         } else if (target.classList.contains('recreate-protocol-btn')) {
             fetch(`/recreate_protocol/${date}/${filename}`);
+            // Если мы были в режиме редактирования, выходим из него
+            // Принудительно выходим из режима редактирования, если он был активен
+            const input = target.closest('.recording-table-row').querySelector('.title-edit-input');
+            if (input) input.blur();
+            if (input) {
+                // Вызываем blur(), чтобы сработал обработчик сохранения
+                input.blur();
+            }
             alert(`Задача пересоздания протокола для ${filename} запущена.`);
         } else if (target.closest('.date-group > h3')) {
         // Обработчик для разворачивания/сворачивания группы (теперь по клику на заголовок)
@@ -463,12 +496,11 @@ document.addEventListener('DOMContentLoaded', function () {
             rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n', enabled: true });
         }
         rules.forEach(rule => {
-            addContextRuleRow(rule.pattern, rule.prompt);
+            addContextRuleRow(rule.pattern, rule.prompt, rule.enabled);
         });
     }
 
-    function addContextRuleRow(pattern = '', prompt = '') {
-        const isEnabled = arguments.length > 2 ? arguments[2] : true; // По умолчанию включено
+    function addContextRuleRow(pattern = '', prompt = '', isEnabled = true) {
         const ruleItem = document.createElement('div');
         ruleItem.className = 'context-rule-item';
 
