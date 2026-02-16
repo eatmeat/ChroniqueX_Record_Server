@@ -31,6 +31,11 @@ except ImportError:
 # Импортируем PaWasapiStreamInfo напрямую из оригинального pyaudio,
 # так как в некоторых версиях pyaudiowpatch он может отсутствовать.
 try:
+    from bs4 import BeautifulSoup
+except ImportError:
+    BeautifulSoup = None
+# так как в некоторых версиях pyaudiowpatch он может отсутствовать.
+try:
     from pyaudio import PaWasapiStreamInfo
 except ImportError:
     PaWasapiStreamInfo = None
@@ -953,6 +958,67 @@ def open_main_window(icon=None, item=None):
     lan_accessible_var.trace_add("write", mark_as_changed)
     win.mainloop()
 
+def _clean_html_content(html_content):
+    """
+    Очищает HTML-содержимое с помощью BeautifulSoup, оставляя только
+    текст и теги таблиц. Удаляет <script>, <style> и все атрибуты тегов.
+    """
+    if not html_content or not BeautifulSoup:
+        return ""
+
+    try:
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Список тегов, которые нужно сохранить.
+        allowed_tags = {'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td'}
+
+
+
+        # Удаляем все теги <script> и <style>
+        for s in soup(['script', 'style']):
+            s.decompose()
+
+        # Проходим по всем тегам в документе
+        for tag in soup.find_all(True):
+            # Удаляем все атрибуты у всех тегов
+            tag.attrs = {}
+            
+            # Если тег не в списке разрешенных, заменяем его на его содержимое.
+            # Это удаляет сам тег, но оставляет текст и дочерние элементы.
+            if tag.name not in allowed_tags:
+                tag.unwrap()
+
+        # Извлекаем только содержимое тега body, если он есть.
+        # Это позволяет избавиться от <!DOCTYPE>, <html>, <head> и т.д.
+        # Если body нет, soup останется как есть (фрагмент HTML).
+        body_content = soup.body
+        if body_content:
+            soup = body_content        
+
+        # Проходим по всем ячейкам таблицы (td, th) и убираем переносы строк внутри них,
+        # делая содержимое каждой ячейки однострочным.
+        for cell in soup.find_all(['td', 'th']):
+            # .get_text() с пробелом в качестве сепаратора объединяет весь текст внутри ячейки.
+            cell_content_single_line = cell.get_text(separator=' ', strip=True)
+            # Заменяем содержимое ячейки на одну очищенную строку, сохраняя сам тег.
+            cell.string = cell_content_single_line
+
+        # Преобразуем в строку, используя 'formatter=None', чтобы избежать
+        # автоматического добавления переносов строк BeautifulSoup.
+        cleaned_html = soup.decode(formatter=None)
+
+        # Дополнительно убираем переносы строк между тегами <td> и <tr>
+        cleaned_html = re.sub(r'(?<=>)\s*\n\s*(?=<)', '', cleaned_html)
+
+        # Убираем множественные переносы строк, заменяя их на один,
+        # чтобы сделать текст более компактным.
+        compact_html = re.sub(r'\n{2,}', '\n', cleaned_html).strip()
+        return compact_html
+
+    except Exception as e:
+        print(f"Ошибка при очистке HTML: {e}")
+        return html_content
+
 def build_final_prompt_addition(base_path, recording_date, is_preview=False):
     """
     Универсальная функция для сборки "добавки к промпту" на основе текущих настроек.
@@ -1007,9 +1073,16 @@ def build_final_prompt_addition(base_path, recording_date, is_preview=False):
             for found_file in found_files:
                 try:
                     with open(found_file, 'r', encoding='utf-8') as f:
-                        content = f.read(550) if is_preview else f.read()
-                        if is_preview and len(content) > 500:
-                            content = content[:500] + "..."
+                        content = f.read()
+
+                    # Если это HTML-файл, очищаем его от стилей и атрибутов
+                    file_ext = found_file.suffix.lower()
+                    if file_ext in ['.html', '.htm']:
+                        content = _clean_html_content(content)
+
+                    if is_preview and len(content) > 1000:
+                        content = content[:1000] + "..."
+
                     if content:
                         formatted_prompt = prompt_template.replace("{filename}", found_file.name).replace("{content}", content)
                         context_files_prompt_addition += formatted_prompt
@@ -1042,7 +1115,7 @@ def build_final_prompt_addition(base_path, recording_date, is_preview=False):
             participants_prompt = "\n".join(prompt_lines)
 
     # Собираем финальную строку в правильном порядке
-    final_prompt_text = date_prompt_addition + meeting_name_prompt_addition + participants_prompt + filtered_prompt_addition
+    final_prompt_text = date_prompt_addition + meeting_name_prompt_addition + participants_prompt + "\n" + filtered_prompt_addition
     return final_prompt_text
 
 # --- Post-processing, Audio Recording, and other functions (mostly unchanged) ---
