@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 rowEl.innerHTML = `
                     <div class="recording-cell cell-time">${rec.time}</div>
                     <div class="recording-cell cell-duration">${Math.floor(rec.duration / 60)} м ${Math.round(rec.duration % 60)} с</div>
-                    <div class="recording-cell cell-title"><span class="editable-title" data-date="${date}" data-filename="${rec.filename}">${rec.title}</span></div>
+                    <div class="recording-cell cell-title"><span class="editable-title" data-date="${date}" data-filename="${rec.filename}" data-prompt-addition="${escapeHtml(rec.promptAddition)}">${rec.title}</span></div>
                     <div class="recording-cell cell-files">
                         <a href="/files/${date}/${rec.filename}" target="_blank" class="action-btn audio-link">${audioExtension}</a>
                         <a href="/files/${date}/${rec.transcription_filename}" target="_blank" class="action-btn transcription-link ${rec.transcription_exists ? 'exists' : ''}">TXT</a>
@@ -294,13 +294,24 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    // Функция для экранирования HTML
+    function escapeHtml(unsafe) {
+        if (typeof unsafe !== 'string') return '';
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
     // Используем делегирование событий для кнопок действий
     recordingsListContainer.addEventListener('click', (e) => {
         const target = e.target;
-        const { date, filename } = target.dataset;        
 
         // --- Обработчик для редактирования названия ---
         if (target.classList.contains('editable-title')) {
+            const { date, filename, promptAddition } = target.dataset;
             const currentTitle = target.textContent;
             const row = target.closest('.recording-table-row');
             const recreateContainer = row.querySelector('.recreate-actions-container');
@@ -317,9 +328,26 @@ document.addEventListener('DOMContentLoaded', function () {
             input.focus();
             input.select();
 
+            // Создаем и показываем блок с promptAddition
+            let promptRow = null;
+            if (promptAddition) {
+                promptRow = document.createElement('div');
+                promptRow.className = 'prompt-display-row';
+                const promptContent = document.createElement('div');
+                promptContent.className = 'prompt-addition-display';
+                // Используем <pre> для сохранения форматирования и переносов строк
+                promptContent.innerHTML = `<pre>${escapeHtml(promptAddition)}</pre>`;
+                promptRow.appendChild(promptContent);
+
+                // Вставляем новую строку после текущей строки записи
+                row.parentNode.insertBefore(promptRow, row.nextSibling);
+            }
+
             const saveTitle = async () => {
                 const newTitle = input.value.trim();
                 if (newTitle && newTitle !== currentTitle) {
+                    // Обновляем data-атрибут, если нужно
+                    target.dataset.promptAddition = promptAddition;
                     // Отправляем запрос на сервер
                     await fetch(`/update_metadata/${date}/${filename}`, {
                         method: 'POST',
@@ -333,6 +361,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 recreateContainer.classList.add('hidden');
                 recreateContainers.forEach(c => c.classList.add('hidden'));
                 input.replaceWith(target);
+                if (promptRow) promptRow.remove(); // Удаляем строку с промптом
             };
 
             input.addEventListener('blur', (e) => {
@@ -350,11 +379,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     target.textContent = currentTitle;
                     recreateContainer.classList.add('hidden');
                     recreateContainers.forEach(c => c.classList.add('hidden'));
+                    if (promptRow) promptRow.remove();
                     input.replaceWith(target);
                 }
             });
         }
 
+        const { date, filename } = target.dataset;
         if (target.classList.contains('recreate-transcription-btn')) {
             fetch(`/recreate_transcription/${date}/${filename}`);
             // Если мы были в режиме редактирования, выходим из него

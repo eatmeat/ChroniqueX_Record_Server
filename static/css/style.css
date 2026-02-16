@@ -652,3 +652,34 @@ input[type="text"], input[type="number"], textarea {
 .editable-title:hover {
     background-color: #ecf0f1;
 }
+
+/* Стили для отображения добавки к промпту при редактировании */
+.prompt-addition-display {
+    margin-top: 8px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    font-size: 0.85em;
+    color: #495057;
+    max-height: 200px; /* Ограничиваем высоту, чтобы не растягивать строку */
+    overflow-y: auto; /* Добавляем скролл, если контент не помещается */
+    white-space: normal; /* Разрешаем перенос строк */
+}
+
+.prompt-addition-display pre {
+    margin: 0; /* Убираем стандартные отступы у <pre> */
+    font-family: inherit; /* Наследуем шрифт от родителя */
+}
+
+/* Стили для строки, содержащей блок с промптом */
+.prompt-display-row {
+    /* Используем grid, чтобы контент мог занять все колонки */
+    display: grid;
+    grid-column: 1 / -1; /* Растягиваем на все колонки от первой до последней */
+    padding: 0 10px 10px 10px; /* Отступы, совпадающие с .recording-table-row */
+    background-color: #f9f9f9; /* Тот же фон, что и при наведении на строку */
+}
+.prompt-display-row .prompt-addition-display {
+    margin-top: 0; /* Убираем верхний отступ, так как он уже есть у строки */
+}

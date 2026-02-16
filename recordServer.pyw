@@ -1178,11 +1178,46 @@ def process_recording_tasks(file_path):
             if not line.strip().startswith("//")
         ])
 
+        # --- Формирование списка участников для сохранения в promptAddition ---
+        selected_contact_ids = set(settings.get("selected_contacts", []))
+        participants_prompt_for_metadata = ""
+        if selected_contact_ids:
+            participants_by_group = {}
+            for group in contacts_data.get("groups", []):
+                group_name = group.get("name", "Без группы")
+                for contact in group.get("contacts", []):
+                    if contact.get("id") in selected_contact_ids:
+                        if group_name not in participants_by_group:
+                            participants_by_group[group_name] = []
+                        participants_by_group[group_name].append(contact.get("name"))
+            if participants_by_group:
+                prompt_lines = ["# Список участников:\n"]
+                for group_name in sorted(participants_by_group.keys()):
+                    prompt_lines.append(f"# Группа: {group_name}")
+                    for participant_name in sorted(participants_by_group[group_name]):
+                        prompt_lines.append(f"- {participant_name}")
+                    prompt_lines.append("")
+                participants_prompt_for_metadata = "\n".join(prompt_lines)
+
         # Update post-processing status for protocol stage
         post_process_stage = "protocol"
         protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition, add_participants_prompt=True)
         if protocol_task_id and poll_and_save_result(protocol_task_id, txt_output_path):
             protocol_output_path = base_name + "_protocol.pdf"
+
+            # --- Сохранение добавки к промпту в метаданные ---
+            json_path = base_name + '.json'
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, 'r+', encoding='utf-8') as f:
+                        metadata = json.load(f)
+                        metadata['promptAddition'] = participants_prompt_for_metadata + meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition
+                        f.seek(0)
+                        json.dump(metadata, f, indent=4, ensure_ascii=False)
+                        f.truncate()
+                except Exception as e:
+                    print(f"Не удалось обновить метаданные с промптом для {json_path}: {e}")
+
             poll_and_save_result(protocol_task_id, protocol_output_path)
     
     # Reset post-processing status
@@ -1376,7 +1411,8 @@ def get_recordings_for_date_data(date_dir):
                 'protocol_exists': protocol_filepath is not None,
                 'protocol_filename': protocol_filename,
                 'title': title,
-                'startTime': start_time_obj.isoformat(),
+                'startTime': start_time_obj.isoformat(), # Оставляем для сортировки
+                'promptAddition': metadata.get('promptAddition', ''),
                 'duration': duration
             }
             recordings_in_group.append(recording_info)
@@ -1936,6 +1972,27 @@ def process_protocol_task(txt_file_path):
                 except Exception as e:
                     print(f"Не удалось прочитать или обработать файл контекста {found_file}: {e}")
 
+    # --- Формирование списка участников для сохранения в promptAddition (повтор логики) ---
+    selected_contact_ids = set(settings.get("selected_contacts", []))
+    participants_prompt_for_metadata = ""
+    if selected_contact_ids:
+        participants_by_group = {}
+        for group in contacts_data.get("groups", []):
+            group_name = group.get("name", "Без группы")
+            for contact in group.get("contacts", []):
+                if contact.get("id") in selected_contact_ids:
+                    if group_name not in participants_by_group:
+                        participants_by_group[group_name] = []
+                    participants_by_group[group_name].append(contact.get("name"))
+        if participants_by_group:
+            prompt_lines = ["# Список участников:\n"]
+            for group_name in sorted(participants_by_group.keys()):
+                prompt_lines.append(f"# Группа: {group_name}")
+                for participant_name in sorted(participants_by_group[group_name]):
+                    prompt_lines.append(f"- {participant_name}")
+                prompt_lines.append("")
+            participants_prompt_for_metadata = "\n".join(prompt_lines)
+
     filtered_prompt_addition = "\n".join([line for line in prompt_addition.splitlines() if not line.strip().startswith("//")])
     protocol_task_id = post_task(
         txt_file_path, "protocol", 
@@ -1945,6 +2002,20 @@ def process_protocol_task(txt_file_path):
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"
+
+        # --- Сохранение добавки к промпту в метаданные ---
+        json_path = base_name + '.json'
+        if os.path.exists(json_path):
+            try:
+                with open(json_path, 'r+', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                    metadata['promptAddition'] = participants_prompt_for_metadata + meeting_name_prompt_addition + date_prompt_addition + filtered_prompt_addition
+                    f.seek(0)
+                    json.dump(metadata, f, indent=4, ensure_ascii=False)
+                    f.truncate()
+            except Exception as e:
+                print(f"Не удалось обновить метаданные с промптом для {json_path}: {e}")
+
         poll_and_save_result(protocol_task_id, protocol_output_path)
 
     is_post_processing = False
@@ -2216,7 +2287,8 @@ def stop_recording():
         metadata = {
             "startTime": start_time.isoformat(),
             "duration": duration.total_seconds(),
-            "title": title
+            "title": title,
+            "promptAddition": "" # Инициализируем пустым значением
         }
         with open(json_path, 'w', encoding='utf-8') as f:
             json.dump(metadata, f, indent=4, ensure_ascii=False)
