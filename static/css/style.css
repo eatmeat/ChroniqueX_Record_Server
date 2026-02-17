@@ -3,6 +3,7 @@ body {
     background-color: #f4f7f9;
     color: #333;
     margin: 0;
+    transition: background-color 0.5s ease; /* Плавный переход для цвета фона */
     padding: 20px;
 }
 
