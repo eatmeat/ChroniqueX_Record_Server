@@ -12,7 +12,7 @@ body {
     background-color: #fff;
     padding: 20px;
     border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 header {
@@ -110,6 +110,8 @@ h1, h2, h3, h4 {
 /* Стили для списка участников */
 .contact-group {
     margin-bottom: 15px;
+    border-right: 1px solid #e0e0e0; /* Добавляем линию справа */
+    padding-right: 15px; /* Добавляем отступ справа от контента до линии */
 }
 
 .contact-group-header {
@@ -286,30 +288,31 @@ h1, h2, h3, h4 {
 .week-group {
     margin-bottom: 25px;
     padding: 15px;
-    border: 1px solid #e9ecef;
+    border: 1px solid #e0e0e0; /* Делаем рамку видимой для более четкого контура */
     border-radius: 8px;
     background-color: #fdfdfd;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05); /* Добавляем тень со смещением по X и Y */
 }
 
 .week-group h4 {
+    /* Унифицируем стили для h4 в обоих состояниях */
     margin-top: 0;
-    margin-bottom: 15px;
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 10px;
+    margin-bottom: 0; /* Убираем нижний отступ, будем управлять им через padding */
     cursor: pointer;
-    padding: 8px; /* Добавляем внутренние отступы */
-    border-radius: 4px; /* Скругляем углы */
+    padding: 15px; /* Устанавливаем единый внутренний отступ */
+    border-radius: 8px; /* Скругляем углы, как у родителя */
     transition: background-color 0.2s; /* Плавный переход */
     display: flex;
     align-items: center;
-    font-size: 1.17em; /* Стандартный размер для h3 */
+    font-size: 1.17em;
     justify-content: space-between; /* Размещаем элементы по краям */
+    border-bottom: 2px solid transparent; /* Прозрачная рамка для сохранения места */
+    margin-bottom: 15px; /* Добавляем нижний отступ для разделения с контентом */
 }
 
-/* Центрируем текст недели, заставляя его занять все доступное место */
-.week-group h4 .week-title {
-    flex-grow: 1;
-    text-align: center;
+/* В развернутом состоянии добавляем нижний отступ и видимую рамку */
+.week-group:not(.collapsed) h4 {
+    /* Убираем все изменения, чтобы заголовок не "прыгал" */
 }
 
 /* Подсветка при наведении */
@@ -317,10 +320,9 @@ h1, h2, h3, h4 {
     background-color: #ecf0f1;
 }
 
-/* Убираем нижний отступ у заголовка, когда неделя свернута, для симметрии */
+/* Когда неделя свернута, убираем внутренний отступ у родительского блока */
 .week-group.collapsed h4 {
-    margin-bottom: 0;
-    border-bottom: none; /* Убираем линию под заголовком */
+    margin-bottom: 0; /* Убираем нижний отступ, когда неделя свернута */
 }
 
 /* Общие стили для иконки-стрелки */

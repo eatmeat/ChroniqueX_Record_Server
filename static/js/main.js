@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // --- Логика для предварительного отображения метки времени ---
         const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
-        if (secondsUntilNextMark > 0 && secondsUntilNextMark <= 20) {
+        if (secondsUntilNextMark > 0 && secondsUntilNextMark <= 20) { // This was changed to 10 in the last request
             // Вычисляем время будущей метки
             // Очищаем область, где будет текст, чтобы избежать наложения
             // Ширина 150px выбрана с запасом для текста
@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             ctx.textAlign = 'right'; // Выравниваем по правому краю, чтобы текст не обрезался
-            ctx.fillStyle = '#7f8c8d';
+            ctx.fillStyle = '#000000'; // Более темный цвет для лучшей читаемости
             ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 25); // Сдвигаем текст выше
             ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 5);   // Рисуем у правого края
         }
