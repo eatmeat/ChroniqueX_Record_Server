@@ -82,10 +82,18 @@ document.addEventListener('DOMContentLoaded', function () {
     const audioChartCanvas = document.getElementById('audio-chart');
     const audioChartCtx = audioChartCanvas.getContext('2d');
     
+    // Сохраняем текущие размеры, чтобы избежать ненужных перерисовок при скролле на мобильных
+    let currentCanvasWidth = 0;
+    let currentCanvasHeight = 0;
+
     // --- Адаптация Canvas для HiDPI (Retina) дисплеев для четкости ---
     function setupCanvas(canvas) {
         const dpr = window.devicePixelRatio || 1;
         const rect = canvas.getBoundingClientRect();
+        // Сохраняем новые размеры
+        currentCanvasWidth = rect.width;
+        currentCanvasHeight = rect.height;
+
         canvas.width = rect.width * dpr;
         canvas.height = rect.height * dpr;
         const ctx = canvas.getContext('2d');
@@ -95,7 +103,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Перенастраиваем canvas при изменении размера окна
     window.addEventListener('resize', () => {
-        setupCanvas(audioChartCanvas);
+        // Перерисовываем, только если размеры действительно изменились
+        const rect = audioChartCanvas.getBoundingClientRect();
+        if (rect.width !== currentCanvasWidth || rect.height !== currentCanvasHeight) {
+            setupCanvas(audioChartCanvas);
+        }
     });
     // --- Конец адаптации ---
 
