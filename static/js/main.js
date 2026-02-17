@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Каждые 30 секунд - жирная линия с подписью
             if (markSeconds === 0 || markSeconds === 30) {
                 ctx.strokeStyle = '#aaaaaa'; // Унифицируем цвет
-                ctx.lineWidth = 0.5;
+                ctx.lineWidth = 1; // Делаем линию толще
                 ctx.beginPath();
                 ctx.moveTo(x, 0); ctx.lineTo(x, chartHeight);
                 ctx.stroke();
