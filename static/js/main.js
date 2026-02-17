@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
         bgGradient.addColorStop(0, '#ffffff'); // Белый сверху
-        bgGradient.addColorStop(1, `rgb(${r},${g},${b})`); // Динамический цвет снизу
+        bgGradient.addColorStop(1, '#f7f9fa'); // Возвращаем статичный светло-серый цвет для фона графика
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, chartHeight);
 
