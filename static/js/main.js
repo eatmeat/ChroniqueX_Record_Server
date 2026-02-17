@@ -200,7 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
             for (let i = 0; i < historySlice.length; i++) {
                 const value = historySlice[i] || 0;
                 const x = width - pointsToDraw + i;
-                const y = chartHeight - value * chartHeight;
+                const y = chartHeight - Math.min(1, value * 2) * chartHeight; // Увеличиваем значение вдвое
                 ctx.lineTo(x, y);
             }
 
@@ -308,8 +308,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 ctx.beginPath();
                 ctx.strokeStyle = typeof colorFunc === 'function' ? colorFunc(newValue) : colorFunc;
-                ctx.moveTo(x1, chartHeight - prevValue * chartHeight);
-                ctx.lineTo(x2, chartHeight - newValue * chartHeight);
+                ctx.moveTo(x1, chartHeight - Math.min(1, prevValue * 2) * chartHeight); // Увеличиваем значение вдвое
+                ctx.lineTo(x2, chartHeight - Math.min(1, newValue * 2) * chartHeight); // Увеличиваем значение вдвое
                 ctx.stroke();
             }
         };
