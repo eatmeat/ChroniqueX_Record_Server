@@ -82,39 +82,55 @@ document.addEventListener('DOMContentLoaded', function () {
     const audioChartCanvas = document.getElementById('audio-chart');
     const audioChartCtx = audioChartCanvas.getContext('2d');
     
+    // --- Адаптация Canvas для HiDPI (Retina) дисплеев для четкости ---
+    function setupCanvas(canvas) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        return ctx;
+    }
+
+    // Перенастраиваем canvas при изменении размера окна
+    window.addEventListener('resize', () => {
+        setupCanvas(audioChartCanvas);
+    });
+    // --- Конец адаптации ---
+
     const chartHistorySize = 6000; // 300 секунд * 20 обновлений/сек = 6000 точек
     let micHistory = new Array(chartHistorySize).fill(0);
     let sysHistory = new Array(chartHistorySize).fill(0);
 
     function amplifyLevel(value) {
-        // Используем квадратный корень для нелинейного усиления.
-        // Это делает тихие звуки более заметными, не давая громким зашкаливать.
         return Math.sqrt(value);
     }
 
     let frameCount = 0;
-    const scrollInterval = 3; // Сдвигать график каждый 3-й кадр, чтобы замедлить его
+    const scrollInterval = 3; 
 
+    // --- Отрисовка графика со сдвигом для сохранения временных меток ---
     function updateChartWithScroll() {
         const canvas = audioChartCanvas;
-        const ctx = audioChartCtx;
-        const { width, height } = canvas;
-        const chartHeight = height - 25; // Увеличим место для подписей
+        const dpr = window.devicePixelRatio || 1;
+        const ctx = canvas.getContext('2d');
+        const { clientWidth: width, clientHeight: height } = canvas;
+        const chartHeight = height - 50; // Увеличиваем место для подписей
 
-        if (frameCount % scrollInterval === 0) {
-            // 1. Сдвигаем существующее изображение влево на 1 пиксель
-            const imageData = ctx.getImageData(1, 0, width - 1, height);
-            ctx.putImageData(imageData, 0, 0);
+        // 1. Сдвигаем существующее изображение влево. Работаем с ФИЗИЧЕСКИМИ пикселями.
+        // Сдвигаем на dpr пикселей, что соответствует 1 логическому пикселю.
+        const imageData = ctx.getImageData(dpr, 0, canvas.width - dpr, canvas.height);
+        ctx.putImageData(imageData, 0, 0);
 
-            // 2. Очищаем последнюю колонку (1px), чтобы нарисовать там новые данные
-            ctx.clearRect(width - 1, 0, 1, height);
-        }
-
+        // 2. Очищаем последнюю колонку (1 логический пиксель), чтобы нарисовать там новые данные
+        ctx.clearRect(width - 1, 0, 1, height);
+        
         // 3. Рисуем сетку и временные метки в последней колонке (которая только что была очищена)
         ctx.strokeStyle = '#ecf0f1';
         ctx.lineWidth = 0.5;
         ctx.fillStyle = '#7f8c8d';
-        ctx.font = '10px sans-serif';
+        ctx.font = '20px sans-serif';
         ctx.textAlign = 'center';
 
         // Горизонтальные линии сетки (рисуем только в новой колонке)
@@ -132,7 +148,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const milliseconds = now.getMilliseconds();
         
         // Проверяем, что мы находимся в начале секунды, чтобы нарисовать метку только один раз
-        if ((seconds === 0 || seconds === 30) && milliseconds < (50 * scrollInterval)) {
+        if ((seconds === 0 || seconds === 30) && milliseconds < 100) { // Увеличим окно до 100мс
             ctx.strokeStyle = '#bdc3c7'; // Более заметная линия сетки
             ctx.lineWidth = 0.5;
             ctx.beginPath();
@@ -141,56 +157,65 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.stroke();
 
             // Рисуем метки времени для МСК и ИРК
-            const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' });
-            const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk' });
+            const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             ctx.textAlign = 'right'; // Выравниваем по правому краю, чтобы текст не обрезался
             ctx.fillStyle = '#7f8c8d';
-            ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 15); // Рисуем у правого края
-            ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 5);  // Рисуем у правого края
+            ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 25); // Сдвигаем текст выше
+            ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 5);   // Рисуем у правого края
         }
 
         // 4. Рисуем новые сегменты линий
         ctx.lineWidth = 1.5;
         const drawNewSegment = (history, colorFunc) => {
             // Берем две последние точки из истории для отрисовки сегмента.
-            // +1, т.к. history.length-1 это текущая точка, а нам нужна предыдущая.
             const prevValue = history[history.length - 2] || 0;
             const newValue = history[history.length - 1] || 0;
 
             ctx.beginPath();
-            ctx.strokeStyle = colorFunc(newValue);
+            ctx.strokeStyle = typeof colorFunc === 'function' ? colorFunc(newValue) : colorFunc;
             // Рисуем новый сегмент в последнем пикселе холста
             ctx.moveTo(width - 1, chartHeight - (prevValue * chartHeight));
             ctx.lineTo(width, chartHeight - (newValue * chartHeight));
             ctx.stroke();
         };
 
-        drawNewSegment(sysHistory, () => '#3498db');
+        drawNewSegment(sysHistory, '#3498db');
         drawNewSegment(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
     }
+    // --- Конец функции отрисовки ---
 
+    // --- Разделяем получение данных и отрисовку для плавности ---
+    // Эта функция будет вызываться постоянно для плавной анимации
+    function renderLoop() {
+        // Замедление отрисовки для соответствия скорости скролла
+        if (frameCount % scrollInterval === 0) {
+            updateChartWithScroll();
+        }
+        frameCount++;
+        requestAnimationFrame(renderLoop);
+    }
+
+    // Эта функция будет вызываться по интервалу для получения данных с сервера
     async function updateAudioLevels() {
         try {
             const response = await fetch('/audio_levels');
             const levels = await response.json();
-
-            // Add new level to history and remove the oldest
+    
             const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
             const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
-
+    
             micHistory.push(amplifiedMic);
             sysHistory.push(amplifiedSys);
-            if (micHistory.length > chartHistorySize) micHistory.shift();
-            if (sysHistory.length > chartHistorySize) sysHistory.shift();
-
-            updateChartWithScroll();
-            frameCount++;
-
+            if (micHistory.length > chartHistorySize) micHistory.shift(); // Возвращаем старую логику
+            if (sysHistory.length > chartHistorySize) sysHistory.shift(); // Возвращаем старую логику
         } catch (error) {
             // console.error('Error fetching audio levels:', error); // Keep this commented to avoid console spam
         }
     }
+    // --- Конец разделения ---
+
 
     recBtn.addEventListener('click', () => fetch(currentStatus === 'pause' ? '/resume' : '/rec'));
     pauseBtn.addEventListener('click', () => fetch('/pause'));
@@ -1223,9 +1248,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function initialize() {
         updateStatus();
         setInterval(updateStatus, 2000); // Poll status every 2 seconds
-        setInterval(checkForRecordingUpdates, 3000); // Проверяем наличие обновлений каждые 3 секунды
-        setInterval(updateAudioLevels, 50); // Уменьшаем интервал для большей плавности (20 FPS)
+        setInterval(checkForRecordingUpdates, 3000); // Проверяем обновления записей каждые 3 секунды
+        setInterval(updateAudioLevels, 50); // Получаем данные об уровнях звука 20 раз в секунду
         updateRecordingsList(); // Загружаем список записей при инициализации
+        setupCanvas(audioChartCanvas); // Первоначальная настройка canvas
+        requestAnimationFrame(renderLoop); // Запускаем цикл отрисовки
+
         loadSettings();
         updatePromptPreview();
         loadContactsAndSettings();
