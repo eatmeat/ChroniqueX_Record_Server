@@ -631,8 +631,8 @@ input[type="text"], input[type="number"], textarea {
     display: flex;
     flex-direction: column;
     border: 1px solid #e0e0e0;
-    border-radius: 5px;
-    overflow: hidden; /* Для скругления углов */
+    border-radius: 5px;    
+    overflow-x: auto; /* Добавляем горизонтальную прокрутку при необходимости */
     margin-top: 10px;
 }
 
@@ -654,6 +654,7 @@ input[type="text"], input[type="number"], textarea {
     gap: 10px;
     align-items: center;
     padding: 10px;
+    min-width: 600px; /* Устанавливаем минимальную ширину, чтобы контент не сжимался */
     border-bottom: 1px solid #f0f0f0;
 }
 
