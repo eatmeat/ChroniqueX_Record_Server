@@ -165,22 +165,25 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Расчет цвета для динамического фона всей страницы ---
         const currentMicLevel = micHistory[micHistory.length - 1] || 0;
         const currentSysLevel = sysHistory[sysHistory.length - 1] || 0;
-        
-        // Базовый цвет фона страницы (очень светлый)
-        let r = 244, g = 247, b = 249; 
+
+        // Усиливаем влияние уровня звука для более заметного эффекта
+        const micEffect = Math.min(1, currentMicLevel * 1.5);
+        const sysEffect = Math.min(1, currentSysLevel * 1.5);
+
+        // Базовый цвет фона (очень светлый)
+        let r = 244, g = 247, b = 249;
         // Влияние микрофона (красный)
-        r = Math.min(255, Math.round(r * (1 - currentMicLevel) + 255 * currentMicLevel));
-        g = Math.min(255, Math.round(g * (1 - currentMicLevel) + 230 * currentMicLevel));
-        b = Math.min(255, Math.round(b * (1 - currentMicLevel) + 230 * currentMicLevel));
+        r = Math.round(r * (1 - micEffect) + 255 * micEffect); // Цель: 255, 220, 220 (насыщенный розовый)
+        g = Math.round(g * (1 - micEffect) + 220 * micEffect);
+        b = Math.round(b * (1 - micEffect) + 220 * micEffect);
         // Влияние системного звука (синий)
-        r = Math.min(255, Math.round(r * (1 - currentSysLevel) + 230 * currentSysLevel));
-        g = Math.min(255, Math.round(g * (1 - currentSysLevel) + 240 * currentSysLevel));
-        b = Math.min(255, Math.round(b * (1 - currentSysLevel) + 255 * currentSysLevel));
+        r = Math.round(r * (1 - sysEffect) + 220 * sysEffect); // Цель: 220, 230, 255 (насыщенный голубой)
+        g = Math.round(g * (1 - sysEffect) + 230 * sysEffect);
+        b = Math.round(b * (1 - sysEffect) + 255 * sysEffect);
         document.body.style.backgroundColor = `rgb(${r},${g},${b})`;
 
         const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
         bgGradient.addColorStop(0, '#ffffff'); // Белый сверху
-        bgGradient.addColorStop(1, '#f7f9fa'); // Очень светло-серый снизу
         bgGradient.addColorStop(1, `rgb(${r},${g},${b})`); // Динамический цвет снизу
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, chartHeight);
