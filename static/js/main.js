@@ -161,7 +161,7 @@ document.addEventListener('DOMContentLoaded', function () {
         
         // --- Логика для предварительного отображения метки времени ---
         const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
-        if (secondsUntilNextMark > 0 && secondsUntilNextMark <= 20) { // This was changed to 10 in the last request
+        if (secondsUntilNextMark > 0 && secondsUntilNextMark <= 22) { // This was changed to 10 in the last request
             // Вычисляем время будущей метки
             // Очищаем область, где будет текст, чтобы избежать наложения
             // Ширина 150px выбрана с запасом для текста

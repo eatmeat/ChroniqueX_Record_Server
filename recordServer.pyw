@@ -1402,11 +1402,17 @@ def get_date_dirs_data():
                 # --- Вычисляем начало и конец недели ---
                 start_of_week = date_obj - timedelta(days=date_obj.weekday())
                 end_of_week = start_of_week + timedelta(days=6)
-                short_months = {
-                    1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Мая', 6: 'Июн',
-                    7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек'
+                short_months_lower = {
+                    1: 'янв', 2: 'фев', 3: 'мар', 4: 'апр', 5: 'мая', 6: 'июн',
+                    7: 'июл', 8: 'авг', 9: 'сен', 10: 'окт', 11: 'ноя', 12: 'дек'
                 }
-                week_header_text = f"{start_of_week.day} {short_months[start_of_week.month]} - {end_of_week.day} {short_months[end_of_week.month]} {end_of_week.year} : Неделя №{week_number}"
+
+                if start_of_week.month == end_of_week.month:
+                    date_range_str = f"{start_of_week.day} - {end_of_week.day} {short_months_lower[end_of_week.month]} {end_of_week.year}"
+                else:
+                    date_range_str = f"{start_of_week.day} {short_months_lower[start_of_week.month]} - {end_of_week.day} {short_months_lower[end_of_week.month]} {end_of_week.year}"
+
+                week_header_text = f"{date_range_str} : Неделя №{week_number}"
                 # --- Конец вычисления ---
                 
                 # Новый формат даты: отдельно дата, отдельно день недели
