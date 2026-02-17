@@ -828,6 +828,12 @@ input[type="text"], input[type="number"], textarea {
 
 /* --- Адаптация для мобильных устройств --- */
 @media (max-width: 768px) {
+    header {
+        flex-wrap: wrap; /* Разрешаем перенос элементов */
+        justify-content: center; /* Центрируем, когда элементы перенеслись */
+        gap: 10px; /* Добавляем отступ между заголовком и статусом */
+    }
+
     body {
         padding: 0; /* Убираем отступы у body */
     }
