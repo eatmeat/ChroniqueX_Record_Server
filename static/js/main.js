@@ -182,15 +182,9 @@ document.addEventListener('DOMContentLoaded', function () {
         const seconds = now.getSeconds();
         const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
 
-        const nextMarkTime = new Date(now);
-        nextMarkTime.setMilliseconds(0);
-        nextMarkTime.setSeconds(seconds < 30 ? 30 : (Math.floor(seconds / 30) + 1) * 30);
-        if (nextMarkTime <= now) nextMarkTime.setSeconds(nextMarkTime.getSeconds() + 30);
-        const nextMarkX = width - (nextMarkTime.getTime() - endTime) / timePerPixel;
-
-        // Показываем метку за 20 секунд до события
-        // и скрываем ее, когда центр движущейся метки (nextMarkX) доезжает до центра стационарной (width - 70).
-        if (secondsUntilNextMark <= 20 && nextMarkX < (width - 70)) {
+        // Показываем "призрачную" метку за 20 секунд до события
+        // и скрываем ее ровно в момент наступления :00 или :30.
+        if (secondsUntilNextMark <= 20 && secondsUntilNextMark > 0) {
             // Показываем ТЕКУЩЕЕ время, а не будущее
             const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
