@@ -160,13 +160,56 @@ document.addEventListener('DOMContentLoaded', function () {
         const chartHeight = height - 40; // Оставляем 40px для подписей
 
         // 1. Очищаем холст и рисуем приятный фоновый градиент
+        // 1. Очищаем холст и рисуем динамический фоновый градиент
         ctx.clearRect(0, 0, width, height);
+
+        // --- Расчет цвета для динамического фона ---
+        const currentMicLevel = micHistory[micHistory.length - 1] || 0;
+        const currentSysLevel = sysHistory[sysHistory.length - 1] || 0;
+        
+        // Базовый цвет фона (светло-серый)
+        let r = 247, g = 249, b = 250; 
+        // Влияние микрофона (красный)
+        r = Math.round(r * (1 - currentMicLevel) + 231 * currentMicLevel);
+        g = Math.round(g * (1 - currentMicLevel) + 76 * currentMicLevel);
+        b = Math.round(b * (1 - currentMicLevel) + 60 * currentMicLevel);
+        // Влияние системного звука (синий)
+        r = Math.round(r * (1 - currentSysLevel) + 52 * currentSysLevel);
+        g = Math.round(g * (1 - currentSysLevel) + 152 * currentSysLevel);
+        b = Math.round(b * (1 - currentSysLevel) + 219 * currentSysLevel);
+
         const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
         bgGradient.addColorStop(0, '#ffffff'); // Белый сверху
         bgGradient.addColorStop(1, '#f7f9fa'); // Очень светло-серый снизу
+        bgGradient.addColorStop(1, `rgb(${r},${g},${b})`); // Динамический цвет снизу
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, chartHeight);
 
+        // --- Динамический фон на основе звуковых волн ---
+        const drawWaveBackground = (history, color) => {
+            const pointsToDraw = Math.min(history.length, Math.ceil(width));
+            const historySlice = history.slice(history.length - pointsToDraw);
+
+            ctx.beginPath();
+            // Начинаем с левого нижнего угла видимой части
+            ctx.moveTo(width - pointsToDraw, chartHeight); 
+
+            for (let i = 0; i < historySlice.length; i++) {
+                const value = historySlice[i] || 0;
+                const x = width - pointsToDraw + i;
+                const y = chartHeight - value * chartHeight;
+                ctx.lineTo(x, y);
+            }
+
+            // Завершаем путь в правом нижнем углу, чтобы создать замкнутую фигуру
+            ctx.lineTo(width, chartHeight);
+            ctx.closePath();
+
+            ctx.fillStyle = color;
+            ctx.fill();
+        };
+        drawWaveBackground(sysHistory, 'rgba(52, 152, 219, 0.08)'); // Полупрозрачный синий для системного звука
+        drawWaveBackground(micHistory, 'rgba(46, 204, 113, 0.08)'); // Полупрозрачный зеленый для микрофона
 
         // 2. Рисуем горизонтальную сетку
         ctx.strokeStyle = '#aaaaaa'; // Сделаем горизонтальные линии темнее
@@ -270,6 +313,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         drawLine(sysHistory, '#3498db');
         drawLine(micHistory, value => value > 0.9 ? '#e74c3c' : (value > 0.7 ? '#f39c12' : '#2ecc71'));
+        drawLine(micHistory, value => value > 0.9 ? '#ff0000' : (value > 0.7 ? '#e74c3c' : '#c0392b'));
     }
     // --- Конец функции отрисовки ---
 
