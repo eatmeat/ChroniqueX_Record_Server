@@ -259,16 +259,22 @@ h1, h2, h3, h4 {
 
 /* Стили для списка записей */
 .date-group h3 {
-    border-bottom: 2px solid #e9ecef;
-    padding-bottom: 10px;
     cursor: pointer;
     margin-top: 20px;
     /* Добавляем flex для выравнивания стрелки */
+    padding: 8px; /* Добавляем внутренние отступы */
+    border-radius: 4px; /* Скругляем углы */
+    transition: background-color 0.2s; /* Плавный переход */
     display: flex;
     align-items: center;
 }
 .date-group h3 span {
     color: #7f8c8d;
+}
+
+/* Подсветка при наведении */
+.date-group h3:hover {
+    background-color: #ecf0f1;
 }
 
 .recording-items {
@@ -291,14 +297,30 @@ h1, h2, h3, h4 {
     border-bottom: 2px solid #e9ecef;
     padding-bottom: 10px;
     cursor: pointer;
+    padding: 8px; /* Добавляем внутренние отступы */
+    border-radius: 4px; /* Скругляем углы */
+    transition: background-color 0.2s; /* Плавный переход */
     display: flex;
     align-items: center;
     font-size: 1.17em; /* Стандартный размер для h3 */
+    justify-content: space-between; /* Размещаем элементы по краям */
+}
+
+/* Центрируем текст недели, заставляя его занять все доступное место */
+.week-group h4 .week-title {
+    flex-grow: 1;
+    text-align: center;
+}
+
+/* Подсветка при наведении */
+.week-group h4:hover {
+    background-color: #ecf0f1;
 }
 
 /* Убираем нижний отступ у заголовка, когда неделя свернута, для симметрии */
 .week-group.collapsed h4 {
     margin-bottom: 0;
+    border-bottom: none; /* Убираем линию под заголовком */
 }
 
 /* Общие стили для иконки-стрелки */

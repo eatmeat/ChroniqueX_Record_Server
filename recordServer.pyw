@@ -6,7 +6,7 @@ import re
 import sys
 import platform
 from datetime import datetime
-import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Thread, Event
 import uuid
@@ -1378,31 +1378,46 @@ def get_date_dirs_data():
     if os.path.exists(rec_dir):
         date_dirs = [d for d in os.listdir(rec_dir) if os.path.isdir(os.path.join(rec_dir, d))]
         
-        day_names = {
-            0: 'Понедельник', 1: 'Вторник', 2: 'Среда', 3: 'Четверг',
-            4: 'Пятница', 5: 'Суббота', 6: 'Воскресенье'
+        # Словарь для коротких названий дней недели
+        short_day_names = {
+            0: 'Пн', 1: 'Вт', 2: 'Ср', 3: 'Чт',
+            4: 'Пт', 5: 'Сб', 6: 'Вс'
         }
         
         for date_dir in date_dirs:
             try:
                 date_obj = datetime.strptime(date_dir, '%Y-%m-%d')
-                day_of_week = day_names[date_obj.weekday()]
+                # Убираем полное название дня недели, так как оно больше не нужно
+                # day_of_week = day_names[date_obj.weekday()]
+                short_day_of_week = short_day_names[date_obj.weekday()]
+
                 # Используем strftime('%W') для нумерации недель с понедельника.
                 # Неделя 0 - это дни до первого понедельника года.
                 # Добавляем 1, чтобы нумерация была с 1, а не с 0.
                 week_number = int(date_obj.strftime('%W')) + 1
                 
+                # --- Вычисляем начало и конец недели ---
+                start_of_week = date_obj - timedelta(days=date_obj.weekday())
+                end_of_week = start_of_week + timedelta(days=6)
+                short_months = {
+                    1: 'Янв', 2: 'Фев', 3: 'Мар', 4: 'Апр', 5: 'Мая', 6: 'Июн',
+                    7: 'Июл', 8: 'Авг', 9: 'Сен', 10: 'Окт', 11: 'Ноя', 12: 'Дек'
+                }
+                week_header_text = f"{start_of_week.day} {short_months[start_of_week.month]} - {end_of_week.day} {short_months[end_of_week.month]} {end_of_week.year} : Неделя №{week_number}"
+                # --- Конец вычисления ---
+
                 months = {
                     1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля', 5: 'Мая', 6: 'Июня',
                     7: 'Июля', 8: 'Августа', 9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
                 }
-                formatted_date = f"{date_obj.day:02d} {months[date_obj.month]} {date_obj.year}"
+                # Новый формат даты: "пн : 16 Февраля"
+                formatted_date = f"{short_day_of_week} : {date_obj.day} {months[date_obj.month]}"
                 
                 date_groups.append({
                     'date': date_dir,
-                    'day_of_week': day_of_week,
                     'formatted_date': formatted_date,
                     'week_number': week_number,
+                    'week_header_text': week_header_text,
                 })
             except ValueError:
                 # If parsing fails, skip this directory

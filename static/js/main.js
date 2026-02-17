@@ -242,6 +242,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         id: weekId,
                         year: year,
                         number: group.week_number,
+                        header_text: group.week_header_text, // Сохраняем новый текст заголовка
                         dates: []
                     };
                 }
@@ -265,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     weekGroupEl.classList.add('collapsed');
                 }
 
-                weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span>Неделя ${weekData.number} (${weekData.year})</h4>`;
+                weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span><span class="week-title">${weekData.header_text}</span></h4>`;
                 recordingsListContainer.appendChild(weekGroupEl);
 
                 // Сортируем даты внутри недели по возрастанию
@@ -282,7 +283,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         groupEl.classList.add('collapsed');
                     }
                     groupEl.dataset.date = groupData.date;
-                    groupEl.innerHTML = `<h3><span class="expand-icon"></span>${groupData.formatted_date}&nbsp;<span>(${groupData.day_of_week})</span></h3>`;
+                    groupEl.innerHTML = `<h3><span class="expand-icon"></span>${groupData.formatted_date}</h3>`;
                     
                     // Добавляем пустую таблицу, которая заполнится при раскрытии
                     const tableContainer = document.createElement('div');
