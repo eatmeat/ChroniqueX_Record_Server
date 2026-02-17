@@ -159,11 +159,17 @@ document.addEventListener('DOMContentLoaded', function () {
         const height = canvas.height / dpr;
         const chartHeight = height - 40; // Оставляем 40px для подписей
 
-        // 1. Очищаем холст
+        // 1. Очищаем холст и рисуем приятный фоновый градиент
         ctx.clearRect(0, 0, width, height);
+        const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
+        bgGradient.addColorStop(0, '#ffffff'); // Белый сверху
+        bgGradient.addColorStop(1, '#f7f9fa'); // Очень светло-серый снизу
+        ctx.fillStyle = bgGradient;
+        ctx.fillRect(0, 0, width, chartHeight);
+
 
         // 2. Рисуем горизонтальную сетку
-        ctx.strokeStyle = '#ecf0f1';
+        ctx.strokeStyle = '#aaaaaa'; // Сделаем горизонтальные линии темнее
         ctx.lineWidth = 0.5;
         for (let i = 1; i < 4; i++) {
             const y = chartHeight * (i / 4);
@@ -209,7 +215,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Каждые 30 секунд - жирная линия с подписью
             if (markSeconds === 0 || markSeconds === 30) {
-                ctx.strokeStyle = '#bdc3c7';
+                ctx.strokeStyle = '#aaaaaa'; // Унифицируем цвет
                 ctx.lineWidth = 0.5;
                 ctx.beginPath();
                 ctx.moveTo(x, 0); ctx.lineTo(x, chartHeight);
@@ -220,13 +226,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 ctx.fillStyle = '#7f8c8d';
                 ctx.font = '18px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(`МСК: ${mskTime}`, x, height - 22);
-                ctx.fillText(`ИРК: ${irkTime}`, x, height - 2);
+                ctx.textAlign = 'right'; // Выравниваем по правому краю
+                ctx.fillText(`МСК: ${mskTime}`, x - 5, height - 22); // Смещаем текст на 5px левее линии
+                ctx.fillText(`ИРК: ${irkTime}`, x - 5, height - 2);
             } 
             // Каждые 5 секунд (кроме 30-секундных) - тонкая линия без подписи
             else {
-                ctx.strokeStyle = '#ecf0f1';
+                // Унифицируем цвет
+                ctx.strokeStyle = '#aaaaaa';
                 ctx.lineWidth = 0.5;
                 ctx.beginPath();
                 ctx.moveTo(x, 0); ctx.lineTo(x, chartHeight);
