@@ -219,8 +219,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 ctx.fillStyle = '#7f8c8d';
                 ctx.font = '18px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.fillText(mskTime, x, height - 22);
-                ctx.fillText(irkTime, x, height - 2);
+                ctx.fillText(`МСК: ${mskTime}`, x, height - 22);
+                ctx.fillText(`ИРК: ${irkTime}`, x, height - 2);
             } 
             // Каждые 5 секунд (кроме 30-секундных) - тонкая линия без подписи
             else {
