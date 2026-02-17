@@ -491,6 +491,7 @@ DEFAULT_SETTINGS = {
         {"id": "default1", "template": "Еженедельное собрание команды"},
         {"id": "default2", "template": "Планирование спринта"}
     ],
+    "relay_enabled": False,
     "active_meeting_name_template_id": None,
     "main_window_width": 700,
     "main_window_height": 800,
@@ -572,6 +573,11 @@ stop_event = Event()
 frames = {}
 temp_buffers = {}  # Temporary buffers for real-time mixing
 CHANNELS = 2
+
+# Очереди для real-time микширования и ретрансляции
+mic_audio_queue = queue.Queue()
+sys_audio_queue = queue.Queue()
+relay_audio_queue = queue.Queue()
 FORMAT = pyaudio.paInt16  # Keep for compatibility, though we're using sounddevice now
 
 audio_queue = queue.Queue()
@@ -1667,7 +1673,7 @@ def save_web_settings():
         # This allows partial updates (e.g., only updating contacts)
         for key in ['use_custom_prompt', 'prompt_addition', 'selected_contacts', 'context_file_rules',
                     'add_meeting_date', 'meeting_date_source', 'meeting_name_templates',
-                    'active_meeting_name_template_id']:
+                    'active_meeting_name_template_id', 'relay_enabled']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1689,6 +1695,7 @@ def get_web_settings():
         "meeting_date_source": settings.get("meeting_date_source", "current"),
         "meeting_name_templates": settings.get("meeting_name_templates", []),
         "active_meeting_name_template_id": settings.get("active_meeting_name_template_id", None),
+        "relay_enabled": settings.get("relay_enabled", False),
     }
     return jsonify(web_settings)
 
@@ -1879,6 +1886,40 @@ def resume():
     # Используем ту же функцию, что и для трея
     Thread(target=resume_recording_from_tray, args=(None, None), daemon=True).start()
     return jsonify({"status": "ok", "message": "Resume command sent."})
+
+@app.route('/relay')
+def relay_audio():
+    if not settings.get("relay_enabled", False):
+        return Response("Relay is disabled.", status=403, mimetype='text/plain')
+
+    def generate_audio():
+        # Отправляем WAV заголовок
+        # Это временный заголовок с максимальной длиной, который будет работать для потока
+        header = wave.struct.pack(
+            wave.struct.Struct('<4sL4s4sLHHLLHH4sL'),
+            b'RIFF',
+            0xFFFFFFFF,  # max size
+            b'WAVE',
+            b'fmt ',
+            16,  # PCM
+            1,  # PCM
+            2,  # channels
+            RATE,  # sample rate
+            RATE * 2 * 2,  # byte rate
+            4,  # block align
+            16,  # bits per sample
+            b'data',
+            0xFFFFFFFF  # max size
+        )
+        yield header
+        while is_recording:
+            try:
+                chunk = relay_audio_queue.get(timeout=1)
+                yield chunk
+            except queue.Empty:
+                if not is_recording:
+                    break
+    return Response(generate_audio(), mimetype='audio/wav')
 
 @app.route('/status', methods=['GET'])
 def status():
@@ -2165,7 +2206,8 @@ def update_icon(icon):
 
 def start_recording():
     """Starts a new recording session"""
-    global is_recording, start_time, stop_event, is_paused, total_pause_duration, recording_threads, RATE
+    global is_recording, start_time, stop_event, is_paused, total_pause_duration, recording_threads, RATE, \
+           mic_audio_queue, sys_audio_queue, relay_audio_queue
 
     # 1. Find devices
     try:
@@ -2199,6 +2241,11 @@ def start_recording():
     start_time = datetime.now()
     stop_event.clear()
 
+    # Очищаем очереди перед новой записью
+    mic_audio_queue = queue.Queue()
+    sys_audio_queue = queue.Queue()
+    relay_audio_queue = queue.Queue()
+
     # 3. Create temporary file paths
     script_dir = get_application_path()
     temp_dir = os.path.join(script_dir, 'rec', 'temp')
@@ -2214,16 +2261,21 @@ def start_recording():
     recording_threads = []
 
     if mic_device_index is not None:
-        mic_thread = Thread(target=recorder_mic_to_file, args=(mic_device_index, stop_event, mic_temp_file))
+        # Используем версию, которая пишет в очередь
+        mic_thread = Thread(target=recorder_mic, args=(mic_device_index, stop_event, mic_audio_queue))
         recording_threads.append(mic_thread)
         mic_thread.start()
 
     if platform.system() == "Windows":
-        sys_thread = Thread(target=recorder_sys_to_file, args=(stop_event, sys_temp_file))
+        # Используем версию, которая пишет в очередь
+        sys_thread = Thread(target=recorder_sys, args=(stop_event, sys_audio_queue))
         recording_threads.append(sys_thread)
         sys_thread.start()
 
-
+    # Запускаем поток микшера и писателя
+    mixer_thread = Thread(target=audio_mixer_and_writer, args=(stop_event, mic_temp_file, sys_temp_file))
+    recording_threads.append(mixer_thread)
+    mixer_thread.start()
 def resume_recording():
     """Resumes a paused recording session"""
     global is_paused, pause_start_time, total_pause_duration
@@ -2471,6 +2523,68 @@ def recorder_mic_to_file(device_index, stop_event, output_filename):
         print(f"Error during mic recording: {e}", file=sys.stderr)
     finally:
         print(f"Mic recording process finished for device {device_index}.")
+
+def audio_mixer_and_writer(stop_event, mic_file, sys_file):
+    """
+    Смешивает аудио из очередей в реальном времени, пишет в файлы
+    и отправляет в очередь для ретрансляции.
+    """
+    mic_has_data = False
+    sys_has_data = False
+
+    with wave.open(mic_file, 'wb') as wf_mic, wave.open(sys_file, 'wb') as wf_sys:
+        # Настройка WAV файлов
+        wf_mic.setnchannels(1)
+        wf_mic.setsampwidth(2)
+        wf_mic.setframerate(RATE)
+
+        wf_sys.setnchannels(2)
+        wf_sys.setsampwidth(2)
+        wf_sys.setframerate(RATE)
+
+        while not stop_event.is_set():
+            if is_paused:
+                time.sleep(0.1)
+                continue
+
+            try:
+                mic_data = mic_audio_queue.get_nowait()
+                wf_mic.writeframes(mic_data)
+                mic_has_data = True
+                # Преобразуем моно в стерео для микширования
+                mic_data_stereo = np.repeat(mic_data, 2, axis=1)
+            except queue.Empty:
+                mic_data = None
+                mic_data_stereo = None
+
+            try:
+                sys_data = sys_audio_queue.get_nowait()
+                wf_sys.writeframes(sys_data)
+                sys_has_data = True
+            except queue.Empty:
+                sys_data = None
+
+            # Микширование и отправка в ретрансляцию
+            if settings.get("relay_enabled"):
+                mixed_chunk = None
+                if mic_data_stereo is not None and sys_data is not None:
+                    # Убедимся, что массивы одинаковой длины
+                    min_len = min(len(mic_data_stereo), len(sys_data))
+                    # Смешиваем как float, чтобы избежать клиппинга, затем конвертируем обратно
+                    mixed_float = mic_data_stereo[:min_len].astype(np.float32) + sys_data[:min_len].astype(np.float32)
+                    mixed_float = np.clip(mixed_float, -32768, 32767)
+                    mixed_chunk = mixed_float.astype(np.int16)
+                elif mic_data_stereo is not None:
+                    mixed_chunk = mic_data_stereo
+                elif sys_data is not None:
+                    mixed_chunk = sys_data
+
+                if mixed_chunk is not None:
+                    relay_audio_queue.put(mixed_chunk.tobytes())
+
+            # Небольшая задержка, чтобы не перегружать CPU
+            if mic_data is None and sys_data is None:
+                time.sleep(0.01)
 
 def recorder_sys_to_file(stop_event, output_filename):
     """Records system audio using pyaudiowpatch and writes to a file."""
