@@ -87,6 +87,7 @@ h1, h2, h3, h4 {
 .tabs {
     display: flex;
     border-bottom: 1px solid #ccc;
+    justify-content: center; /* Центрируем вкладки */
     margin-bottom: 20px;
 }
 
@@ -823,4 +824,17 @@ input[type="text"], input[type="number"], textarea {
 /* Скрываем контент, когда блок свернут */
 .prompt-preview-container.collapsed #prompt-preview-content {
     display: none;
+}
+
+/* --- Адаптация для мобильных устройств --- */
+@media (max-width: 768px) {
+    body {
+        padding: 0; /* Убираем отступы у body */
+    }
+    .container {
+        padding-left: 10px;  /* Оставляем небольшие отступы для контента */
+        padding-right: 10px;
+        border-radius: 0; /* Убираем скругление */
+        box-shadow: none;   /* Убираем тень */
+    }
 }
