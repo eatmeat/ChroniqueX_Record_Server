@@ -11,6 +11,7 @@ from pathlib import Path
 from threading import Thread, Event
 import uuid
 import logging
+import tempfile
 
 import sounddevice as sd
 import numpy as np
