@@ -155,11 +155,9 @@ document.addEventListener('DOMContentLoaded', function () {
             // Ширина 150px выбрана с запасом для текста
             ctx.clearRect(width - 150, height - 50, 150, 50);
 
-            const futureTime = new Date(now.getTime() + secondsUntilNextMark * 1000);
-
             // Рисуем метки времени для МСК и ИРК
-            const mskTime = futureTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            const irkTime = futureTime.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
             ctx.textAlign = 'right';
             // Используем полупрозрачный цвет для "призрачной" метки
@@ -178,6 +176,9 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.moveTo(width - 1, 0);
             ctx.lineTo(width - 1, chartHeight);
             ctx.stroke();
+
+            // Очищаем область перед отрисовкой основной метки, чтобы убрать "призрачную"
+            ctx.clearRect(width - 150, height - 50, 150, 50);
 
             // Рисуем метки времени для МСК и ИРК
             const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
