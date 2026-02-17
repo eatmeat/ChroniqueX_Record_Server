@@ -147,6 +147,29 @@ document.addEventListener('DOMContentLoaded', function () {
         const seconds = now.getSeconds();
         const milliseconds = now.getMilliseconds();
         
+        // --- Логика для предварительного отображения метки времени ---
+        const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
+        if (secondsUntilNextMark > 0 && secondsUntilNextMark <= 3) {
+            // Вычисляем время будущей метки
+            // Очищаем область, где будет текст, чтобы избежать наложения
+            // Ширина 150px выбрана с запасом для текста
+            ctx.clearRect(width - 150, height - 50, 150, 50);
+
+            const futureTime = new Date(now.getTime() + secondsUntilNextMark * 1000);
+
+            // Рисуем метки времени для МСК и ИРК
+            const mskTime = futureTime.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            const irkTime = futureTime.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+            ctx.textAlign = 'right';
+            // Используем полупрозрачный цвет для "призрачной" метки
+            ctx.fillStyle = 'rgba(127, 140, 141, 0.5)'; // Полупрозрачный #7f8c8d
+            ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 25);
+            ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 5);
+        }
+        // --- Конец логики предпросмотра ---
+
+
         // Проверяем, что мы находимся в начале секунды, чтобы нарисовать метку только один раз
         if ((seconds === 0 || seconds === 30) && milliseconds < 100) { // Увеличим окно до 100мс
             ctx.strokeStyle = '#bdc3c7'; // Более заметная линия сетки
