@@ -1379,18 +1379,20 @@ def get_date_dirs_data():
     if os.path.exists(rec_dir):
         date_dirs = [d for d in os.listdir(rec_dir) if os.path.isdir(os.path.join(rec_dir, d))]
         
-        # Словарь для коротких названий дней недели
-        short_day_names = {
-            0: 'Пн', 1: 'Вт', 2: 'Ср', 3: 'Чт',
-            4: 'Пт', 5: 'Сб', 6: 'Вс'
+        # Словари для форматирования даты
+        day_names = {
+            0: 'понедельник', 1: 'вторник', 2: 'среда', 3: 'четверг',
+            4: 'пятница', 5: 'суббота', 6: 'воскресенье'
+        }
+        months_genitive = {
+            1: 'января', 2: 'февраля', 3: 'марта', 4: 'апреля', 5: 'мая', 6: 'июня',
+            7: 'июля', 8: 'августа', 9: 'сентября', 10: 'октября', 11: 'ноября', 12: 'декабря'
         }
         
         for date_dir in date_dirs:
             try:
                 date_obj = datetime.strptime(date_dir, '%Y-%m-%d')
-                # Убираем полное название дня недели, так как оно больше не нужно
-                # day_of_week = day_names[date_obj.weekday()]
-                short_day_of_week = short_day_names[date_obj.weekday()]
+                day_of_week = day_names[date_obj.weekday()]
 
                 # Используем strftime('%W') для нумерации недель с понедельника.
                 # Неделя 0 - это дни до первого понедельника года.
@@ -1406,17 +1408,14 @@ def get_date_dirs_data():
                 }
                 week_header_text = f"{start_of_week.day} {short_months[start_of_week.month]} - {end_of_week.day} {short_months[end_of_week.month]} {end_of_week.year} : Неделя №{week_number}"
                 # --- Конец вычисления ---
-
-                months = {
-                    1: 'Января', 2: 'Февраля', 3: 'Марта', 4: 'Апреля', 5: 'Мая', 6: 'Июня',
-                    7: 'Июля', 8: 'Августа', 9: 'Сентября', 10: 'Октября', 11: 'Ноября', 12: 'Декабря'
-                }
-                # Новый формат даты: "пн : 16 Февраля"
-                formatted_date = f"{short_day_of_week} : {date_obj.day} {months[date_obj.month]}"
+                
+                # Новый формат даты: отдельно дата, отдельно день недели
+                date_part = f"{date_obj.day} {months_genitive[date_obj.month]}"
                 
                 date_groups.append({
                     'date': date_dir,
-                    'formatted_date': formatted_date,
+                    'date_part': date_part,
+                    'day_of_week': day_of_week,
                     'week_number': week_number,
                     'week_header_text': week_header_text,
                 })

@@ -315,7 +315,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     weekGroupEl.classList.add('collapsed');
                 }
 
-                weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span><span class="week-title">${weekData.header_text}</span></h4>`;
+                // Разделяем заголовок на две части для выравнивания по краям
+                const headerParts = weekData.header_text.split(' : ');
+                const weekDateRange = headerParts[0] || '';
+                const weekNumberText = headerParts[1] || '';
+
+                weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span><span class="week-title">${weekDateRange}</span><span class="week-number">${weekNumberText}</span></h4>`;
+
                 recordingsListContainer.appendChild(weekGroupEl);
 
                 // Сортируем даты внутри недели по возрастанию
@@ -332,7 +338,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         groupEl.classList.add('collapsed');
                     }
                     groupEl.dataset.date = groupData.date;
-                    groupEl.innerHTML = `<h3><span class="expand-icon"></span>${groupData.formatted_date}</h3>`;
+                    groupEl.innerHTML = `
+                        <h3>
+                            <div class="date-group-left">
+                                <span class="expand-icon"></span><span class="date-group-title">${groupData.date_part}</span>
+                            </div>
+                            <span class="date-group-day">${groupData.day_of_week}</span>
+                        </h3>
+                    `;
                     
                     // Добавляем пустую таблицу, которая заполнится при раскрытии
                     const tableContainer = document.createElement('div');

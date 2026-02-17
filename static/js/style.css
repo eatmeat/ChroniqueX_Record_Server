@@ -272,6 +272,17 @@ h1, h2, h3, h4 {
     justify-content: space-between; /* Размещаем элементы по краям */
 }
 
+.date-group-title {
+    flex-grow: 1; /* Занимает доступное место, отодвигая день недели вправо */
+}
+
+.date-group-day {
+    color: #7f8c8d;
+    font-weight: normal; /* Убираем жирность у дня недели */
+    font-size: 0.9em; /* Делаем текст дня недели чуть меньше */
+    text-transform: capitalize; /* Делаем первую букву заглавной */
+}
+
 /* Подсветка при наведении */
 .date-group h3:hover {
     background-color: #ecf0f1;
