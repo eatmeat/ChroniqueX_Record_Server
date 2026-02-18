@@ -123,6 +123,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const chartHistorySize = 6000; // 300 секунд * 20 обновлений/сек = 6000 точек
     let micHistory = new Array(chartHistorySize).fill(0);
     let sysHistory = new Array(chartHistorySize).fill(0);
+    let recHistory = new Array(chartHistorySize).fill(0);
 
     function amplifyLevel(value) {
         return Math.sqrt(value);
@@ -171,6 +172,19 @@ document.addEventListener('DOMContentLoaded', function () {
         bgGradient.addColorStop(1, '#f7f9fa'); // Возвращаем статичный светло-серый цвет для фона графика
         ctx.fillStyle = bgGradient;
         ctx.fillRect(0, 0, width, chartHeight);
+
+        // --- Новый слой: индикатор записи ---
+        const recSlice = recHistory.slice(recHistory.length - Math.ceil(width));
+        ctx.fillStyle = 'rgba(192, 57, 43, 0.2)'; // Полупрозрачный красный
+        for (let i = 0; i < recSlice.length; i++) {
+            const value = recSlice[i];
+            if (value === 1) {
+                // Для каждой точки, где запись была активна, рисуем вертикальную линию шириной 1px.
+                // Это эффективно создает сплошную область.
+                const x = width - recSlice.length + i;
+                ctx.fillRect(x, 0, 1, chartHeight);
+            }
+        }
 
         // --- Динамический фон на основе звуковых волн ---
         const drawWaveBackground = (history, color) => {
@@ -292,8 +306,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 ctx.beginPath();
                 ctx.strokeStyle = typeof colorFunc === 'function' ? colorFunc(newValue) : colorFunc;
-                ctx.moveTo(x1, chartHeight - Math.min(1, prevValue * 2) * chartHeight); // Уменьшаем усиление до x2
-                ctx.lineTo(x2, chartHeight - Math.min(1, newValue * 2) * chartHeight); // Уменьшаем усиление до x2
+                ctx.moveTo(x1, chartHeight - Math.min(1, prevValue * 1) * chartHeight); // Уменьшаем усиление до x1
+                ctx.lineTo(x2, chartHeight - Math.min(1, newValue * 1) * chartHeight); // Уменьшаем усиление до x1
                 ctx.stroke();
             }
         };
@@ -321,9 +335,11 @@ document.addEventListener('DOMContentLoaded', function () {
     
             const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
             const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
+            const recValue = (currentStatus === 'rec') ? 1 : 0;
     
             micHistory.push(amplifiedMic);
             sysHistory.push(amplifiedSys);
+            recHistory.push(recValue);
             if (micHistory.length > chartHistorySize) micHistory.shift(); // Возвращаем старую логику
             if (sysHistory.length > chartHistorySize) sysHistory.shift(); // Возвращаем старую логику
 
