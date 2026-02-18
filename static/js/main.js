@@ -67,10 +67,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Update post-processing status
             if (data.post_processing.active) {
-                postProcessStatus.textContent = data.post_processing.info;
-                postProcessStatus.style.display = 'block';
+                postProcessStatus.textContent = data.post_processing.info; // Показываем текст
             } else {
-                postProcessStatus.style.display = 'none';
+                postProcessStatus.innerHTML = '&nbsp;'; // Вставляем неразрывный пробел для сохранения высоты
             }
 
         } catch (error) {
@@ -359,6 +358,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // --- Стилизация и наполнение PiP окна ---
             const pipDocument = pipWindow.document;
             const pipBody = pipDocument.body;
+            pipDocument.title = "ChroniqueX Record Server"; // Устанавливаем заголовок для PiP окна
 
             // Копируем стили из основного документа
             [...document.styleSheets].forEach(styleSheet => {
@@ -374,6 +374,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const controlsContainer = document.querySelector('.controls');
 
+            const volumeChart = document.querySelector('.volume-chart');
+            // Находим элементы статуса в основном окне
+            const statusWrapper = document.querySelector('.status-wrapper');
+            const mainHeader = document.querySelector('header');
+
             // Скрываем легенду в режиме PiP
             const legendEl = volumeMetersContainer.querySelector('.chart-legend');
             if (legendEl) legendEl.style.display = 'none';
@@ -385,11 +390,15 @@ document.addEventListener('DOMContentLoaded', function () {
             pipBody.style.padding = '0';
             pipBody.style.overflow = 'hidden'; // Принудительно скрываем полосу прокрутки
             pipBody.style.margin = '0';
+            if (statusWrapper) statusWrapper.style.alignItems = 'center'; // Центрируем контент внутри status-wrapper
             // Убираем лишние отступы у контейнеров, чтобы они не создавали скролл
-            volumeMetersContainer.style.margin = '0';
+            if (volumeChart) volumeChart.style.margin = '0';
+            if (volumeChart) volumeChart.style.width = '100%'; // Растягиваем график на всю ширину
             controlsContainer.style.padding = '10px 0'; // Добавляем отступы сверху и снизу кнопок
+            if (statusWrapper) statusWrapper.style.padding = '0 10px'; // Добавляем отступы для статуса в PiP
             controlsContainer.style.margin = '0';
-            pipBody.append(volumeMetersContainer);
+            if (statusWrapper) pipBody.append(statusWrapper); // Перемещаем статус в PiP окно
+            if (volumeChart) pipBody.append(volumeChart);
             pipBody.append(controlsContainer);
             pipBtn.classList.add('active');
 
@@ -399,6 +408,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!pipDoc) return;
 
                 const controlsEl = pipDoc.querySelector('.controls'); // Блок с кнопками
+                const statusEl = pipDoc.querySelector('.status-wrapper');
                 // const legendEl = pipDoc.querySelector('.chart-legend'); // Легенда теперь скрыта
                 const canvasEl = pipDoc.getElementById('audio-chart'); // Сам холст
 
@@ -406,13 +416,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Вычисляем доступную высоту для холста
                 const controlsHeight = controlsEl.offsetHeight;
+                const statusHeight = statusEl ? statusEl.offsetHeight : 0;
                 const legendHeight = legendEl.offsetHeight;
                 // Учитываем только отступы контейнера, так как легенда и gap между ней скрыты
-                const containerPadding = 30; // 15px сверху + 15px снизу
+                const containerPadding = 0; // volume-meters-container не перемещается
                 const controlsPadding = 20;
                 const canvasBorder = 2; // 1px сверху + 1px снизу у самого canvas
                 
-                const totalNonCanvasHeight = controlsHeight + containerPadding + canvasBorder + controlsPadding;
+                const totalNonCanvasHeight = controlsHeight + statusHeight + canvasBorder + controlsPadding;
                 const availableHeight = pipDoc.documentElement.clientHeight - totalNonCanvasHeight;
 
                 // Устанавливаем высоту, но не меньше минимального значения (например, 50px)
@@ -424,13 +435,21 @@ document.addEventListener('DOMContentLoaded', function () {
             pipWindow.addEventListener('pagehide', () => {
                 // Возвращаем элементы на основную страницу, используя сохраненные ссылки
                 const mainControlsExtensions = document.querySelector('.main-controls-extensions');
-                mainControlsExtensions.insertAdjacentElement('afterend', volumeMetersContainer); // Возвращаем график
+                if (mainHeader && statusWrapper) mainHeader.appendChild(statusWrapper); // Возвращаем статус в заголовок
                 
                 // --- Восстанавливаем стили и размеры ---
                 // Возвращаем легенду
                 if (legendEl) legendEl.style.display = '';
+                // Возвращаем отступы статуса
+                if (statusWrapper) statusWrapper.style.alignItems = ''; // Сбрасываем выравнивание
+                if (statusWrapper) statusWrapper.style.padding = '';
+                // Возвращаем график в его родительский контейнер
+                if (volumeMetersContainer && volumeChart) {
+                    volumeMetersContainer.prepend(volumeChart);
+                }
                 // Возвращаем исходные стили для отступов
-                volumeMetersContainer.style.margin = '';
+                if (volumeChart) volumeChart.style.margin = '';
+                if (volumeChart) volumeChart.style.width = ''; // Сбрасываем ширину
                 // Сбрасываем высоту холста, чтобы он принял размеры из CSS
                 const canvasEl = volumeMetersContainer.querySelector('#audio-chart');
                 if (canvasEl) canvasEl.style.height = '';
@@ -438,6 +457,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 controlsContainer.style.padding = '';
                 controlsContainer.style.margin = '';
                 mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
+                if (mainControlsExtensions) mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
                 pipBtn.classList.remove('active');
                 pipWindow = null;
             });

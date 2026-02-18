@@ -51,11 +51,18 @@ h1, h2, h3, h4 {
     100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
 }
 
+.status-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%; /* Позволяет центрировать контент внутри */
+    align-items: flex-end;
+}
+
 .post-process-status {
     font-size: 0.9em;
     color: #3498db;
-    text-align: center;
-    margin-bottom: 15px;
+    text-align: right;
+    margin-top: 5px;
 }
 
 .controls {
@@ -797,11 +804,18 @@ input[type="text"], input[type="number"], textarea {
     margin-top: 0;
     margin-bottom: 10px;
     cursor: pointer;
+    padding: 8px;
+    border-radius: 4px;
+    transition: background-color 0.2s;
 }
 
 /* Убираем нижний отступ у заголовка, когда блок свернут, для симметрии */
 .prompt-preview-container.collapsed h4 {
     margin-bottom: 0;
+}
+
+.prompt-preview-container h4:hover {
+    background-color: #ecf0f1;
 }
 
 /* Иконка для сворачивания/разворачивания предпросмотра */
