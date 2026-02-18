@@ -63,6 +63,7 @@ h1, h2, h3, h4 {
     justify-content: center;
     gap: 15px;
     margin-bottom: 20px;
+    transition: padding 0.3s ease; /* Плавный переход для отступов */
 }
 
 .control-btn {

@@ -374,18 +374,69 @@ document.addEventListener('DOMContentLoaded', function () {
 
             const controlsContainer = document.querySelector('.controls');
 
+            // Скрываем легенду в режиме PiP
+            const legendEl = volumeMetersContainer.querySelector('.chart-legend');
+            if (legendEl) legendEl.style.display = 'none';
+
             // Перемещаем график и кнопки в PiP окно
+            // Применяем Flexbox для гибкой компоновки
+            pipBody.style.display = 'flex';
+            pipBody.style.flexDirection = 'column';
+            pipBody.style.padding = '0';
+            pipBody.style.overflow = 'hidden'; // Принудительно скрываем полосу прокрутки
+            pipBody.style.margin = '0';
+            // Убираем лишние отступы у контейнеров, чтобы они не создавали скролл
+            volumeMetersContainer.style.margin = '0';
+            controlsContainer.style.padding = '10px 0'; // Добавляем отступы сверху и снизу кнопок
+            controlsContainer.style.margin = '0';
             pipBody.append(volumeMetersContainer);
             pipBody.append(controlsContainer);
-            pipBody.style.padding = '0';
-            pipBody.style.margin = '0';
             pipBtn.classList.add('active');
+
+            // --- Адаптация размера графика при изменении размера PiP окна ---
+            pipWindow.addEventListener('resize', () => {
+                const pipDoc = pipWindow.document;
+                if (!pipDoc) return;
+
+                const controlsEl = pipDoc.querySelector('.controls'); // Блок с кнопками
+                // const legendEl = pipDoc.querySelector('.chart-legend'); // Легенда теперь скрыта
+                const canvasEl = pipDoc.getElementById('audio-chart'); // Сам холст
+
+                if (!controlsEl || !legendEl || !canvasEl) return;
+
+                // Вычисляем доступную высоту для холста
+                const controlsHeight = controlsEl.offsetHeight;
+                const legendHeight = legendEl.offsetHeight;
+                // Учитываем только отступы контейнера, так как легенда и gap между ней скрыты
+                const containerPadding = 30; // 15px сверху + 15px снизу
+                const controlsPadding = 20;
+                const canvasBorder = 2; // 1px сверху + 1px снизу у самого canvas
+                
+                const totalNonCanvasHeight = controlsHeight + containerPadding + canvasBorder + controlsPadding;
+                const availableHeight = pipDoc.documentElement.clientHeight - totalNonCanvasHeight;
+
+                // Устанавливаем высоту, но не меньше минимального значения (например, 50px)
+                canvasEl.style.height = `${Math.max(20, availableHeight)}px`;
+                setupCanvas(canvasEl); // Перенастраиваем canvas с новыми размерами
+            });
 
             // --- Обработка закрытия окна ---
             pipWindow.addEventListener('pagehide', () => {
                 // Возвращаем элементы на основную страницу, используя сохраненные ссылки
                 const mainControlsExtensions = document.querySelector('.main-controls-extensions');
                 mainControlsExtensions.insertAdjacentElement('afterend', volumeMetersContainer); // Возвращаем график
+                
+                // --- Восстанавливаем стили и размеры ---
+                // Возвращаем легенду
+                if (legendEl) legendEl.style.display = '';
+                // Возвращаем исходные стили для отступов
+                volumeMetersContainer.style.margin = '';
+                // Сбрасываем высоту холста, чтобы он принял размеры из CSS
+                const canvasEl = volumeMetersContainer.querySelector('#audio-chart');
+                if (canvasEl) canvasEl.style.height = '';
+                setupCanvas(audioChartCanvas); // Перенастраиваем холст под его оригинальные размеры
+                controlsContainer.style.padding = '';
+                controlsContainer.style.margin = '';
                 mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
                 pipBtn.classList.remove('active');
                 pipWindow = null;
