@@ -417,10 +417,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Вычисляем доступную высоту для холста
                 const controlsHeight = controlsEl.offsetHeight;
                 const statusHeight = statusEl ? statusEl.offsetHeight : 0;
-                const legendHeight = legendEl.offsetHeight;
                 // Учитываем только отступы контейнера, так как легенда и gap между ней скрыты
-                const containerPadding = 0; // volume-meters-container не перемещается
-                const controlsPadding = 20;
+                const controlsPadding = 0;
                 const canvasBorder = 2; // 1px сверху + 1px снизу у самого canvas
                 
                 const totalNonCanvasHeight = controlsHeight + statusHeight + canvasBorder + controlsPadding;
