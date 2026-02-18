@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
             for (let i = 0; i < historySlice.length; i++) {
                 const value = historySlice[i] || 0;
                 const x = width - pointsToDraw + i;
-                const y = chartHeight - Math.min(1, value * 2) * chartHeight; // Уменьшаем усиление до x2
+                const y = chartHeight - Math.min(1, value * 1) * chartHeight; // Уменьшаем усиление до x1
                 ctx.lineTo(x, y);
             }
 
