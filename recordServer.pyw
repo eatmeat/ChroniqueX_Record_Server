@@ -2763,6 +2763,27 @@ def make_hyperlink(widget):
     widget.tag_bind("hyperlink", "<Leave>", leave_link)
     widget.tag_bind("hyperlink", "<Button-1>", click_link)
 
+def _suppress_subprocess_window():
+    """
+    "Оборачивает" subprocess.Popen, чтобы подавить появление консольных окон в Windows
+    при вызове внешних программ, таких как ffmpeg из pydub.
+    """
+    if platform.system() == "Windows":
+        try:
+            import subprocess
+            
+            original_popen = subprocess.Popen
+
+            def new_popen(*args, **kwargs):
+                # Добавляем флаг CREATE_NO_WINDOW, если он еще не задан
+                if 'creationflags' not in kwargs:
+                    kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+                return original_popen(*args, **kwargs)
+
+            subprocess.Popen = new_popen
+        except Exception as e:
+            print(f"Не удалось применить патч для скрытия окон subprocess: {e}")
+
 if __name__ == '__main__':
     # --- Проверка на запуск только одного экземпляра приложения ---
     if CreateMutex:
@@ -2779,6 +2800,7 @@ if __name__ == '__main__':
     else:
         print("Предупреждение: библиотека pywin32 не установлена. Проверка на запуск единственного экземпляра отключена.")
 
+    _suppress_subprocess_window()
     setup_logging()
     load_settings()
     load_contacts()
