@@ -25,6 +25,15 @@ header {
     margin-bottom: 20px;
 }
 
+/* Заставляем элементы форм наследовать шрифт */
+input, button, textarea {
+    font-family: inherit;
+    font-weight: inherit;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
 h1, h2, h3, h4 {
     color: #2c3e50;
 }
@@ -115,12 +124,15 @@ h1, h2, h3, h4 {
     border: none;
     background-color: transparent;
     border-bottom: 3px solid transparent;    
-    font-size: 1.7em; /* Увеличенный размер для десктопа */
+    font-size: 1.4em; /* Увеличенный размер для десктопа */
+    text-align: center; /* Центрируем текст внутри вкладки */
+    flex-basis: 0;      /* Устанавливаем базовую ширину в 0 */
+    flex-grow: 1;       /* Позволяем вкладкам равномерно расти */
 }
 
 .tab-link.active {
     border-bottom-color: #3498db;
-    font-weight: bold;
+    /*font-weight: bold;*/
 }
 
 .tab-content { display: none; }

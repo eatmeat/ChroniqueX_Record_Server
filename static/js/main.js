@@ -132,6 +132,10 @@ document.addEventListener('DOMContentLoaded', function () {
     let frameCount = 0;
     const scrollInterval = 1; // Уменьшаем до 1 для максимальной плавности (обновление каждые 50мс)
 
+    // Переменные для плавного изменения цвета фона
+    let currentBgR = 244, currentBgG = 247, currentBgB = 249;
+    const colorChangeFactor = 0.1; // Фактор сглаживания (меньше = плавнее)
+
     // --- Новая, полностью переработанная функция отрисовки графика (v3) ---
     // Эта версия рисует временные метки, которые движутся вместе с графиком.
     function redrawMovingChart() {
@@ -151,21 +155,25 @@ document.addEventListener('DOMContentLoaded', function () {
         const currentMicLevel = micHistory[micHistory.length - 1] || 0;
         const currentSysLevel = sysHistory[sysHistory.length - 1] || 0;
 
-        // Увеличиваем множитель и используем более агрессивную функцию для усиления эффекта
         const micEffect = Math.min(1, currentMicLevel * 2.5);
         const sysEffect = Math.min(1, currentSysLevel * 2.5);
 
-        // Базовый цвет фона (очень светлый)
-        let r = 244, g = 247, b = 249;
-        // Влияние микрофона (красный)
-        r = Math.round(r * (1 - micEffect) + 255 * micEffect); // Цель: более яркий розовый (255, 210, 210)
-        g = Math.round(g * (1 - micEffect) + 210 * micEffect);
-        b = Math.round(b * (1 - micEffect) + 210 * micEffect);
-        // Влияние системного звука (синий)
-        r = Math.round(r * (1 - sysEffect) + 210 * sysEffect); // Цель: более яркий голубой (210, 225, 255)
-        g = Math.round(g * (1 - sysEffect) + 225 * sysEffect);
-        b = Math.round(b * (1 - sysEffect) + 255 * sysEffect);
-        document.body.style.backgroundColor = `rgb(${r},${g},${b})`;
+        // 1. Рассчитываем ЦЕЛЕВОЙ цвет на основе текущих уровней
+        let targetR = 244, targetG = 247, targetB = 249; // Базовый цвет
+        // Эффект микрофона (красноватый)
+        targetR = targetR * (1 - micEffect) + 255 * micEffect;
+        targetG = targetG * (1 - micEffect) + 210 * micEffect;
+        targetB = targetB * (1 - micEffect) + 210 * micEffect;
+        // Эффект системного звука (голубоватый)
+        targetR = targetR * (1 - sysEffect) + 210 * sysEffect;
+        targetG = targetG * (1 - sysEffect) + 225 * sysEffect;
+        targetB = targetB * (1 - sysEffect) + 255 * sysEffect;
+
+        // 2. Плавно переходим от ТЕКУЩЕГО цвета к ЦЕЛЕВОМУ
+        currentBgR += (targetR - currentBgR) * colorChangeFactor;
+        currentBgG += (targetG - currentBgG) * colorChangeFactor;
+        currentBgB += (targetB - currentBgB) * colorChangeFactor;
+        document.body.style.backgroundColor = `rgb(${Math.round(currentBgR)},${Math.round(currentBgG)},${Math.round(currentBgB)})`;
 
         const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
         bgGradient.addColorStop(0, '#ffffff'); // Белый сверху
@@ -1517,7 +1525,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Сохраняем изменения, только если они были
-        if (selectionChanged) await saveContactSelection();
+        if (selectionChanged) await saveContactSelection().then(updatePromptPreview);
 
         // Обновляем счетчик после всех изменений
         if (updateCounterCallback) updateCounterCallback();
