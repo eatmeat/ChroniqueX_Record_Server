@@ -29,25 +29,6 @@ document.addEventListener('DOMContentLoaded', function () {
     // --- Recording Status and Controls ---
     let currentStatus = 'stop';
     let audioContext;
-    let audioSource;
-    let audioPlayer = new Audio();
-
-    function stopRelay() {
-        if (audioPlayer) {
-            audioPlayer.pause();
-            audioPlayer.src = ''; // Освобождаем ресурсы
-        }
-    }
-
-    function startRelay() {
-        stopRelay(); // Останавливаем предыдущий поток, если он был
-        // Добавляем случайный параметр, чтобы избежать кэширования
-        audioPlayer.src = `/relay?v=${new Date().getTime()}`;
-        audioPlayer.play().catch(e => {
-            console.error("Ошибка воспроизведения аудио-ретрансляции:", e);
-            // В некоторых браузерах для автозапуска требуется взаимодействие с пользователем
-        });
-    }
 
     async function updateStatus() {
         try {
@@ -61,21 +42,16 @@ document.addEventListener('DOMContentLoaded', function () {
             statusIndicator.className = 'status-indicator ' + data.status;
             switch (data.status) {
                 case 'rec':
-                    statusText.textContent = 'Запись';
-                    if (document.getElementById('relay-enabled-checkbox')?.checked && audioPlayer.paused) {
-                        startRelay();
-                    }
+                    statusText.textContent = 'Запись';                    
                     volumeMetersContainer.classList.add('recording');
                     break;
                 case 'pause':
                     statusText.textContent = 'Пауза';
-                    stopRelay();
                     volumeMetersContainer.classList.remove('recording');
                     break;
                 case 'stop':
                 default:
                     statusText.textContent = 'Остановлено';
-                    stopRelay();
                     volumeMetersContainer.classList.remove('recording');
                     break;
             }
@@ -166,19 +142,19 @@ document.addEventListener('DOMContentLoaded', function () {
         const currentMicLevel = micHistory[micHistory.length - 1] || 0;
         const currentSysLevel = sysHistory[sysHistory.length - 1] || 0;
 
-        // Усиливаем влияние уровня звука для более заметного эффекта
-        const micEffect = Math.min(1, currentMicLevel * 1.5);
-        const sysEffect = Math.min(1, currentSysLevel * 1.5);
+        // Увеличиваем множитель и используем более агрессивную функцию для усиления эффекта
+        const micEffect = Math.min(1, currentMicLevel * 2.5);
+        const sysEffect = Math.min(1, currentSysLevel * 2.5);
 
         // Базовый цвет фона (очень светлый)
         let r = 244, g = 247, b = 249;
         // Влияние микрофона (красный)
-        r = Math.round(r * (1 - micEffect) + 255 * micEffect); // Цель: 255, 220, 220 (насыщенный розовый)
-        g = Math.round(g * (1 - micEffect) + 220 * micEffect);
-        b = Math.round(b * (1 - micEffect) + 220 * micEffect);
+        r = Math.round(r * (1 - micEffect) + 255 * micEffect); // Цель: более яркий розовый (255, 210, 210)
+        g = Math.round(g * (1 - micEffect) + 210 * micEffect);
+        b = Math.round(b * (1 - micEffect) + 210 * micEffect);
         // Влияние системного звука (синий)
-        r = Math.round(r * (1 - sysEffect) + 220 * sysEffect); // Цель: 220, 230, 255 (насыщенный голубой)
-        g = Math.round(g * (1 - sysEffect) + 230 * sysEffect);
+        r = Math.round(r * (1 - sysEffect) + 210 * sysEffect); // Цель: более яркий голубой (210, 225, 255)
+        g = Math.round(g * (1 - sysEffect) + 225 * sysEffect);
         b = Math.round(b * (1 - sysEffect) + 255 * sysEffect);
         document.body.style.backgroundColor = `rgb(${r},${g},${b})`;
 
@@ -674,7 +650,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const addMeetingDateCheckbox = document.getElementById('add-meeting-date');
     const meetingDateSourceGroup = document.getElementById('meeting-date-source-group');
     const meetingNameTemplatesContainer = document.getElementById('meeting-name-templates-container');
-    const relaySettingsContainer = document.getElementById('relay-settings-container');
     const addMeetingNameTemplateBtn = document.getElementById('add-meeting-name-template-btn');
 
     async function loadSettings() {
@@ -686,7 +661,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const dateSourceRadio = document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
         if (dateSourceRadio) dateSourceRadio.checked = true;
 
-        renderRelaySettings(settings.relay_enabled);
         renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         toggleMeetingDateSourceVisibility();
     }
@@ -729,8 +703,7 @@ document.addEventListener('DOMContentLoaded', function () {
             add_meeting_date: addMeetingDateCheckbox.checked,
             meeting_date_source: document.querySelector('input[name="meeting_date_source"]:checked').value,
             meeting_name_templates: getMeetingNameTemplatesFromDOM(),
-            active_meeting_name_template_id: document.querySelector('input[name="active_meeting_name_template"]:checked')?.value || null,
-            relay_enabled: document.getElementById('relay-enabled-checkbox').checked,
+            active_meeting_name_template_id: document.querySelector('input[name="active_meeting_name_template"]:checked')?.value || null,            
             context_file_rules: contextFileRules,
             // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
@@ -759,22 +732,6 @@ document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
         radio.addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
     });
-
-    function renderRelaySettings(isRelayEnabled) {
-        relaySettingsContainer.innerHTML = `
-            <label class="relay-label">
-                <input type="checkbox" id="relay-enabled-checkbox" name="relay_enabled" ${isRelayEnabled ? 'checked' : ''}>
-                <span class="relay-icon"></span>
-                Прослушивание
-            </label>
-        `;
-        const relayCheckbox = document.getElementById('relay-enabled-checkbox');
-        relayCheckbox.addEventListener('change', () => {
-            saveSettings();
-            if (!relayCheckbox.checked) stopRelay();
-        });
-    }
-
 
     function toggleMeetingDateSourceVisibility() { meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; }
 
@@ -961,7 +918,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const settings = await settingsRes.json();
         selectedContactIds = settings.selected_contacts || [];
         renderContacts();
-        renderRelaySettings(settings.relay_enabled);
         renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         renderContextFileRules(settings.context_file_rules);
         updatePromptPreview();
