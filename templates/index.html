@@ -15,7 +15,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>ChroniqueX Record Server</h1>
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="ChroniqueX Record Server" class="header-logo">
             <div class="status-wrapper">
                 <div class="status-container">
                     <div id="status-indicator" class="status-indicator stop"></div>
@@ -48,7 +48,7 @@
         </div>
 
         <div id="prompt-preview-container" class="prompt-preview-container" style="display: none;">
-            <h4>Предпросмотр добавки к промпту</h4>
+            <h4>Дополнение промпта</h4>
             <pre id="prompt-preview-content"></pre>
         </div>
         
@@ -135,16 +135,16 @@
 
             <div id="contacts-tab" class="tab-content">
                 <p class="prompt-info">Выбранные участники будут добавлены в промпт для генерации протокола. Их количество будет использовано для определения числа спикеров при транскрибации.</p>
-                
-                <div id="contacts-list-container">
-                    <!-- Контакты будут загружены сюда через JS -->
-                </div>
-
+ 
                 <div class="contacts-management">
                     <div class="add-item-row">
                         <input type="text" id="new-group-name" class="add-item-input" placeholder="Название новой группы...">
                         <button id="add-group-btn" class="action-btn">Добавить</button>
                     </div>
+                </div>
+
+                <div id="contacts-list-container">
+                    <!-- Контакты будут загружены сюда через JS -->
                 </div>
             </div>
         </main>

@@ -375,13 +375,16 @@ document.addEventListener('DOMContentLoaded', function () {
             const controlsContainer = document.querySelector('.controls');
 
             const volumeChart = document.querySelector('.volume-chart');
-            // Находим элементы статуса в основном окне
+            // Находим элементы статуса в основном окне и его клон для PiP
             const statusWrapper = document.querySelector('.status-wrapper');
             const mainHeader = document.querySelector('header');
 
             // Скрываем легенду в режиме PiP
             const legendEl = volumeMetersContainer.querySelector('.chart-legend');
             if (legendEl) legendEl.style.display = 'none';
+
+            // Скрываем контейнер графика в основном окне
+            if (volumeMetersContainer) volumeMetersContainer.style.display = 'none';
 
             // Перемещаем график и кнопки в PiP окно
             // Применяем Flexbox для гибкой компоновки
@@ -392,12 +395,15 @@ document.addEventListener('DOMContentLoaded', function () {
             pipBody.style.margin = '0';
             if (statusWrapper) statusWrapper.style.alignItems = 'center'; // Центрируем контент внутри status-wrapper
             // Убираем лишние отступы у контейнеров, чтобы они не создавали скролл
+            if (statusWrapper) statusWrapper.style.display = 'none'; // Скрываем оригинал, а не перемещаем
             if (volumeChart) volumeChart.style.margin = '0';
             if (volumeChart) volumeChart.style.width = '100%'; // Растягиваем график на всю ширину
             controlsContainer.style.padding = '10px 0'; // Добавляем отступы сверху и снизу кнопок
-            if (statusWrapper) statusWrapper.style.padding = '0 10px'; // Добавляем отступы для статуса в PiP
+            const pipStatusWrapper = statusWrapper ? statusWrapper.cloneNode(true) : null;
+            if (pipStatusWrapper) pipStatusWrapper.style.display = 'flex'; // Убедимся, что клон видим
+            if (pipStatusWrapper) pipStatusWrapper.style.padding = '0 10px'; // Добавляем отступы для статуса в PiP
             controlsContainer.style.margin = '0';
-            if (statusWrapper) pipBody.append(statusWrapper); // Перемещаем статус в PiP окно
+            if (pipStatusWrapper) pipBody.append(pipStatusWrapper); // Перемещаем клон статуса в PiP окно
             if (volumeChart) pipBody.append(volumeChart);
             pipBody.append(controlsContainer);
             pipBtn.classList.add('active');
@@ -408,7 +414,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (!pipDoc) return;
 
                 const controlsEl = pipDoc.querySelector('.controls'); // Блок с кнопками
-                const statusEl = pipDoc.querySelector('.status-wrapper');
+                const statusEl = pipDoc.querySelector('.status-wrapper'); // Используем клон
                 // const legendEl = pipDoc.querySelector('.chart-legend'); // Легенда теперь скрыта
                 const canvasEl = pipDoc.getElementById('audio-chart'); // Сам холст
 
@@ -432,15 +438,16 @@ document.addEventListener('DOMContentLoaded', function () {
             // --- Обработка закрытия окна ---
             pipWindow.addEventListener('pagehide', () => {
                 // Возвращаем элементы на основную страницу, используя сохраненные ссылки
-                const mainControlsExtensions = document.querySelector('.main-controls-extensions');
-                if (mainHeader && statusWrapper) mainHeader.appendChild(statusWrapper); // Возвращаем статус в заголовок
+                if (statusWrapper) statusWrapper.style.display = ''; // Показываем оригинал обратно
                 
                 // --- Восстанавливаем стили и размеры ---
                 // Возвращаем легенду
                 if (legendEl) legendEl.style.display = '';
-                // Возвращаем отступы статуса
-                if (statusWrapper) statusWrapper.style.alignItems = ''; // Сбрасываем выравнивание
-                if (statusWrapper) statusWrapper.style.padding = '';
+                // Показываем контейнер графика в основном окне
+                if (volumeMetersContainer) volumeMetersContainer.style.display = '';
+
+                // Возвращаем исходные стили для статуса
+                if (statusWrapper) statusWrapper.style.alignItems = '';
                 // Возвращаем график в его родительский контейнер
                 if (volumeMetersContainer && volumeChart) {
                     volumeMetersContainer.prepend(volumeChart);
@@ -453,8 +460,9 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (canvasEl) canvasEl.style.height = '';
                 setupCanvas(audioChartCanvas); // Перенастраиваем холст под его оригинальные размеры
                 controlsContainer.style.padding = '';
-                controlsContainer.style.margin = '';
-                mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
+                // controlsContainer.style.margin = ''; // Этот стиль не менялся, сбрасывать не нужно
+                controlsContainer.style.margin = ''; // Восстанавливаем margin, включая margin-bottom
+                const mainControlsExtensions = document.querySelector('.main-controls-extensions');
                 if (mainControlsExtensions) mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
                 pipBtn.classList.remove('active');
                 pipWindow = null;

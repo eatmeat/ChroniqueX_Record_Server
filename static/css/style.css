@@ -29,6 +29,12 @@ h1, h2, h3, h4 {
     color: #2c3e50;
 }
 
+.header-logo {
+    max-width: 350px; /* Ограничиваем максимальную ширину */
+    height: auto;     /* Высота подстроится автоматически для сохранения пропорций */
+    flex-shrink: 2;   /* Позволяем логотипу сжиматься, если не хватает места */
+}
+
 .status-container {
     display: flex;
     align-items: center;
@@ -125,6 +131,12 @@ h1, h2, h3, h4 {
     margin-bottom: 15px;
     border-right: 1px solid #e0e0e0; /* Добавляем линию справа */
     padding-right: 15px; /* Добавляем отступ справа от контента до линии */
+    /* Стили как у week-group для консистентности */
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #fdfdfd;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05);
 }
 
 .contact-group-header {
@@ -226,7 +238,10 @@ h1, h2, h3, h4 {
     align-items: center;
     margin-top: 10px;
     padding-top: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     border-top: 1px dashed #e0e0e0;
+    border-bottom: 1px dashed #e0e0e0;
 }
 
 /* Стили для инпутов в строках добавления */
@@ -579,10 +594,11 @@ input[type="text"], input[type="number"], textarea {
     grid-template-columns: 1fr;
     gap: 10px;
     margin-bottom: 20px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border-radius: 5px;
-    border: 1px solid #e9ecef;
+    padding: 15px; /* Отступы как у week-group */
+    background-color: #fdfdfd; /* Фон как у week-group */
+    border-radius: 8px; /* Скругление как у week-group */
+    border: 1px solid #e0e0e0; /* Рамка как у week-group */
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05); /* Тень как у week-group */
     transition: background-color 0.3s ease;
 }
 
@@ -791,10 +807,11 @@ input[type="text"], input[type="number"], textarea {
 .prompt-preview-container {
     margin-top: 20px;
     margin-bottom: 20px;
-    padding: 15px;
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 5px;
+    padding: 15px; /* Отступы как у week-group */
+    background-color: #fdfdfd; /* Фон как у week-group */
+    border: 1px solid #e0e0e0; /* Рамка как у week-group */
+    border-radius: 8px; /* Скругление как у week-group */
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05); /* Тень как у week-group */
 }
 
 .prompt-preview-container h4 {
@@ -805,6 +822,7 @@ input[type="text"], input[type="number"], textarea {
     margin-bottom: 10px;
     cursor: pointer;
     padding: 8px;
+    font-size: 1.17em; /* Размер как у заголовка недели */
     border-radius: 4px;
     transition: background-color 0.2s;
 }
