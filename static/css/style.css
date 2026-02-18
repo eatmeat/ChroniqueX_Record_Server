@@ -621,6 +621,7 @@ input[type="text"], input[type="number"], textarea {
 
 .legend-item.mic .legend-color {
     background-color: #2ecc71;
+    background-color: #c0392b; /* Изменяем цвет на красный, как у графика */
 }
 
 .legend-item.sys .legend-color {
