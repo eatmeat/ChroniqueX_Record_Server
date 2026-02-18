@@ -1418,7 +1418,7 @@ def get_date_dirs_data():
                 else:
                     date_range_str = f"{start_of_week.day} {short_months_lower[start_of_week.month]} - {end_of_week.day} {short_months_lower[end_of_week.month]} {end_of_week.year}"
 
-                week_header_text = f"{date_range_str} : Неделя №{week_number}"
+                week_header_text = f"{date_range_str} : неделя №{week_number}"
                 # --- Конец вычисления ---
                 
                 # Новый формат даты: отдельно дата, отдельно день недели

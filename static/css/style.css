@@ -1,9 +1,9 @@
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Ubuntu', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-weight: 500; /* Medium weight for Ubuntu */
     background-color: #f4f7f9;
     color: #333;
     margin: 0;
-    transition: background-color 0.5s ease; /* Плавный переход для цвета фона */
     padding: 20px;
 }
 
@@ -115,7 +115,7 @@ h1, h2, h3, h4 {
     border: none;
     background-color: transparent;
     border-bottom: 3px solid transparent;    
-    font-size: 2em; /* Увеличенный размер для десктопа */
+    font-size: 1.7em; /* Увеличенный размер для десктопа */
 }
 
 .tab-link.active {
