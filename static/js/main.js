@@ -11,6 +11,11 @@ document.addEventListener('DOMContentLoaded', function () {
     const favicon = document.getElementById('favicon');
     const volumeMetersContainer = document.querySelector('.volume-meters-container');
 
+    // Скрываем кнопку PiP, если API не поддерживается
+    if (!('documentPictureInPicture' in window)) {
+        if (pipBtn) pipBtn.style.display = 'none';
+    }
+
     // --- Tabs ---
     const tabLinks = document.querySelectorAll('.tab-link');
     const tabContents = document.querySelectorAll('.tab-content');
