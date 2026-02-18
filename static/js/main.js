@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const recBtn = document.getElementById('rec-btn');
     const pauseBtn = document.getElementById('pause-btn');
     const stopBtn = document.getElementById('stop-btn');
+    const pipBtn = document.getElementById('pip-btn');
     const favicon = document.getElementById('favicon');
     const volumeMetersContainer = document.querySelector('.volume-meters-container');
 
@@ -331,6 +332,66 @@ document.addEventListener('DOMContentLoaded', function () {
     }
     // --- Конец разделения ---
 
+
+    // --- Picture-in-Picture (PiP) Logic ---
+    let pipWindow = null;
+
+    pipBtn.addEventListener('click', async () => {
+        // Проверяем, поддерживается ли API
+        if (!('documentPictureInPicture' in window)) {
+            alert('Ваш браузер не поддерживает режим "Картинка в картинке" для HTML-элементов.');
+            return;
+        }
+
+        // Если окно уже открыто, закрываем его
+        if (pipWindow) {
+            pipWindow.close();
+            return;
+        }
+
+        try {
+            // Запрашиваем новое окно PiP
+            pipWindow = await window.documentPictureInPicture.requestWindow({
+                width: audioChartCanvas.width / (window.devicePixelRatio || 1),
+                height: audioChartCanvas.height / (window.devicePixelRatio || 1),
+            });
+
+            // --- Стилизация и наполнение PiP окна ---
+            const pipDocument = pipWindow.document;
+            const pipBody = pipDocument.body;
+
+            // Копируем стили из основного документа
+            [...document.styleSheets].forEach(styleSheet => {
+                try {
+                    const cssRules = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
+                    const style = pipDocument.createElement('style');
+                    style.textContent = cssRules;
+                    pipBody.appendChild(style);
+                } catch (e) {
+                    console.warn('Не удалось скопировать стили для PiP окна:', e);
+                }
+            });
+
+            const controlsContainer = document.querySelector('.controls');
+
+            // Перемещаем график и кнопки в PiP окно
+            pipBody.append(volumeMetersContainer);
+            pipBody.append(controlsContainer);
+            pipBody.style.padding = '0';
+            pipBody.style.margin = '0';
+            pipBtn.classList.add('active');
+
+            // --- Обработка закрытия окна ---
+            pipWindow.addEventListener('pagehide', () => {
+                // Возвращаем элементы на основную страницу, используя сохраненные ссылки
+                const mainControlsExtensions = document.querySelector('.main-controls-extensions');
+                mainControlsExtensions.insertAdjacentElement('afterend', volumeMetersContainer); // Возвращаем график
+                mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
+                pipBtn.classList.remove('active');
+                pipWindow = null;
+            });
+        } catch (error) { console.error('Ошибка при открытии PiP окна:', error); }
+    });
 
     recBtn.addEventListener('click', () => fetch(currentStatus === 'pause' ? '/resume' : '/rec'));
     pauseBtn.addEventListener('click', () => fetch('/pause'));
