@@ -114,8 +114,8 @@ h1, h2, h3, h4 {
     cursor: pointer;
     border: none;
     background-color: transparent;
-    border-bottom: 3px solid transparent;
-    font-size: 1em;
+    border-bottom: 3px solid transparent;    
+    font-size: 2em; /* Увеличенный размер для десктопа */
 }
 
 .tab-link.active {
@@ -934,5 +934,9 @@ input[type="text"], input[type="number"], textarea {
         padding-right: 10px;
         border-radius: 0; /* Убираем скругление */
         box-shadow: none;   /* Убираем тень */
+    }
+
+    .tab-link {
+        font-size: 1em; /* Возвращаем исходный размер для мобильных */
     }
 }
