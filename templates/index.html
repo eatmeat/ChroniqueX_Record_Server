@@ -86,50 +86,65 @@
 
             <div id="settings-tab" class="tab-content">
                 <form id="settings-form">
-                    <h3>Дата собрания</h3>
-                    <div class="form-group">
-                        <label>
-                            <input type="checkbox" id="add-meeting-date" name="add_meeting_date">
-                            Добавлять дату в начало промпта (в формате <code># Дата собрания: ...</code>)
-                        </label>
-                    </div>
-                    <div class="form-group" id="meeting-date-source-group">
-                        <label><input type="radio" name="meeting_date_source" value="current"> Текущая дата</label>
-                        <label><input type="radio" name="meeting_date_source" value="folder"> Дата из папки с записью</label>
+                    <div class="settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Дата собрания</h4>
+                        <div class="settings-group-content">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="add-meeting-date" name="add_meeting_date">
+                                    Добавлять дату в начало промпта (в формате <code># Дата собрания: ...</code>)
+                                </label>
+                            </div>
+                            <div class="form-group" id="meeting-date-source-group">
+                                <label><input type="radio" name="meeting_date_source" value="current"> Текущая дата</label>
+                                <label><input type="radio" name="meeting_date_source" value="folder"> Дата из папки с записью</label>
+                            </div>
+                        </div>
                     </div>
 
-                    <h3>Название собрания</h3>
-                    <div id="meeting-name-templates-container">
-                        <!-- Шаблоны будут отрисованы здесь с помощью JS -->
+                    <div class="settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Название собрания</h4>
+                        <div class="settings-group-content">
+                            <div id="meeting-name-templates-container">
+                                <!-- Шаблоны будут отрисованы здесь с помощью JS -->
+                            </div>
+                            <button type="button" id="add-meeting-name-template-btn" class="action-btn">Добавить шаблон</button>
+                        </div>
                     </div>
-                    <button type="button" id="add-meeting-name-template-btn" class="action-btn">Добавить шаблон</button>
 
-                    <h3>Правила для файлов контекста</h3>
-                    <div class="prompt-info">
-                        <p>Здесь можно настроить, какие файлы из папки с записью будут добавлены в контекст. В шаблоне имени файла можно использовать:</p>
-                        <ul>
-                            <li><code>*</code> — заменяет любую последовательность символов (например, <code>*.txt</code>).</li>
-                            <li><code>?</code> — заменяет один любой символ (например, <code>report_?.doc</code>).</li>
-                            <li><code>[]</code> — заменяет один из символов в скобках (например, <code>img[123].png</code>).</li>
-                        </ul>
-                        <p>Доступные плейсхолдеры в "Добавке к промпту": <code>{filename}</code>, <code>{content}</code>.</p>
-                    </div>
-                    <div id="context-file-rules-container"></div>
-                    <button type="button" id="add-context-rule-btn" class="action-btn">Добавить правило</button>
-                    
-                    <h3>Дополнение к промпту</h3>
-                    <div class="form-group">
-                        <label for="use-custom-prompt">
-                            <input type="checkbox" id="use-custom-prompt" name="use_custom_prompt">
-                            Использовать дополнение к промпту
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
-                        <p>Строки, начинающиеся с <code>//</code>, будут проигнорированы.</p>
-                        <textarea id="prompt-addition" name="prompt_addition" rows="20"></textarea>                    
+                    <div class="settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Правила для файлов контекста</h4>
+                        <div class="settings-group-content">
+                            <div class="prompt-info">
+                                <p>Здесь можно настроить, какие файлы из папки с записью будут добавлены в контекст. В шаблоне имени файла можно использовать:</p>
+                                <ul>
+                                    <li><code>*</code> — заменяет любую последовательность символов (например, <code>*.txt</code>).</li>
+                                    <li><code>?</code> — заменяет один любой символ (например, <code>report_?.doc</code>).</li>
+                                    <li><code>[]</code> — заменяет один из символов в скобках (например, <code>img[123].png</code>).</li>
+                                </ul>
+                                <p>Доступные плейсхолдеры в "Добавке к промпту": <code>{filename}</code>, <code>{content}</code>.</p>
+                            </div>
+                            <div id="context-file-rules-container"></div>
+                            <button type="button" id="add-context-rule-btn" class="action-btn">Добавить правило</button>
+                        </div>
                     </div>
                     
+                    <div class="settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Дополнение к промпту</h4>
+                        <div class="settings-group-content">
+                            <div class="form-group">
+                                <label for="use-custom-prompt">
+                                    <input type="checkbox" id="use-custom-prompt" name="use_custom_prompt">
+                                    Использовать дополнение к промпту
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <p>Доступные плейсхолдеры: <code>{current_date}</code> - текущая дата.</p>
+                                <p>Строки, начинающиеся с <code>//</code>, будут проигнорированы.</p>
+                                <textarea id="prompt-addition" name="prompt_addition" rows="20"></textarea>                    
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
 

@@ -358,6 +358,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Picture-in-Picture (PiP) Logic ---
     let pipWindow = null;
+    let chartPlaceholder = null; // Placeholder for the chart container
+    let controlsPlaceholder = null; // Placeholder for the controls
 
     pipBtn.addEventListener('click', async () => {
         // Проверяем, поддерживается ли API
@@ -403,12 +405,49 @@ document.addEventListener('DOMContentLoaded', function () {
             const statusWrapper = document.querySelector('.status-wrapper');
             const mainHeader = document.querySelector('header');
 
+            // --- Создаем заглушку для кнопок управления ---
+            if (controlsContainer) {
+                const computedStyle = window.getComputedStyle(controlsContainer);
+                const controlsHeight = controlsContainer.offsetHeight;
+                controlsPlaceholder = document.createElement('div');
+                controlsPlaceholder.id = 'controls-placeholder';
+                // Копируем высоту и все внешние отступы, чтобы избежать "подпрыгивания" макета
+                controlsPlaceholder.style.height = `${controlsHeight}px`;
+                controlsPlaceholder.style.marginTop = computedStyle.marginTop;
+                controlsPlaceholder.style.marginBottom = computedStyle.marginBottom;
+                controlsPlaceholder.style.marginLeft = computedStyle.marginLeft;
+                controlsPlaceholder.style.marginRight = computedStyle.marginRight;
+                // Вставляем заглушку перед кнопками, чтобы она заняла их место после перемещения
+                controlsContainer.parentNode.insertBefore(controlsPlaceholder, controlsContainer);
+            }
+
             // Скрываем легенду в режиме PiP
             const legendEl = volumeMetersContainer.querySelector('.chart-legend');
             if (legendEl) legendEl.style.display = 'none';
 
-            // Скрываем контейнер графика в основном окне
-            if (volumeMetersContainer) volumeMetersContainer.style.display = 'none';
+            // Заменяем контейнер графика на заглушку
+            if (volumeMetersContainer) {
+                chartPlaceholder = document.createElement('div');
+                chartPlaceholder.id = 'pip-placeholder';
+                chartPlaceholder.style.cssText = `
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                    align-items: center;
+                    height: ${volumeMetersContainer.offsetHeight + 25}px;
+                    box-sizing: border-box; /* Чтобы padding не увеличивал общую высоту */
+                    padding: 20px;
+                    text-align: center;
+                    font-size: 1.2em;
+                    color: #7f8c8d;
+                `;
+                chartPlaceholder.innerHTML = `
+                    <p>Режим «картинка в картинке» активен</p>
+                    <button class="control-btn pip-btn">Вернуть</button>
+                `;
+                volumeMetersContainer.parentNode.replaceChild(chartPlaceholder, volumeMetersContainer);
+                chartPlaceholder.querySelector('button').addEventListener('click', () => pipWindow.close());
+            }
 
             // Перемещаем график и кнопки в PiP окно
             // Применяем Flexbox для гибкой компоновки
@@ -467,9 +506,11 @@ document.addEventListener('DOMContentLoaded', function () {
                 // --- Восстанавливаем стили и размеры ---
                 // Возвращаем легенду
                 if (legendEl) legendEl.style.display = '';
-                // Показываем контейнер графика в основном окне
-                if (volumeMetersContainer) volumeMetersContainer.style.display = '';
-
+                // Возвращаем контейнер графика на место заглушки
+                if (chartPlaceholder && chartPlaceholder.parentNode) {
+                    chartPlaceholder.parentNode.replaceChild(volumeMetersContainer, chartPlaceholder);
+                }
+                chartPlaceholder = null;
                 // Возвращаем исходные стили для статуса
                 if (statusWrapper) statusWrapper.style.alignItems = '';
                 // Возвращаем график в его родительский контейнер
@@ -488,6 +529,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 controlsContainer.style.margin = ''; // Восстанавливаем margin, включая margin-bottom
                 const mainControlsExtensions = document.querySelector('.main-controls-extensions');
                 if (mainControlsExtensions) mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer); // Возвращаем кнопки
+                // Возвращаем кнопки на их место, заменяя заглушку
+                if (controlsPlaceholder && controlsPlaceholder.parentNode) {
+                    controlsPlaceholder.parentNode.replaceChild(controlsContainer, controlsPlaceholder);
+                }
+                controlsPlaceholder = null; // Сбрасываем заглушку
+
                 pipBtn.classList.remove('active');
                 pipWindow = null;
             });
@@ -1547,6 +1594,13 @@ document.addEventListener('DOMContentLoaded', function () {
         loadSettings();
         updatePromptPreview();
         loadContactsAndSettings();
+        
+        // Add click listeners to collapsible settings groups
+        document.querySelectorAll('.settings-group-header').forEach(header => {
+            header.addEventListener('click', () => {
+                header.parentElement.classList.toggle('collapsed');
+            });
+        });
         setRandomGroupPlaceholder();
     }
 
