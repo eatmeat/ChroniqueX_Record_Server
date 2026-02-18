@@ -873,6 +873,10 @@ input[type="text"], input[type="number"], textarea {
         gap: 10px; /* Добавляем отступ между заголовком и статусом */
     }
 
+    .status-wrapper {
+        align-items: center; /* Выравниваем по центру на мобильных, когда элементы переносятся */
+    }
+
     body {
         padding: 0; /* Убираем отступы у body */
     }
