@@ -49,21 +49,24 @@ document.addEventListener('DOMContentLoaded', function () {
             switch (data.status) {
                 case 'rec':
                     statusText.textContent = 'Запись';                    
+                    recBtn.textContent = 'REC'; // Убедимся, что текст кнопки правильный
                     volumeMetersContainer.classList.add('recording');
                     break;
-                case 'pause':
+                case 'paused':
                     statusText.textContent = 'Пауза';
+                    recBtn.textContent = 'RESUME'; // Меняем текст кнопки на "RESUME" в режиме паузы
                     volumeMetersContainer.classList.remove('recording');
                     break;
                 case 'stop':
                 default:
                     statusText.textContent = 'Остановлено';
+                    recBtn.textContent = 'REC'; // Возвращаем исходный текст
                     volumeMetersContainer.classList.remove('recording');
                     break;
             }
 
             // Update control buttons state
-            recBtn.disabled = data.status === 'rec';
+            recBtn.disabled = data.status === 'rec' && data.status !== 'paused';
             pauseBtn.disabled = data.status !== 'rec';
             stopBtn.disabled = data.status === 'stop';
             
@@ -475,7 +478,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (error) { console.error('Ошибка при открытии PiP окна:', error); }
     });
 
-    recBtn.addEventListener('click', () => fetch(currentStatus === 'pause' ? '/resume' : '/rec'));
+    recBtn.addEventListener('click', () => fetch(currentStatus === 'paused' ? '/resume' : '/rec'));
     pauseBtn.addEventListener('click', () => fetch('/pause'));
     stopBtn.addEventListener('click', () => {
         fetch('/stop');
