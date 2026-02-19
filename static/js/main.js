@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     flex-direction: column;
                     justify-content: center;
                     align-items: center;
-                    height: ${volumeMetersContainer.offsetHeight + 25}px;
+                    height: ${volumeMetersContainer.offsetHeight + 21}px;
                     box-sizing: border-box; /* Чтобы padding не увеличивал общую высоту */
                     padding: 20px;
                     text-align: center;
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     
                     // Добавляем пустую таблицу, которая заполнится при раскрытии
                     const tableContainer = document.createElement('div');
-                    tableContainer.innerHTML = `<div class="recording-table"><div class="recording-table-header"><div class="recording-cell cell-time">Начало</div><div class="recording-cell cell-duration">Длительность</div><div class="recording-cell cell-title">Наименование</div><div class="recording-cell cell-files">Файлы</div></div><div class="recording-table-body"></div></div>`;
+                    tableContainer.innerHTML = `<div class="recording-table"><div class="recording-table-header"><div class="recording-cell cell-time">Начало</div><div class="recording-cell cell-duration">Длит.</div><div class="recording-cell cell-title">Наименование</div><div class="recording-cell cell-files">Файлы</div></div><div class="recording-table-body"></div></div>`;
                     groupEl.appendChild(tableContainer);
                     weekGroupEl.appendChild(groupEl);
                 }
@@ -743,7 +743,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const input = document.createElement('input');
             input.type = 'text';
             input.value = currentTitle;
-            input.className = 'title-edit-input';
+            input.className = 'title-edit-input input-field';
 
             target.replaceWith(input);
             input.focus();
@@ -910,7 +910,7 @@ document.addEventListener('DOMContentLoaded', function () {
         return templates;
     }
 
-    async function saveSettings() {
+    async function saveSettings(keysToSave = null) {
         // Собираем правила из DOM
         const contextFileRules = getContextFileRulesFromDOM();
 
@@ -924,11 +924,22 @@ document.addEventListener('DOMContentLoaded', function () {
             context_file_rules: contextFileRules,
             // selected_contacts сохраняются отдельно при изменении на их вкладке
         };
+        
+        let settingsToSave = settings;
+        // Если передан массив ключей, отправляем только их
+        if (Array.isArray(keysToSave)) {
+            settingsToSave = {};
+            for (const key of keysToSave) {
+                if (key in settings) {
+                    settingsToSave[key] = settings[key];
+                }
+            }
+        }
 
-        const response = await fetch('/save_web_settings', {
+        await fetch('/save_web_settings', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settings)
+            body: JSON.stringify(settingsToSave)
         });
     
         // По запросу пользователя убираем уведомление о сохранении
@@ -939,15 +950,15 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     // Автосохранение при изменении настроек
-    document.getElementById('use-custom-prompt').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
+    document.getElementById('use-custom-prompt').addEventListener('change', () => { saveSettings(['use_custom_prompt']).then(updatePromptPreview); });
     // Для textarea используем 'change', чтобы не отправлять запрос на каждое нажатие клавиши
-    document.getElementById('prompt-addition').addEventListener('change', () => { saveSettings().then(updatePromptPreview); }); 
+    document.getElementById('prompt-addition').addEventListener('input', () => { saveSettings(['prompt_addition']).then(updatePromptPreview); }); 
     addMeetingDateCheckbox.addEventListener('change', () => {
         toggleMeetingDateSourceVisibility();
-        saveSettings().then(updatePromptPreview);
+        saveSettings(['add_meeting_date']).then(updatePromptPreview);
     });
     document.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
-        radio.addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
+        radio.addEventListener('change', () => { saveSettings(['meeting_date_source']).then(updatePromptPreview); });
     });
 
     function toggleMeetingDateSourceVisibility() { meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; }
@@ -976,7 +987,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     <input type="checkbox" class="context-rule-enabled" ${isEnabled ? 'checked' : ''}>
                     Включено
                 </label>
-                <input type="text" class="context-rule-pattern" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
+                <input type="text" class="context-rule-pattern input-field" placeholder="Шаблон файла (e.g. *.html)" value="${pattern}">
                 <button type="button" class="action-btn remove-rule-btn">&times;</button>
             </div>
             <textarea class="context-rule-prompt" rows="8" placeholder="Добавка к промпту...">${prompt}</textarea>
@@ -988,9 +999,9 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         // Автосохранение при изменении полей
-        ruleItem.querySelector('.context-rule-enabled').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
-        ruleItem.querySelector('.context-rule-pattern').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
-        ruleItem.querySelector('.context-rule-prompt').addEventListener('change', () => { saveSettings().then(updatePromptPreview); });
+        ruleItem.querySelector('.context-rule-enabled').addEventListener('change', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
+        ruleItem.querySelector('.context-rule-pattern').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
+        ruleItem.querySelector('.context-rule-prompt').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
 
         contextRulesContainer.appendChild(ruleItem);
     }
@@ -1064,23 +1075,23 @@ document.addEventListener('DOMContentLoaded', function () {
         const label = item.querySelector('label');
         if (isEditable) {
             label.innerHTML = `
-                <input type="text" class="meeting-name-template-input" value="${template.template}">
+                <input type="text" class="meeting-name-template-input input-field" value="${template.template}">
                 <button type="button" class="action-btn remove-rule-btn">&times;</button>
             `;
             const input = label.querySelector('input');
             const removeBtn = label.querySelector('button');
 
-            input.addEventListener('change', () => { saveSettings(); updatePromptPreview(); });
+            input.addEventListener('input', () => { saveSettings(['meeting_name_templates']).then(updatePromptPreview); });
             removeBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 item.remove();
-                saveSettings().then(updatePromptPreview);
+                saveSettings(['meeting_name_templates']).then(updatePromptPreview);
             });
         } else {
             label.textContent = template.template;
         }
 
-        item.querySelector('input[type="radio"]').addEventListener('change', () => { saveSettings(); updatePromptPreview(); });
+        item.querySelector('input[type="radio"]').addEventListener('change', () => { saveSettings(['active_meeting_name_template_id']).then(updatePromptPreview); });
 
         return item;
     }
@@ -1225,7 +1236,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 const oldName = group.name;
                 const input = document.createElement('input');
                 input.value = oldName;
-                input.className = 'contact-name-edit'; // Используем тот же стиль, что и для участника
+                input.className = 'contact-name-edit input-field'; // Используем тот же стиль, что и для участника
 
                 // Скрываем счетчик при редактировании
                 if (groupHeaderEl.contains(groupCounterEl)) groupHeaderEl.removeChild(groupCounterEl);
@@ -1237,7 +1248,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
                 // Создаем и добавляем кнопку удаления группы
                 const deleteGroupBtn = document.createElement('button');
-                deleteGroupBtn.textContent = 'Удалить группу';
+                deleteGroupBtn.textContent = '×';
                 deleteGroupBtn.className = 'action-btn delete-group-btn';
                 deleteGroupBtn.onmousedown = (e) => { // Используем mousedown, чтобы сработало до blur
                     e.preventDefault(); // Предотвращаем потерю фокуса с инпута
@@ -1322,7 +1333,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const addInput = document.createElement('input');
             addInput.type = 'text';
             addInput.placeholder = `Новый учасник: ${generateRandomPlaceholder()}`;
-            addInput.className = 'add-item-input';
+            addInput.className = 'add-item-input input-field';
             const addBtn = document.createElement('button');
             addBtn.textContent = 'Добавить';
             addBtn.className = 'action-btn';
@@ -1381,13 +1392,13 @@ document.addEventListener('DOMContentLoaded', function () {
                     const input = document.createElement('input');
                     input.type = 'text';
                     input.value = currentName;
-                    input.className = 'contact-name-edit';
+                    input.className = 'contact-name-edit input-field';
 
                     // Создаем кнопку удаления и контейнер для нее
                     const buttonsContainer = document.createElement('div');
                     buttonsContainer.className = 'item-actions';
                     const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Удалить';
+                    deleteBtn.textContent = '×';
                     deleteBtn.className = 'action-btn';
                     // Используем mousedown, чтобы событие сработало до blur на поле ввода
                     deleteBtn.onmousedown = (e) => {

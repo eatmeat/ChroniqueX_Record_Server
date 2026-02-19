@@ -157,7 +157,7 @@ h1, h2, h3, h4 {
     gap: 10px;
     justify-content: space-between; /* Размещаем элементы по краям */
     padding: 8px;
-    border-radius: 4px; 
+    border-radius: 8px;
     /* cursor: pointer; - убираем курсор со всего заголовка */
     transition: background-color 0.2s;
 }
@@ -215,7 +215,7 @@ h1, h2, h3, h4 {
     justify-content: space-between;
     align-items: center;
     padding: 8px;
-    border-radius: 4px;
+    border-radius: 8px;
 }
 
 .contact-group-list li:hover {
@@ -263,36 +263,24 @@ h1, h2, h3, h4 {
 
 /* Стили для инпутов в строках добавления */
 .add-item-input {
-    flex-grow: 1;
-    font-size: 1em;
-    padding: 4px 8px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    outline-color: #3498db;
+    flex-grow: 1; /* Занимает доступное место */
 }
 
 .contact-name {
     cursor: text;
 }
 
-.contact-name-edit {
-    font-size: 1em;
-    padding: 2px 4px;
-    border: 1px solid #bdc3c7;
-    border-radius: 3px;
-    outline-color: #3498db;
-    width: 100%; /* Занимает всю ширину родительского label */
-}
-
 .action-btn {
     margin-left: 2px;
-    padding: 4px 4px;
-    font-size: 0.8em;
-    border-radius: 4px;
+    padding: 4px 8px; /* Унифицируем отступы с полями ввода */
+    font-size: 1em; /* Унифицируем размер шрифта */
+    border-radius: 8px;
     border: 1px solid #bdc3c7;
     background-color: #fff;
     cursor: pointer;
     transition: background-color 0.2s, border-color 0.2s;
+    box-sizing: border-box; /* Учитываем padding и border в общей высоте */
+    height: 30px; /* Задаем фиксированную высоту, как у полей ввода */
 }
 .action-btn:hover {
     background-color: #dfe6e9;
@@ -340,7 +328,7 @@ h1, h2, h3, h4 {
 
 /* Стили для группы недель */
 .week-group {
-    margin-bottom: 25px;
+    margin-bottom: 15px;
     padding: 15px;
     border: 1px solid #e0e0e0; /* Делаем рамку видимой для более четкого контура */
     border-radius: 8px;
@@ -439,7 +427,7 @@ h1, h2, h3, h4 {
 }
 .recording-item:hover {
     background-color: #f9f9f9;
-    border-radius: 4px; /* Скругляем углы при наведении */
+    border-radius: 8px; /* Скругляем углы при наведении */
 }
 
 .item-main {
@@ -513,12 +501,16 @@ h1, h2, h3, h4 {
     margin-bottom: 15px;
 }
 
-input[type="text"], input[type="number"], textarea {
+/* --- Общий стиль для всех полей ввода --- */
+.input-field, input[type="text"], input[type="number"], textarea {
     width: 100%;
-    padding: 8px;
+    padding: 6px 8px; /* Унифицированный padding */
     border: 1px solid #ccc;
-    border-radius: 4px;
+    border-radius: 8px;
     box-sizing: border-box;
+    height: 30px; /* Унифицированная высота */
+    font-size: 1em;
+    outline-color: #3498db; /* Цвет обводки при фокусе */
 }
 
 .prompt-info {
@@ -532,7 +524,7 @@ input[type="text"], input[type="number"], textarea {
     color: white;
     padding: 10px 15px;
     border: none;
-    border-radius: 4px;
+    border-radius: 8px;
     cursor: pointer;
 }
 .submit-btn:hover {
@@ -578,12 +570,7 @@ input[type="text"], input[type="number"], textarea {
 }
 
 .context-rule-pattern, .context-rule-prompt {
-    width: 100%;
-    padding: 6px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    box-sizing: border-box;
-    font-size: 0.9em;
+    /* Стили теперь наследуются от общего правила для input/textarea */
 }
 
 .context-rule-prompt {
@@ -592,7 +579,9 @@ input[type="text"], input[type="number"], textarea {
 }
 
 .remove-rule-btn {
-    padding: 5px 10px;
+    padding: 4px 8px; /* Унифицируем отступы */
+    font-size: 1.2em; /* Делаем крестик чуть больше */
+    line-height: 1; /* Выравниваем крестик по центру */
 }
 
 /* Стили для шаблонов названий собраний */
@@ -618,9 +607,7 @@ input[type="text"], input[type="number"], textarea {
 
 .meeting-name-template-input {
     flex-grow: 1;
-    padding: 6px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    /* Стили теперь наследуются от общего правила для input */
 }
 
 /* Стили для графиков громкости */
@@ -657,7 +644,7 @@ input[type="text"], input[type="number"], textarea {
     width: 100%;
     height: 200px; /* Высота графика уменьшена вдвое */
     /* background-color убран, так как фон теперь рисуется градиентом в JS */
-    border-radius: 4px;
+    border-radius: 8px;
     border: 1px solid #dee2e6;
 }
 
@@ -813,7 +800,7 @@ input[type="text"], input[type="number"], textarea {
     padding: 10px;
     background-color: #f8f9fa;
     border: 1px solid #e9ecef;
-    border-radius: 4px;
+    border-radius: 8px;
     font-size: 0.85em;
     color: #495057;
     max-height: 200px; /* Ограничиваем высоту, чтобы не растягивать строку */
@@ -858,7 +845,7 @@ input[type="text"], input[type="number"], textarea {
     cursor: pointer;
     padding: 8px;
     font-size: 1.17em; /* Размер как у заголовка недели */
-    border-radius: 4px;
+    border-radius: 8px;
     transition: background-color 0.2s;
 }
 
@@ -902,7 +889,7 @@ input[type="text"], input[type="number"], textarea {
 
 /* --- Новые стили для сворачиваемых групп настроек --- */
 .settings-group {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     padding: 15px;
     background-color: #fdfdfd;
     border: 1px solid #e0e0e0;
@@ -919,7 +906,7 @@ input[type="text"], input[type="number"], textarea {
     cursor: pointer;
     font-size: 1.17em;
     padding: 8px;
-    border-radius: 4px;
+    border-radius: 8px;
     transition: background-color 0.2s;
 }
 
