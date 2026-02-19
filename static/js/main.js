@@ -1249,7 +1249,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Создаем и добавляем кнопку удаления группы
                 const deleteGroupBtn = document.createElement('button');
                 deleteGroupBtn.textContent = '×';
-                deleteGroupBtn.className = 'action-btn delete-group-btn';
+                deleteGroupBtn.className = 'action-btn delete-btn';
                 deleteGroupBtn.onmousedown = (e) => { // Используем mousedown, чтобы сработало до blur
                     e.preventDefault(); // Предотвращаем потерю фокуса с инпута
                     deleteGroup(oldName);
@@ -1399,7 +1399,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     buttonsContainer.className = 'item-actions';
                     const deleteBtn = document.createElement('button');
                     deleteBtn.textContent = '×';
-                    deleteBtn.className = 'action-btn';
+                    deleteBtn.className = 'action-btn delete-btn';
                     // Используем mousedown, чтобы событие сработало до blur на поле ввода
                     deleteBtn.onmousedown = (e) => {
                         e.preventDefault(); // Предотвращаем потерю фокуса с поля ввода
