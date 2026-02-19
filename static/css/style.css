@@ -166,6 +166,11 @@ h1, h2, h3, h4 {
     background-color: #ecf0f1;
 }
 
+/* Когда группа участников развернута, подсвечиваем заголовок */
+.contact-group:not(.collapsed) .contact-group-header {
+    background-color: #ecf0f1;
+}
+
 /* Обёртка для иконки, чтобы увеличить область клика */
 .expand-icon-wrapper {
     display: flex;
@@ -184,7 +189,7 @@ h1, h2, h3, h4 {
     border-right: 5px solid transparent;
     border-top: 5px solid #333;
     transition: transform 0.2s ease-in-out;
-    margin-right: 5px; /* Небольшой отступ от текста */
+    margin-right: 10px; /* Унифицированный отступ от текста */
     transform: rotate(-90deg);
 }
 
@@ -305,7 +310,7 @@ h1, h2, h3, h4 {
     margin-top: 20px;
     /* Добавляем flex для выравнивания стрелки */
     padding: 8px; /* Добавляем внутренние отступы */
-    border-radius: 4px; /* Скругляем углы */
+    border-radius: 8px; /* Скругляем углы, как у недели */
     transition: background-color 0.2s; /* Плавный переход */
     display: flex;
     align-items: center;
@@ -315,11 +320,16 @@ h1, h2, h3, h4 {
 .date-group-left {
     display: flex;
     align-items: center;
-    gap: 5px; /* Добавляем небольшой отступ между стрелкой и текстом */
+    /* gap: 5px; - Убираем, так как теперь используется margin у иконки */
 }
 
 /* Подсветка при наведении */
 .date-group h3:hover {
+    background-color: #ecf0f1;
+}
+
+/* Когда группа даты развернута, подсвечиваем заголовок */
+.date-group:not(.collapsed) > h3 {
     background-color: #ecf0f1;
 }
 
@@ -351,7 +361,7 @@ h1, h2, h3, h4 {
     align-items: center;
     font-size: 1.17em;
     justify-content: space-between; /* Размещаем элементы по краям */
-    border-bottom: 2px solid transparent; /* Прозрачная рамка для сохранения места */
+    /* border-bottom: 2px solid transparent; - Убираем, так как отступ теперь ниже */
     margin-bottom: 15px; /* Добавляем нижний отступ для разделения с контентом */
 }
 
@@ -361,9 +371,6 @@ h1, h2, h3, h4 {
 }
 .week-number {
     color: #7f8c8d; /* Делаем цвет менее контрастным */
-}
-.week-group:not(.collapsed) h4 {
-    background-color: #ecf0f1;
 }
 
 /* Подсветка при наведении */
@@ -376,6 +383,16 @@ h1, h2, h3, h4 {
     margin-bottom: 0; /* Убираем нижний отступ, когда неделя свернута */
 }
 
+/* --- Общие стили для подсветки развернутых групп --- */
+/* Когда группа развернута, подсвечиваем ее заголовок */
+.week-group:not(.collapsed) > h4,
+.date-group:not(.collapsed) > h3,
+.contact-group:not(.collapsed) > .contact-group-header,
+.settings-group:not(.collapsed) > .settings-group-header,
+.prompt-preview-container:not(.collapsed) > h4 {
+    background-color: #ecf0f1;
+}
+
 /* Общие стили для иконки-стрелки */
 .week-group h4 .expand-icon, .date-group h3 .expand-icon {
     display: inline-block;
@@ -385,7 +402,7 @@ h1, h2, h3, h4 {
     border-right: 5px solid transparent;
     border-top: 5px solid #333;
     transition: transform 0.2s ease-in-out;
-    margin-right: 10px;    
+    /* margin-right: 10px; - Перенесено в общий стиль .expand-icon */
     transform: rotate(-90deg); /* По умолчанию стрелка повернута вбок */
 }
 
@@ -915,6 +932,7 @@ input[type="text"], input[type="number"], textarea {
 }
 
 .settings-group .expand-icon {
+    margin-right: 10px; /* Добавляем унифицированный отступ */
     transform: rotate(-90deg);
 }
 
