@@ -250,6 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
             ctx.textAlign = 'right';
             ctx.fillStyle = 'rgba(127, 140, 141, 0.5)'; // Полупрозрачный цвет
             ctx.font = '18px sans-serif';
+            ctx.font = '500 18px Ubuntu, sans-serif';
             ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 22);
             ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 2);
         }
@@ -278,6 +279,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 
                 ctx.fillStyle = '#7f8c8d';
                 ctx.font = '18px sans-serif';
+                ctx.font = '500 18px Ubuntu, sans-serif';
                 ctx.textAlign = 'right'; // Выравниваем по правому краю
                 ctx.fillText(`МСК: ${mskTime}`, x - 5, height - 22); // Смещаем текст на 5px левее линии
                 ctx.fillText(`ИРК: ${irkTime}`, x - 5, height - 2);
