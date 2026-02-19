@@ -20,6 +20,7 @@
         <header>
             <img src="{{ url_for('static', filename='logo.png') }}" alt="ChroniqueX Record Server" class="header-logo">
             <div class="status-wrapper">
+                <a href="/logout" class="logout-link">Выйти</a>
                 <div class="status-container">
                     <div id="status-indicator" class="status-indicator stop"></div>
                     <span id="status-text">Остановлено</span>
@@ -63,6 +64,7 @@
                 <button class="tab-link" data-tab="settings-tab">Настройки</button>
                 <button class="tab-link" data-tab="contacts-tab">Голоса&nbsp;<span id="selected-contacts-count"></span></button>
             </div>
+            
 
             <div id="recordings-tab" class="tab-content active">
                 <div id="recordings-list">

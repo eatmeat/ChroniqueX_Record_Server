@@ -1,5 +1,6 @@
 import os
 import json
+import secrets
 import wave
 import time
 import re
@@ -43,6 +44,7 @@ except ImportError:
 import requests
 from dotenv import load_dotenv
 
+from werkzeug.security import generate_password_hash, check_password_hash
 import queue
 from flask import Flask, jsonify, render_template, request, send_file, Response
 from pydub import AudioSegment
@@ -496,7 +498,11 @@ DEFAULT_SETTINGS = {
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None, 
-    "main_window_y": None
+    "main_window_y": None,
+    # Добавляем секретный ключ для сессий Flask.
+    # Он будет сгенерирован один раз при первом запуске.
+    "secret_key": None,
+
 }
 DEFAULT_SETTINGS["selected_contacts"] = [] # List of selected contact IDs
 settings = {}
@@ -508,13 +514,20 @@ def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, 'r') as f:
-                settings = json.load(f)
+                loaded_settings = json.load(f)
+            # Убедимся, что settings - это словарь
+            if isinstance(loaded_settings, dict):
+                settings = loaded_settings
+            else:
+                settings = DEFAULT_SETTINGS.copy()
             for key, value in DEFAULT_SETTINGS.items():
                 settings.setdefault(key, value)
         except (json.JSONDecodeError, TypeError):
             settings = DEFAULT_SETTINGS.copy()
     else:
         settings = DEFAULT_SETTINGS.copy()
+    if not settings.get("secret_key"):
+        settings["secret_key"] = secrets.token_hex(16)
     save_settings(settings)
 
 def save_settings(new_settings):
@@ -554,8 +567,15 @@ def save_contacts(new_contacts_data):
 # --- Load Environment Variables ---
 dotenv_path = os.path.join(get_application_path(), '.env')
 load_dotenv(dotenv_path)
-API_URL = os.getenv("API_URL")
-API_KEY = os.getenv("API_KEY")
+API_URL = os.getenv("CRS_API_URL")
+API_KEY = os.getenv("CRS_API_KEY")
+USERNAME = os.getenv("CRS_USERNAME")
+PASSWORD_HASH = os.getenv("CRS_PASSWORD_HASH") # Временно используем пароль в открытом виде для отладки
+
+# --- ОТЛАДКА: Выводим загруженные переменные в консоль при старте ---
+print("--- Загруженные переменные окружения ---")
+print(f"USERNAME из .env: '{USERNAME}'")
+print(f"PASSWORD из .env: '{PASSWORD_HASH}'")
 
 # --- Глобальные переменные ---
 app = Flask(
@@ -563,6 +583,7 @@ app = Flask(
     template_folder=os.path.join(get_application_path(), 'templates'),
     static_folder=os.path.join(get_application_path(), 'static')
 )
+
 is_recording = False
 is_paused = False  # Track pause state
 start_time = None
@@ -635,49 +656,62 @@ def restart_server(old_settings):
 
 def update_tray_menu():
     """Updates the tray menu items based on current settings."""
-    if main_icon:
-        server_is_on = settings.get("server_enabled")
+    def _update_in_thread():
+        if not main_icon:
+            return
 
-        # Determine current recording state using internal variables
-        if is_recording and not is_paused:
-            # Recording is active, show pause option
-            main_icon.menu = Menu(
-                item('Начать запись', start_recording_from_tray, enabled=False),  # Disabled since recording is active
-                item('Приостановить запись', pause_recording_from_tray, enabled=True),  # Always enabled if recording is active
-                item('Остановить запись', stop_recording_from_tray, enabled=True),  # Always enabled if recording is active
-                Menu.SEPARATOR,
-                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
-                item('Настройки', open_main_window),
-                item('Открыть папку с записями', open_rec_folder),
-                Menu.SEPARATOR,
-                item('Выход', exit_action)
-            )
-        elif is_recording and is_paused:
-            # Recording is paused, show resume option
-            main_icon.menu = Menu(
-                item('Начать запись', start_recording_from_tray, enabled=False),  # Disabled since recording is active
-                item('Возобновить запись', resume_recording_from_tray, enabled=True),  # Always enabled if paused
-                item('Остановить запись', stop_recording_from_tray, enabled=True),  # Always enabled if recording is active
-                Menu.SEPARATOR,
-                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
-                item('Настройки', open_main_window),
-                item('Открыть папку с записями', open_rec_folder),
-                Menu.SEPARATOR,
-                item('Выход', exit_action)
-            )
-        else:
-            # No active recording, show start option
-            main_icon.menu = Menu(
-                item('Начать запись', start_recording_from_tray, enabled=True),  # Always enabled when not recording
-                item('Приостановить запись', pause_recording_from_tray, enabled=False),  # Always enabled if recording is active
-                item('Остановить запись', stop_recording_from_tray, enabled=False),  # Disabled since no recording is active
-                Menu.SEPARATOR,
-                item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
-                item('Настройки', open_main_window),
-                item('Открыть папку с записями', open_rec_folder),
-                Menu.SEPARATOR,
-                item('Выход', exit_action)
-            )
+        try:
+            server_is_on = settings.get("server_enabled")
+
+            # Determine current recording state using internal variables
+            if is_recording and not is_paused:
+                # Recording is active, show pause option
+                main_icon.menu = Menu(
+                    item('Начать запись', start_recording_from_tray, enabled=False),
+                    item('Приостановить запись', pause_recording_from_tray, enabled=True),
+                    item('Остановить запись', stop_recording_from_tray, enabled=True),
+                    Menu.SEPARATOR,
+                    item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                    item('Настройки', open_main_window),
+                    item('Открыть папку с записями', open_rec_folder),
+                    Menu.SEPARATOR,
+                    item('Выход', exit_action)
+                )
+            elif is_recording and is_paused:
+                # Recording is paused, show resume option
+                main_icon.menu = Menu(
+                    item('Начать запись', start_recording_from_tray, enabled=False),
+                    item('Возобновить запись', resume_recording_from_tray, enabled=True),
+                    item('Остановить запись', stop_recording_from_tray, enabled=True),
+                    Menu.SEPARATOR,
+                    item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                    item('Настройки', open_main_window),
+                    item('Открыть папку с записями', open_rec_folder),
+                    Menu.SEPARATOR,
+                    item('Выход', exit_action)
+                )
+            else:
+                # No active recording, show start option
+                main_icon.menu = Menu(
+                    item('Начать запись', start_recording_from_tray, enabled=True),
+                    item('Приостановить запись', pause_recording_from_tray, enabled=False),
+                    item('Остановить запись', stop_recording_from_tray, enabled=False),
+                    Menu.SEPARATOR,
+                    item('Веб-интерфейс', open_web_interface, enabled=server_is_on),
+                    item('Настройки', open_main_window),
+                    item('Открыть папку с записями', open_rec_folder),
+                    Menu.SEPARATOR,
+                    item('Выход', exit_action)
+                )
+        except Exception as e:
+            # This can happen if the icon is being shut down
+            print(f"Could not update tray menu: {e}")
+
+    # Run the update in a separate thread to avoid deadlocks
+    # when called from a Flask request handler.
+    Thread(target=_update_in_thread, daemon=True).start()
+
+            
 # --- Settings Window ---
 def open_web_interface(icon=None, item=None):
     """Открывает веб-интерфейс в браузере по умолчанию."""
@@ -707,7 +741,14 @@ def open_main_window(icon=None, item=None):
     old_settings = settings.copy()
     
 
+    def on_close_prompt():
+        """Handles closing the initial setup prompt window."""
+        win.destroy()
+
     def on_save():
+        # Объявляем переменные глобальными в самом начале функции, чтобы избежать SyntaxError
+        global API_URL, API_KEY, USERNAME, PASSWORD_HASH
+        
         try:
             new_port = int(port_var.get())
             if not (1024 <= new_port <= 65535):
@@ -720,16 +761,51 @@ def open_main_window(icon=None, item=None):
             width = win.winfo_width()
             height = win.winfo_height()
 
+            # --- Обновление учетных данных и .env файла ---
+            new_username = new_username_var.get().strip()
+            new_password = new_password_var.get()
+            confirm_password = confirm_password_var.get()
+
+            # Собираем текущие данные из .env, чтобы не потерять их
+            env_data = {}
+            if os.path.exists(dotenv_path):
+                with open(dotenv_path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        if '=' in line:
+                            key, value = line.strip().split('=', 1)
+                            # Убираем кавычки, если они есть
+                            if value.startswith('"') and value.endswith('"'):
+                                value = value[1:-1]
+                            env_data[key] = value
+
+            # Обновляем данные API
+            env_data['CRS_API_URL'] = api_url_var.get()
+            env_data['CRS_API_KEY'] = api_key_var.get()
+
+            # Обновляем логин, если он изменился
+            if new_username and new_username != USERNAME:
+                env_data['CRS_USERNAME'] = new_username
+
+            # Обновляем пароль, если он введен
+            if new_password:
+                if new_password != confirm_password:
+                    messagebox.showerror("Ошибка", "Пароли не совпадают.", parent=win)
+                    return
+                env_data['CRS_PASSWORD_HASH'] = generate_password_hash(new_password)
+
+            # Записываем все обновленные данные в .env
+            with open(dotenv_path, 'w', encoding='utf-8') as f:
+                for key, value in env_data.items():
+                    f.write(f'{key}="{value}"\n')
+
             new_settings = {
                 # Сохраняем старые настройки, чтобы не перезаписать их
-                **settings, 
+                **settings,
                 "port": new_port,
                 "server_enabled": server_enabled_var.get(),
                 "lan_accessible": lan_accessible_var.get(),
-                "main_window_width": width,
-                "main_window_height": height,
-                "main_window_x": x,
-                "main_window_y": y
+                "main_window_width": width, "main_window_height": height,
+                "main_window_x": x, "main_window_y": y
             }
 
             restart_needed = (
@@ -738,6 +814,14 @@ def open_main_window(icon=None, item=None):
                 old_settings['lan_accessible'] != new_settings['lan_accessible']
             )
             save_settings(new_settings)
+            # Обновляем глобальные переменные и очищаем поля пароля
+            API_URL = api_url_var.get()
+            API_KEY = api_key_var.get()
+            USERNAME = env_data.get('CRS_USERNAME')
+            PASSWORD_HASH = env_data.get('CRS_PASSWORD_HASH')
+            new_password_var.set("")
+            confirm_password_var.set("")
+
             if restart_needed:
                 messagebox.showinfo("Применение", "Настройки сохранены. Сервер будет перезапущен.", parent=win)
                 restart_server(old_settings)
@@ -838,6 +922,12 @@ def open_main_window(icon=None, item=None):
     port_var = tk.StringVar(value=str(settings.get("port")))
     server_enabled_var = tk.BooleanVar(value=settings.get("server_enabled"))
     lan_accessible_var = tk.BooleanVar(value=settings.get("lan_accessible"))
+    api_url_var = tk.StringVar(value=str(API_URL or "https://www.chroniquex.ru:16040"))
+    api_key_var = tk.StringVar(value=str(API_KEY or ""))
+    new_username_var = tk.StringVar(value=str(USERNAME or ""))
+    new_password_var = tk.StringVar()
+    confirm_password_var = tk.StringVar()
+
 
     # --- Unsaved Changes Logic (continued) ---
     def capture_original_settings():
@@ -845,15 +935,62 @@ def open_main_window(icon=None, item=None):
         original_settings['server_enabled'] = server_enabled_var.get()
         original_settings['lan_accessible'] = lan_accessible_var.get()
 
+        original_settings['api_url'] = api_url_var.get()
+        original_settings['api_key'] = api_key_var.get()
+        original_settings['username'] = new_username_var.get()
+        # Пароли не сохраняем в original_settings для безопасности
+
     # Пустой фрейм для сохранения отступов
     spacer_frame = tk.Frame(settings_container, height=20)
     spacer_frame.pack()
 
     
-    server_settings_frame = tk.Frame(settings_container, padx=10, pady=10)
+    server_settings_frame = tk.LabelFrame(settings_container, text="Настройки сервера", padx=10, pady=10)
     server_settings_frame.pack(fill="x", expand=True)
-    server_settings_frame.grid_columnconfigure(3, weight=1) # Let the last column expand
+    server_settings_frame.grid_columnconfigure(1, weight=1) # Let the entry column expand
 
+
+    # --- API Settings Frame ---
+    api_settings_frame = tk.LabelFrame(settings_container, text="Настройки API ChroniqueX", padx=10, pady=10)
+    api_settings_frame.pack(fill="x", expand=True, pady=(10, 0))
+    api_settings_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(api_settings_frame, text="API URL:").grid(row=0, column=0, sticky="w", pady=5, padx=(0, 5))
+    api_url_edit = tk.Entry(api_settings_frame, textvariable=api_url_var)
+    api_url_edit.grid(row=0, column=1, sticky="ew", padx=5)
+    _add_context_menu_to_text_widget(api_url_edit)
+
+    tk.Label(api_settings_frame, text="API Key:").grid(row=1, column=0, sticky="w", pady=5, padx=(0, 5))
+    api_key_edit = tk.Entry(api_settings_frame, textvariable=api_key_var, show="*")
+    api_key_edit.grid(row=1, column=1, sticky="ew", padx=5)
+    _add_context_menu_to_text_widget(api_key_edit)
+
+    # --- Account Settings Frame ---
+    account_settings_frame = tk.LabelFrame(settings_container, text="Учетная запись веб-интерфейса", padx=10, pady=10)
+    account_settings_frame.pack(fill="x", expand=True, pady=(10, 0))
+    account_settings_frame.grid_columnconfigure(1, weight=1)
+
+    tk.Label(account_settings_frame, text="Логин:").grid(row=0, column=0, sticky="w", pady=5, padx=(0, 5))
+    username_edit = tk.Entry(account_settings_frame, textvariable=new_username_var)
+    username_edit.grid(row=0, column=1, sticky="ew", padx=5)
+    _add_context_menu_to_text_widget(username_edit)
+
+    tk.Label(account_settings_frame, text="Новый пароль:").grid(row=1, column=0, sticky="w", pady=5, padx=(0, 5))
+    password_edit = tk.Entry(account_settings_frame, textvariable=new_password_var, show="*")
+    password_edit.grid(row=1, column=1, sticky="ew", padx=5)
+    _add_context_menu_to_text_widget(password_edit)
+
+    tk.Label(account_settings_frame, text="Подтвердите пароль:").grid(row=2, column=0, sticky="w", pady=5, padx=(0, 5))
+    confirm_password_edit = tk.Entry(account_settings_frame, textvariable=confirm_password_var, show="*")
+    confirm_password_edit.grid(row=2, column=1, sticky="ew", padx=5)
+    _add_context_menu_to_text_widget(confirm_password_edit)
+
+    # --- Buttons Frame ---
+    button_frame = tk.Frame(settings_container)
+    button_frame.pack(pady=10)
+    save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
+    save_button.pack(side="left", padx=5)
+    tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
     # Endpoints info frame
     endpoints_frame = tk.LabelFrame(main_frame, text="Адреса и эндпоинты сервера", padx=10, pady=10)
     endpoints_frame.grid(row=1, column=0, sticky="nsew", padx=10, pady=10)
@@ -946,14 +1083,8 @@ def open_main_window(icon=None, item=None):
     port_edit = tk.Entry(server_settings_frame, textvariable=port_var)
     port_edit.grid(row=0, column=1, sticky="w", padx=5)
     _add_context_menu_to_text_widget(port_edit)
-    tk.Checkbutton(server_settings_frame, text="Сервер запущен", variable=server_enabled_var).grid(row=0, column=2, sticky="w", padx=5)
-    tk.Checkbutton(server_settings_frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=0, column=3, sticky="w", padx=5)
-
-    button_frame = tk.Frame(server_settings_frame)
-    button_frame.grid(row=1, columnspan=4, pady=10)
-    save_button = tk.Button(button_frame, text="Сохранить", command=on_save)
-    save_button.pack(side="left", padx=5)
-    tk.Button(button_frame, text="Свернуть", command=on_hide).pack(side="left", padx=5)
+    tk.Checkbutton(server_settings_frame, text="Сервер запущен", variable=server_enabled_var).grid(row=1, column=0, columnspan=2, sticky="w", padx=5)
+    tk.Checkbutton(server_settings_frame, text="Доступен по локальной сети (host 0.0.0.0)", variable=lan_accessible_var).grid(row=2, column=0, columnspan=2, sticky="w", padx=5)
 
     # --- Unsaved Changes Logic (final part) ---
     # Capture initial state
@@ -963,6 +1094,112 @@ def open_main_window(icon=None, item=None):
     port_var.trace_add("write", mark_as_changed)
     server_enabled_var.trace_add("write", mark_as_changed)
     lan_accessible_var.trace_add("write", mark_as_changed)
+    api_url_var.trace_add("write", mark_as_changed)
+    api_key_var.trace_add("write", mark_as_changed)
+    new_username_var.trace_add("write", mark_as_changed)
+    new_password_var.trace_add("write", mark_as_changed)
+    confirm_password_var.trace_add("write", mark_as_changed)
+    win.mainloop()
+
+def prompt_for_initial_config():
+    """
+    Показывает окно для первоначальной настройки, если учетные данные или API ключи отсутствуют.
+    """
+    # Проверяем, нужны ли какие-либо данные
+    missing_creds = not USERNAME or not PASSWORD_HASH
+    missing_api = not API_URL or not API_KEY
+
+    if not missing_creds and not missing_api:
+        return # Все на месте, ничего не делаем
+
+    win = tk.Tk()
+    win.title("Первоначальная настройка")
+    win.transient(); win.grab_set()
+
+    main_frame = tk.Frame(win, padx=15, pady=15)
+    main_frame.pack(fill="both", expand=True)
+
+    # Переменные
+    username_var = tk.StringVar()
+    password_var = tk.StringVar()
+    password_confirm_var = tk.StringVar()
+    api_url_var = tk.StringVar(value="https://www.chroniquex.ru:16040")
+    api_key_var = tk.StringVar()
+
+    if missing_creds:
+        creds_frame = tk.LabelFrame(main_frame, text="Создайте учетную запись для веб-интерфейса", padx=10, pady=10)
+        creds_frame.pack(fill="x", expand=True, pady=5)
+        creds_frame.grid_columnconfigure(1, weight=1)
+
+        tk.Label(creds_frame, text="Логин:").grid(row=0, column=0, sticky="w", pady=2)
+        tk.Entry(creds_frame, textvariable=username_var).grid(row=0, column=1, sticky="ew", pady=2)
+
+        tk.Label(creds_frame, text="Пароль:").grid(row=1, column=0, sticky="w", pady=2)
+        tk.Entry(creds_frame, textvariable=password_var, show="*").grid(row=1, column=1, sticky="ew", pady=2)
+
+        tk.Label(creds_frame, text="Повторите пароль:").grid(row=2, column=0, sticky="w", pady=2)
+        tk.Entry(creds_frame, textvariable=password_confirm_var, show="*").grid(row=2, column=1, sticky="ew", pady=2)
+
+    if missing_api:
+        api_frame = tk.LabelFrame(main_frame, text="Введите данные API ChroniqueX", padx=10, pady=10)
+        api_frame.pack(fill="x", expand=True, pady=5)
+        api_frame.grid_columnconfigure(1, weight=1)
+
+        tk.Label(api_frame, text="API URL:").grid(row=0, column=0, sticky="w", pady=2)
+        tk.Entry(api_frame, textvariable=api_url_var).grid(row=0, column=1, sticky="ew", pady=2)
+
+        tk.Label(api_frame, text="API Key:").grid(row=1, column=0, sticky="w", pady=2)
+        tk.Entry(api_frame, textvariable=api_key_var).grid(row=1, column=1, sticky="ew", pady=2)
+
+    def save_initial_config():
+        # Собираем данные из .env, чтобы не потерять то, что уже есть
+        env_data = {}
+        if os.path.exists(dotenv_path):
+            with open(dotenv_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if '=' in line:
+                        key, value = line.strip().split('=', 1)
+                        env_data[key] = value
+
+        if missing_creds:
+            username = username_var.get().strip()
+            password = password_var.get()
+            password_confirm = password_confirm_var.get()
+
+            if not username or not password:
+                messagebox.showerror("Ошибка", "Логин и пароль не могут быть пустыми.", parent=win)
+                return
+            if password != password_confirm:
+                messagebox.showerror("Ошибка", "Пароли не совпадают.", parent=win)
+                return
+            env_data['CRS_USERNAME'] = username
+            env_data['CRS_PASSWORD_HASH'] = generate_password_hash(password)
+
+        if missing_api:
+            api_url = api_url_var.get().strip()
+            api_key = api_key_var.get().strip()
+            if not api_url or not api_key:
+                messagebox.showerror("Ошибка", "API URL и API Key не могут быть пустыми.", parent=win)
+                return
+            env_data['CRS_API_URL'] = api_url
+            env_data['CRS_API_KEY'] = api_key
+
+        # Записываем все в .env
+        with open(dotenv_path, 'w', encoding='utf-8') as f:
+            for key, value in env_data.items():
+                f.write(f'{key}="{value}"\n')
+
+        messagebox.showinfo("Успех", "Настройки сохранены. Приложение будет перезапущено для их применения.", parent=win)
+        win.destroy()
+        # Перезапускаем приложение
+        os.execv(sys.executable, ['python'] + sys.argv)
+
+    button_frame = tk.Frame(main_frame)
+    button_frame.pack(pady=10)
+    tk.Button(button_frame, text="Сохранить и перезапустить", command=save_initial_config).pack()
+
+    win.protocol("WM_DELETE_WINDOW", lambda: sys.exit(0)) # Выход, если пользователь закрыл окно
+    win.eval('tk::PlaceWindow . center')
     win.mainloop()
 
 def _clean_html_content(html_content):
@@ -1237,77 +1474,6 @@ def get_elapsed_record_time():
     return max(elapsed, 0)  # Ensure non-negative result
 
 
-def periodic_tray_menu_update():
-    """Periodically update the tray menu to reflect current state"""
-    last_state = (is_recording, is_paused)
-    while True:
-        current_state = (is_recording, is_paused)
-        if current_state != last_state:
-            try:
-                update_tray_menu()
-                last_state = current_state
-            except Exception as e:
-                print(f"Error updating tray menu: {e}")
-        
-        time.sleep(0.5)  # Update every 0.5 seconds
-
-def process_recording_tasks(file_path):
-    global is_post_processing, post_process_file_path, post_process_stage
-    print(f"--- Начало постобработки для файла: {file_path} ---")
-    
-    # Update post-processing status
-    is_post_processing = True
-    post_process_file_path = file_path
-    post_process_stage = "transcribe"
-    
-    base_name, _ = os.path.splitext(file_path)
-    audio_path = Path(file_path)
-    txt_output_path = base_name + ".txt"
-    transcription_task_id = post_task(file_path, "transcribe")
-    if transcription_task_id and poll_and_save_result(transcription_task_id, txt_output_path):
-        print(f"Транскрибация успешна. Начало создания протокола из {txt_output_path}")
-
-        # --- Корректное определение даты записи ---
-        recording_date = datetime.now() # По умолчанию - текущая
-        try:
-            date_str = audio_path.parent.name
-            recording_date = datetime.strptime(date_str, '%Y-%m-%d')
-        except (ValueError, IndexError):
-            print(f"Не удалось получить дату из имени папки: {audio_path.parent.name}. Используется текущая дата.")
-
-        # Update post-processing status for protocol stage
-        post_process_stage = "protocol"
-        
-        # Собираем финальную строку для промпта в правильном порядке
-        final_prompt_addition = build_final_prompt_addition(base_path=audio_path.parent, recording_date=recording_date)
-        
-        protocol_task_id = post_task(txt_output_path, "protocol", prompt_addition_str=final_prompt_addition, add_participants_prompt=False) # add_participants_prompt=False, так как они уже в строке
-        if protocol_task_id:
-            protocol_output_path = base_name + "_protocol.pdf"
-
-            # --- Сохранение добавки к промпту в метаданные ---
-            json_path = base_name + '.json'
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, 'r+', encoding='utf-8') as f: # Открываем для чтения и записи
-                        metadata = json.load(f)
-                        metadata['promptAddition'] = final_prompt_addition
-                        f.seek(0)
-                        json.dump(metadata, f, indent=4, ensure_ascii=False)
-                        f.truncate()
-                except Exception as e:
-                    print(f"Не удалось обновить метаданные с промптом для {json_path}: {e}")
-
-            # Теперь результат сохраняется только в правильный PDF файл
-            poll_and_save_result(protocol_task_id, protocol_output_path)
-    
-    # Reset post-processing status
-    is_post_processing = False
-    post_process_file_path = ""
-    post_process_stage = ""
-
-    print(f"--- Завершение постобработки для файла: {file_path} ---")
-
 def recorder_mic(device_index, stop_event, audio_queue):
     """Records audio from microphone using sounddevice."""
     def callback(indata, frames, time, status):
@@ -1547,8 +1713,30 @@ def get_recordings_last_modified():
     return latest_mtime
 
 @app.route('/')
-def index():    
+def index():
+    from flask import session, redirect, url_for
+    if not session.get('logged_in'):
+        return redirect(url_for('login'))
     return render_template('index.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    from flask import session, redirect, url_for
+    error = None
+    if request.method == 'POST':
+        # Проверяем, что хэш существует и совпадает с введенным паролем
+        if request.form['username'] == USERNAME and PASSWORD_HASH and check_password_hash(PASSWORD_HASH, request.form['password']):
+            session['logged_in'] = True
+            return redirect(url_for('index'))
+        else:
+            error = 'Неверный логин или пароль'
+    return render_template('login.html', error=error)
+
+@app.route('/logout')
+def logout():
+    from flask import session, redirect, url_for
+    session.pop('logged_in', None)
+    return redirect(url_for('login'))
 
 @app.route('/get_date_dirs', methods=['GET'])
 def get_date_dirs():
@@ -2031,6 +2219,18 @@ def favicon():
     
     return Response(icon_bytes, mimetype='image/vnd.microsoft.icon')
 
+@app.before_request
+def before_request():
+    from flask import session, redirect, url_for
+    # Пропускаем проверку для статических файлов, страницы логина и favicon
+    if request.endpoint in ['static', 'login', 'favicon', 'logout']:
+        return
+    # Если пользователь не авторизован, перенаправляем на страницу входа
+    if not session.get('logged_in'):
+        # Для AJAX запросов возвращаем ошибку, чтобы JS мог ее обработать
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(error='Unauthorized'), 401
+        return redirect(url_for('login'))
 # --- Favicon Generation ---
 def create_favicon(shape, color, size=(32, 32)):
     """Создает иконку для favicon и возвращает ее в виде байтов."""
@@ -2141,7 +2341,7 @@ def run_flask():
     host = '0.0.0.0' if settings.get("lan_accessible") else '127.0.0.1'
     port = settings.get("port", DEFAULT_SETTINGS["port"])
     try:
-        http_server = make_server(host, port, app)
+        http_server = make_server(host, port, app, threaded=True)
         http_server.serve_forever()
     except Exception as e:
         print(f"Failed to start Flask server: {e}")
@@ -2237,6 +2437,7 @@ def start_recording():
     # 2. Reset state and start recording
     is_recording = True
     is_paused = False
+    update_tray_menu() # Обновляем меню при старте
     total_pause_duration = 0.0
     start_time = datetime.now()
     stop_event.clear()
@@ -2288,6 +2489,7 @@ def resume_recording():
     # Reset pause state
     is_paused = False
     pause_start_time = None
+    update_tray_menu() # Обновляем меню при возобновлении
 
 
 def start_recording_from_tray(icon, item):
@@ -2321,6 +2523,7 @@ def stop_recording():
     end_time = datetime.now()
     is_recording = False
     is_paused = False
+    update_tray_menu() # Обновляем меню при остановке
     total_pause_duration = 0.0
 
     script_dir = get_application_path()
@@ -2450,6 +2653,7 @@ def pause_recording():
     # Set pause state
     is_paused = True
     pause_start_time = datetime.now()
+    update_tray_menu() # Обновляем меню при паузе
 
 
 def pause_recording_from_tray(icon, item):
@@ -2784,6 +2988,11 @@ def _suppress_subprocess_window():
         except Exception as e:
             print(f"Не удалось применить патч для скрытия окон subprocess: {e}")
 
+def check_and_prompt_config():
+    """Проверяет наличие конфигурации и запрашивает ее у пользователя при необходимости."""
+    if not all([USERNAME, PASSWORD_HASH, API_URL, API_KEY]):
+        prompt_for_initial_config()
+
 if __name__ == '__main__':
     # --- Проверка на запуск только одного экземпляра приложения ---
     if CreateMutex:
@@ -2803,6 +3012,11 @@ if __name__ == '__main__':
     _suppress_subprocess_window()
     setup_logging()
     load_settings()
+    app.secret_key = settings.get("secret_key")
+
+    # Проверяем конфигурацию перед загрузкой контактов и запуском сервера
+    check_and_prompt_config()
+
     load_contacts()
     generate_favicons()
 
@@ -2822,9 +3036,7 @@ if __name__ == '__main__':
     if platform.system() == "Windows":
         sys_monitor_thread = Thread(target=monitor_sys, args=(monitoring_stop_event,), daemon=True)
         sys_monitor_thread.start()
-
-    # Start periodic tray menu update thread
-    menu_update_thread = Thread(target=periodic_tray_menu_update, daemon=True)
-    menu_update_thread.start()
-
+    
+    # Запускаем иконку в основном потоке. Это блокирующий вызов.
+    # Веб-сервер и другие компоненты работают в фоновых потоках.
     main_icon.run()

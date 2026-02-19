@@ -74,7 +74,7 @@ h1, h2, h3, h4 {
 }
 
 .post-process-status {
-    font-size: 0.9em;
+    font-size: 1.1em;
     color: #3498db;
     text-align: right;
     margin-top: 5px;
@@ -137,6 +137,21 @@ h1, h2, h3, h4 {
 
 .tab-content { display: none; }
 .tab-content.active { display: block; }
+
+/* Ссылка для выхода из системы */
+.logout-link {
+    display: block;
+    text-align: right;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #7f8c8d;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.logout-link:hover {
+    color: #3498db;
+}
 
 /* Стили для списка участников */
 .contact-group {

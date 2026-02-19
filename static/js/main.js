@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             // Update control buttons state
-            recBtn.disabled = data.status === 'rec' && data.status !== 'paused';
+            recBtn.disabled = data.status === 'rec';
             pauseBtn.disabled = data.status !== 'rec';
             stopBtn.disabled = data.status === 'stop';
             
@@ -86,6 +86,11 @@ document.addEventListener('DOMContentLoaded', function () {
             statusIndicator.className = 'status-indicator stop';
         }
     }
+
+    // Глобальный обработчик ошибок fetch для перенаправления на страницу входа
+    document.addEventListener('fetch-error', function(e) {
+        if (e.detail.status === 401) { window.location.href = '/login'; }
+    });
 
     // --- Audio Level Charts ---
     const audioChartCanvas = document.getElementById('audio-chart');
@@ -340,18 +345,28 @@ document.addEventListener('DOMContentLoaded', function () {
     // Эта функция будет вызываться по интервалу для получения данных с сервера
     async function updateAudioLevels() {
         try {
-            const response = await fetch('/audio_levels');
+            const response = await fetch('/audio_levels')
+            if (response.status === 401) {
+                // Если сессия истекла, перенаправляем на страницу входа
+                window.location.href = '/login';
+                return;
+            }
             const levels = await response.json();
     
             const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
             const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
             const recValue = (currentStatus === 'rec') ? 1 : 0;
+
+            // Добавляем проверку на существование массивов
+            if (!micHistory) micHistory = new Array(chartHistorySize).fill(0);
+            if (!sysHistory) sysHistory = new Array(chartHistorySize).fill(0);
     
             micHistory.push(amplifiedMic);
             sysHistory.push(amplifiedSys);
             recHistory.push(recValue);
             if (micHistory.length > chartHistorySize) micHistory.shift(); // Возвращаем старую логику
             if (sysHistory.length > chartHistorySize) sysHistory.shift(); // Возвращаем старую логику
+            if (recHistory.length > chartHistorySize) recHistory.shift();
 
             // Вызываем отрисовку здесь, синхронно с получением данных
             // и только если frameCount кратен scrollInterval
@@ -571,6 +586,11 @@ document.addEventListener('DOMContentLoaded', function () {
     async function checkForRecordingUpdates() {
         try {
             const response = await fetch('/recordings_state');
+            if (response.status === 401) {
+                // Если сессия истекла, перенаправляем на страницу входа
+                window.location.href = '/login';
+                return;
+            }
             const state = await response.json();
             if (state.last_modified > lastRecordingsState) {
                 console.log('Обнаружены изменения в записях, обновляю список...');
@@ -584,6 +604,11 @@ document.addEventListener('DOMContentLoaded', function () {
     async function updateRecordingsList() {
         try {
             const response = await fetch('/get_date_dirs');
+            if (response.status === 401) {
+                // Если сессия истекла, перенаправляем на страницу входа
+                window.location.href = '/login';
+                return;
+            }
             const dateGroupsData = await response.json();
 
             if (dateGroupsData.length === 0 && recordingsListContainer.children.length === 0) {
@@ -684,6 +709,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         try {
             const response = await fetch(`/get_recordings_for_date/${date}`);
+            if (response.status === 401) {
+                // Если сессия истекла, перенаправляем на страницу входа
+                window.location.href = '/login';
+                return;
+            }
             const recordings = await response.json();
 
             tableBody.innerHTML = ''; // Очищаем
