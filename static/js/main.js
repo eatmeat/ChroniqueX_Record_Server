@@ -1790,7 +1790,20 @@ document.addEventListener('DOMContentLoaded', function () {
                 modalAddMeetingDateCheckbox.addEventListener('change', () => {
                     const sourceGroup = modal.querySelector('.meeting-date-source-group');
                     if(sourceGroup) sourceGroup.style.display = modalAddMeetingDateCheckbox.checked ? 'block' : 'none';
+                    saveAndPreviewFromModal(); // <--- Вот недостающий вызов
                 });
+            }
+
+            // Отдельно привязываем обработчик для чекбокса "Использовать свою добавку к промпту"
+            const useCustomPromptCheckbox = modal.querySelector('#modal-use-custom-prompt');
+            if (useCustomPromptCheckbox) {
+                useCustomPromptCheckbox.addEventListener('change', saveAndPreviewFromModal);
+            }
+
+            // Отдельно привязываем обработчик для текстового поля добавки к промпту
+            const promptAdditionTextarea = modal.querySelector('#modal-prompt-addition');
+            if (promptAdditionTextarea) {
+                promptAdditionTextarea.addEventListener('input', saveAndPreviewFromModal);
             }
 
             // Восстанавливаем класс для группы с источником даты, так как ID был удален
@@ -1801,6 +1814,18 @@ document.addEventListener('DOMContentLoaded', function () {
 
             modal.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
                 radio.addEventListener('change', saveAndPreviewFromModal);
+            });
+
+            // Отдельно привязываем обработчики для шаблонов названий
+            modal.querySelectorAll('input[name="active_meeting_name_template"]').forEach(radio => {
+                radio.addEventListener('change', saveAndPreviewFromModal);
+            });
+
+            // Отдельно привязываем обработчики для правил контекста
+            modal.querySelectorAll('.context-rule-item').forEach(item => {
+                item.querySelector('.context-rule-enabled')?.addEventListener('change', saveAndPreviewFromModal);
+                item.querySelector('.context-rule-pattern')?.addEventListener('input', saveAndPreviewFromModal);
+                item.querySelector('.context-rule-prompt')?.addEventListener('input', saveAndPreviewFromModal);
             });
 
             // Кнопки добавления/удаления правил
