@@ -1619,10 +1619,11 @@ document.addEventListener('DOMContentLoaded', function () {
         modalContactsCol.appendChild(contactsContent);
         modalPreviewCol.appendChild(previewContent);
 
-        // --- Удаляем ID у клонированных элементов, чтобы избежать конфликтов ---
-        // ID должны быть уникальными на странице.
+        // --- Делаем ID клонированных элементов уникальными, добавляя префикс ---
         settingsContent.querySelectorAll('[id]').forEach(el => {
-            if (el.id !== 'settings-tab') el.removeAttribute('id');
+            if (el.id !== 'settings-tab') {
+                el.id = `modal-${el.id}`;
+            }
         });
 
         // --- Добавляем новый сгенерированный шаблон названия собрания ---
@@ -1685,11 +1686,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // Вспомогательная функция для сбора настроек из DOM (основного или модального)
     function getSettingsFromDOM(container = document) {
         const getVal = (selector) => container.querySelector(selector)?.value;
-        const getChecked = (selector) => container.querySelector(selector)?.checked;
+        const getChecked = (selector) => container.querySelector(selector)?.checked || false;
 
         const getContextFileRulesFromDOM = (cont) => {
             const rules = [];
-            cont.querySelectorAll('.context-rule-item').forEach(item => {
+            cont.querySelectorAll('.context-rule-item:not(.modal-only-template)').forEach(item => {
                 rules.push({
                     pattern: item.querySelector('.context-rule-pattern').value.trim(),
                     prompt: item.querySelector('.context-rule-prompt').value,
@@ -1701,7 +1702,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const getMeetingNameTemplatesFromDOM = (cont) => {
             const templates = [];
-            cont.querySelectorAll('.meeting-name-template-item').forEach(item => {
+            cont.querySelectorAll('.meeting-name-template-item:not(.modal-only-template)').forEach(item => {
                 const id = item.dataset.id;
                 if (!id || id === 'null') return; // Пропускаем опцию "Не добавлять"
 
@@ -1721,16 +1722,20 @@ document.addEventListener('DOMContentLoaded', function () {
             return templates;
         };
 
+        // Определяем, работаем ли мы в модальном окне, по наличию элемента с префиксом
+        const isModal = container.id === 'confirmation-modal';
+        const idPrefix = isModal ? '#modal-' : '#';
+
         return {
-            use_custom_prompt: getChecked('#use-custom-prompt'),
-            prompt_addition: getVal('#prompt-addition'),
-            add_meeting_date: getChecked('#add-meeting-date'),
-            meeting_date_source: getVal('input[name="meeting_date_source"]:checked'),
-            active_meeting_name_template_id: getVal('input[name="active_meeting_name_template"]:checked'),
+            use_custom_prompt: getChecked(`${idPrefix}use-custom-prompt`),
+            prompt_addition: getVal(`${idPrefix}prompt-addition`),
+            add_meeting_date: getChecked(`${idPrefix}add-meeting-date`),
+            meeting_date_source: getVal('input[name="meeting_date_source"]:checked'), // name уникален, префикс не нужен
+            active_meeting_name_template_id: getVal('input[name="active_meeting_name_template"]:checked'), // name уникален
             selected_contacts: [...container.querySelectorAll('.contact-group-list input[type="checkbox"]:checked')].map(cb => cb.value).filter(Boolean),
             context_file_rules: getContextFileRulesFromDOM(container),
             meeting_name_templates: getMeetingNameTemplatesFromDOM(container),
-            confirm_prompt_on_action: getChecked('#confirm-prompt-on-action'),
+            confirm_prompt_on_action: getChecked(`${idPrefix}confirm-prompt-on-action`),
         };
     }
 
@@ -1782,14 +1787,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 dateSourceGroup.classList.add('meeting-date-source-group');
             }
 
-            // Отдельно привязываем обработчик для чекбокса даты, чтобы скрыть/показать зависимые радио-кнопки
-            const addMeetingDateCheckbox = modal.querySelector('input[name="add_meeting_date"]');
-            if (addMeetingDateCheckbox) {
-                addMeetingDateCheckbox.addEventListener('change', () => {
-                    modal.querySelector('.meeting-date-source-group').style.display = addMeetingDateCheckbox.checked ? 'block' : 'none';
-                    saveAndPreviewFromModal();
-                });
-            }
             modal.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
                 radio.addEventListener('change', saveAndPreviewFromModal);
             });
@@ -1846,7 +1843,14 @@ document.addEventListener('DOMContentLoaded', function () {
                         const cb = groupEl.querySelector(`input[value="${id}"]`);
                         if (cb) cb.checked = groupCheckbox.checked;
                     });
-                    saveAndPreviewFromModal();
+                    // Обновляем счетчик после изменения
+                    const groupCounter = groupEl.querySelector('.group-counter');
+                    if (groupCounter) {
+                        const totalCount = contactIdsInGroup.length;
+                        const checkedCount = groupCheckbox.checked ? totalCount : 0;
+                        groupCounter.textContent = `${checkedCount} / ${totalCount}`;
+                    }
+                    saveAndPreviewFromModal(); // Сохраняем и обновляем предпросмотр
                 };
 
                 // --- Клик по заголовку имитирует клик по чекбоксу ---
@@ -1867,8 +1871,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         const checkedCount = contactCheckboxes.filter(cb => cb.checked).length;
                         groupCheckbox.checked = checkedCount === contactCheckboxes.length && contactCheckboxes.length > 0;
                         groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < contactCheckboxes.length;
+
+                        // Обновляем счетчик
+                        const groupCounter = groupEl.querySelector('.group-counter');
+                        if (groupCounter) {
+                            const totalCount = contactCheckboxes.length;
+                            groupCounter.textContent = `${checkedCount} / ${totalCount}`;
+                        }
+
+                        saveAndPreviewFromModal(); // Сохраняем и обновляем предпросмотр
                     }
-                    saveAndPreviewFromModal();
                 };
             });
 
