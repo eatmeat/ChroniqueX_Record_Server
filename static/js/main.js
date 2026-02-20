@@ -1784,6 +1784,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 el.addEventListener('change', saveAndPreviewFromModal);
             });
 
+            // Отдельно привязываем обработчик для чекбокса даты, чтобы скрыть/показать зависимые радио-кнопки
+            const modalAddMeetingDateCheckbox = modal.querySelector('#modal-add-meeting-date');
+            if (modalAddMeetingDateCheckbox) {
+                modalAddMeetingDateCheckbox.addEventListener('change', () => {
+                    const sourceGroup = modal.querySelector('.meeting-date-source-group');
+                    if(sourceGroup) sourceGroup.style.display = modalAddMeetingDateCheckbox.checked ? 'block' : 'none';
+                });
+            }
+
             // Восстанавливаем класс для группы с источником даты, так как ID был удален
             const dateSourceGroup = modal.querySelector('input[name="meeting_date_source"]')?.closest('.form-group');
             if (dateSourceGroup) {
