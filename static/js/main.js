@@ -1527,6 +1527,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return; // Выходим, чтобы не вызывать saveContactSelection
         }
         if (selectionChanged) await saveContactSelection().then(updatePromptPreview);
+
+        // Обновляем счетчик в строке группы (только для основного интерфейса)
+        if (updateCounterCallback) updateCounterCallback();
     }
 
     addGroupBtn.addEventListener('click', async () => {
@@ -1650,6 +1653,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function hideConfirmationModal() {
+        // Сохраняем все изменения, сделанные в модальном окне, даже при отмене,
+        // так как добавление участников/групп уже отправило данные на сервер.
+        saveModalSettings();
         modal.style.display = 'none';
         document.body.style.overflow = ''; // Восстанавливаем прокрутку
 
@@ -1660,6 +1666,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         onConfirmCallback = null;
         modalPausedRecording = false; // Сбрасываем флаг
+
+        // Перезагружаем настройки и контакты в основном интерфейсе, чтобы отразить изменения
+        loadContactsAndSettings();
     }
 
     modalConfirmBtn.addEventListener('click', async () => {
