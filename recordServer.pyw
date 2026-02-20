@@ -1879,7 +1879,7 @@ def save_web_settings():
                     'active_meeting_name_template_id', 'relay_enabled', 'confirm_prompt_on_action']:
             if key in data:
                 settings[key] = data[key]
-
+        
         save_settings(settings) # Save all settings
         return jsonify({"status": "ok", "message": "Настройки успешно сохранены!"})
     except Exception as e:

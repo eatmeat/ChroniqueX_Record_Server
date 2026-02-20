@@ -1,0 +1,71 @@
+.control-btn {
+    padding: 10px 20px;
+    font-size: 1em;
+    border: none;
+    border-radius: 5px;
+    color: white;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+.control-btn:disabled {
+    background-color: #bdc3c7;
+    cursor: not-allowed;
+}
+.rec-btn { background-color: #c0392b; }
+.rec-btn:not(:disabled):hover { background-color: #e74c3c; }
+.pause-btn { background-color: #d35400; }
+.pause-btn:not(:disabled):hover { background-color: #f39c12; }
+.stop-btn { background-color: #7f8c8d; }
+.stop-btn:not(:disabled):hover { background-color: #95a5a6; }
+.pip-btn { background-color: #2980b9; font-size: 1.2em; padding: 8px 15px; }
+.pip-btn:not(:disabled):hover { background-color: #3498db; }
+.pip-btn.active { background-color: #3498db; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+
+.action-btn {
+    margin-left: 2px;
+    padding: 4px 8px; /* Унифицируем отступы с полями ввода */
+    font-size: 1em; /* Унифицируем размер шрифта */
+    border-radius: 8px;
+    border: 1px solid #bdc3c7;
+    background-color: #fff;
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    box-sizing: border-box; /* Учитываем padding и border в общей высоте */
+    height: 30px; /* Задаем фиксированную высоту, как у полей ввода */
+}
+.action-btn:hover {
+    background-color: #dfe6e9;
+    border-color: #b2bec3;
+}
+
+.item-actions .action-btn {
+    white-space: nowrap; /* Предотвращает перенос текста на кнопках */
+    margin-left: 5px; /* Уменьшаем отступ между кнопками */
+}
+
+.submit-btn {
+    background-color: #2980b9;
+    color: white;
+    padding: 10px 15px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.submit-btn:hover {
+    background-color: #3498db;
+}
+
+.remove-rule-btn, .delete-btn {
+    /* Убираем горизонтальные отступы, так как центрируем через flex */
+    padding: 0;
+    width: 30px; /* Делаем кнопку квадратной, равной высоте */
+    font-size: 1.2em; /* Делаем крестик чуть больше */
+    display: flex; /* Включаем flexbox для центрирования */
+    align-items: center; /* Выравниваем по вертикали */
+    justify-content: center; /* Выравниваем по горизонтали */
+}
+
+.recreate-transcription-btn, .recreate-protocol-btn {
+    border-color: #e67e22;
+    font-size: 0.8em; /* Делаем символ пересоздания крупнее */
+}

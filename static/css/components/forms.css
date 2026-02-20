@@ -1,0 +1,122 @@
+/* Заставляем элементы форм наследовать шрифт */
+input, button, textarea {
+    font-family: inherit;
+    font-weight: inherit;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+/* --- Общий стиль для всех полей ввода --- */
+.input-field, input[type="text"], input[type="number"], textarea {
+    width: 100%;
+    padding: 6px 8px; /* Унифицированный padding */
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    box-sizing: border-box;
+    height: 30px; /* Унифицированная высота */
+    font-size: 1em;
+    outline-color: #3498db; /* Цвет обводки при фокусе */
+}
+
+.prompt-info {
+    font-size: 0.9em;
+    color: #7f8c8d;
+    margin-bottom: 10px;
+}
+
+#settings-save-status {
+    margin-top: 10px;
+    font-weight: bold;
+}
+
+/* Стили для правил файлов контекста */
+#context-file-rules-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.context-rule-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    background-color: #fdfdfd;
+}
+
+.context-rule-header {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.context-rule-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+.context-rule-pattern, .context-rule-prompt {
+    /* Стили теперь наследуются от общего правила для input/textarea */
+}
+
+.context-rule-prompt {
+    resize: vertical;
+    min-height: 40px;
+}
+
+/* Стили для шаблонов названий собраний */
+#meeting-name-templates-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 15px;
+}
+
+.meeting-name-template-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.meeting-name-template-label {
+    display: flex;
+    flex-grow: 1;
+    align-items: center;
+    gap: 10px;
+}
+
+.meeting-name-template-input {
+    flex-grow: 1;
+    /* Стили теперь наследуются от общего правила для input */
+}
+
+.title-edit-input {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.add-item-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-top: 10px;
+    padding-top: 10px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-top: 1px dashed #e0e0e0;
+    border-bottom: 1px dashed #e0e0e0;
+}
+
+/* Стили для инпутов в строках добавления */
+.add-item-input {
+    flex-grow: 1; /* Занимает доступное место */
+}

@@ -1,0 +1,33 @@
+.tabs {
+    display: flex;
+    border-bottom: 1px solid #ccc;
+    justify-content: center; /* Центрируем вкладки */
+    margin-bottom: 20px;
+}
+
+.tab-link {
+    padding: 10px 15px;
+    cursor: pointer;
+    border: none;
+    background-color: transparent;
+    border-bottom: 3px solid transparent;    
+    font-size: 1.4em; /* Увеличенный размер для десктопа */
+    text-align: center; /* Центрируем текст внутри вкладки */
+    flex-basis: 0;      /* Устанавливаем базовую ширину в 0 */
+    flex-grow: 1;       /* Позволяем вкладкам равномерно расти */
+}
+
+.tab-link.active {
+    border-bottom-color: #3498db;
+    /*font-weight: bold;*/
+}
+
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Стиль для счетчика выбранных участников (на вкладке и в модальном окне) */
+.selected-count {
+    color: #3498db;
+    font-weight: normal;
+    margin-left: 5px;
+}

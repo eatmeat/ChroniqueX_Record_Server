@@ -1,0 +1,376 @@
+/* Стили для списка участников */
+.contact-group {
+    margin-bottom: 15px;
+    border-right: 1px solid #e0e0e0; /* Добавляем линию справа */
+    padding-right: 15px; /* Добавляем отступ справа от контента до линии */
+    /* Стили как у week-group для консистентности */
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    background-color: #fdfdfd;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.contact-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    justify-content: space-between; /* Размещаем элементы по краям */
+    padding: 8px;
+    border-radius: 8px;
+    /* cursor: pointer; - убираем курсор со всего заголовка */
+    transition: background-color 0.2s;
+}
+
+.contact-group-header:hover {
+    background-color: #ecf0f1;
+}
+
+/* Когда группа участников развернута, подсвечиваем заголовок */
+.contact-group:not(.collapsed) .contact-group-header {
+    background-color: #ecf0f1;
+}
+
+.contact-group-name { margin: 0; cursor: text; }
+
+.contact-group-list {
+    list-style: none;
+    padding-left: 10px;
+}
+
+.contact-group-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px;
+    border-radius: 8px;
+}
+
+.contact-group-list li:hover {
+    background-color: #ecf0f1;
+}
+
+.contact-group-list li label {
+    display: flex;
+    align-items: center;
+    flex-grow: 1; /* Позволяет label занять доступное пространство */
+    min-width: 0; /* Необходимо для корректного сжатия flex-элемента */
+    gap: 8px;
+    cursor: pointer;
+}
+
+/* Счетчик участников в группе */
+.group-counter {
+    font-size: 0.9em;
+    color: #7f8c8d;
+    white-space: nowrap; /* Чтобы текст не переносился */
+    cursor: pointer; /* Указываем, что по счетчику можно кликнуть */
+}
+
+/* Стили для label в заголовке группы, аналогично label участника */
+.contact-group-header-label {
+    display: flex;
+    align-items: center;
+    flex-grow: 1; /* Позволяет label занять доступное пространство */
+    min-width: 0; /* Необходимо для корректного сжатия flex-элемента */
+    gap: 8px;
+    cursor: pointer;
+}
+
+.contact-name {
+    cursor: text;
+}
+
+/* Стили для списка записей */
+.date-group h3 {
+    cursor: pointer;
+    margin-top: 20px;
+    /* Добавляем flex для выравнивания стрелки */
+    padding: 8px; /* Добавляем внутренние отступы */
+    border-radius: 8px; /* Скругляем углы, как у недели */
+    transition: background-color 0.2s; /* Плавный переход */
+    display: flex;
+    align-items: center;
+    justify-content: space-between; /* Размещаем элементы по краям */
+}
+
+.date-group-left {
+    display: flex;
+    align-items: center;
+    /* gap: 5px; - Убираем, так как теперь используется margin у иконки */
+}
+
+/* Подсветка при наведении */
+.date-group h3:hover {
+    background-color: #ecf0f1;
+}
+
+/* Когда группа даты развернута, подсвечиваем заголовок */
+.date-group:not(.collapsed) > h3 {
+    background-color: #ecf0f1;
+}
+
+.recording-items {
+    list-style: none;
+    padding: 0;
+}
+
+/* Стили для группы недель */
+.week-group {
+    margin-bottom: 15px;
+    padding: 15px;
+    border: 1px solid #e0e0e0; /* Делаем рамку видимой для более четкого контура */
+    border-radius: 8px;
+    background-color: #fdfdfd;
+    box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.05); /* Добавляем тень со смещением по X и Y */
+    transition: background-color 0.2s ease-in-out; /* Плавный переход для фона */
+}
+
+.week-group h4 {
+    /* Унифицируем стили для h4 в обоих состояниях */
+    margin-top: 0;
+    margin-bottom: 0; /* Убираем нижний отступ, будем управлять им через padding */
+    cursor: pointer;
+    padding: 8px; /* Устанавливаем единый внутренний отступ */
+    border-radius: 8px; /* Скругляем углы, как у родителя */
+    transition: background-color 0.2s; /* Плавный переход */
+    display: flex;
+    align-items: center;
+    font-size: 1.17em;
+    justify-content: space-between; /* Размещаем элементы по краям */
+    /* border-bottom: 2px solid transparent; - Убираем, так как отступ теперь ниже */
+    margin-bottom: 15px; /* Добавляем нижний отступ для разделения с контентом */
+}
+
+/* Стили для заголовка недели и номера недели */
+.week-title {
+    flex-grow: 1; /* Позволяет заголовку занять доступное место */
+}
+.week-number {
+    color: #7f8c8d; /* Делаем цвет менее контрастным */
+}
+
+/* Подсветка при наведении */
+.week-group h4:hover {
+    background-color: #ecf0f1;
+}
+
+/* Когда неделя свернута, убираем внутренний отступ у родительского блока */
+.week-group.collapsed h4 {
+    margin-bottom: 0; /* Убираем нижний отступ, когда неделя свернута */
+}
+
+.loading-placeholder {
+    color: #7f8c8d;
+    padding: 15px;
+    text-align: center;
+    font-style: italic;
+}
+
+.recording-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid #f0f0f0;
+}
+.recording-item:last-child {
+    border-bottom: none;
+}
+.recording-item:hover {
+    background-color: #f9f9f9;
+    border-radius: 8px; /* Скругляем углы при наведении */
+}
+
+.item-main {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.rec-time {
+    font-weight: bold;
+    min-width: 70px; /* Фиксированная ширина для времени, чтобы выровнять имена файлов */
+    color: #34495e;
+}
+
+.rec-title {
+    font-weight: 500;
+    color: #2c3e50;
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+}
+
+.rec-filename {
+    color: #3498db;
+    text-decoration: none;
+}
+.rec-filename:hover {
+    text-decoration: underline;
+}
+
+.rec-size {
+    font-size: 0.9em;
+    color: #7f8c8d;
+}
+
+/* --- Новые стили для таблицы записей --- */
+.recording-table {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;    
+    overflow-x: auto; /* Добавляем горизонтальную прокрутку при необходимости */
+    margin-top: 10px;
+}
+
+.recording-table-header, .recording-table-row {
+    display: grid;
+    grid-template-columns: 80px 100px 1fr 250px;
+    gap: 10px;
+    align-items: center;
+    padding: 10px;
+    min-width: 600px; /* Устанавливаем минимальную ширину, чтобы контент не сжимался */
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.recording-table-header {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #495057;
+    font-size: 0.9em;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.recording-table-row:last-child {
+    border-bottom: none;
+}
+
+.recording-table-row:hover {
+    background-color: #f9f9f9;
+}
+
+.recording-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cell-title {
+    white-space: normal; /* Разрешаем перенос для длинных названий */
+}
+
+.cell-files {
+    justify-content: flex-start; /* Выравниваем кнопки по левому краю */
+    flex-wrap: wrap; /* Разрешаем перенос кнопок на новую строку */
+}
+
+.cell-files .action-btn {
+    min-width: 45px; /* Фиксированная ширина для кнопок */
+    text-align: center;
+    justify-content: center;
+    flex-shrink: 0; /* Запрещаем кнопкам сжиматься */
+}
+/* Контейнер для пары кнопок (например, TXT + кнопка пересоздания) */
+.file-action-pair {
+    display: inline-flex;
+    align-items: center;
+}
+/* По умолчанию скрываем кнопку пересоздания */
+.recreate-actions-container {
+    display: inline-flex;
+    transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    margin-left: 0;
+}
+/* Показываем кнопку пересоздания при наведении на пару */
+.file-action-pair:hover .recreate-actions-container {
+    opacity: 1;
+    max-width: 50px; /* Достаточно для одной кнопки */
+    margin-left: 4px; /* Добавляем отступ при появлении */
+}
+
+.cell-transcription .action-btn,
+.cell-protocol .action-btn {
+    min-width: 45px; /* Фиксированная ширина для кнопок TXT/PDF */
+    text-align: center;
+    justify-content: center;
+}
+
+.cell-transcription .recreate-transcription-btn,
+.cell-protocol .recreate-protocol-btn {
+    min-width: auto;
+}
+
+.editable-title {
+    cursor: text;
+    padding: 2px 4px;
+    border-radius: 3px;
+    width: 100%;
+    transition: background-color 0.2s;
+}
+
+.editable-title:hover {
+    background-color: #ecf0f1;
+}
+
+/* Стили для отображения добавки к промпту при редактировании */
+.prompt-addition-display {
+    margin-top: 8px;
+    padding: 10px;
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 0.85em;
+    color: #495057;
+    max-height: 200px; /* Ограничиваем высоту, чтобы не растягивать строку */
+    overflow-y: auto; /* Добавляем скролл, если контент не помещается */
+    white-space: normal; /* Разрешаем перенос строк */
+}
+
+.prompt-addition-display pre {
+    margin: 0; /* Убираем стандартные отступы у <pre> */
+    font-family: inherit; /* Наследуем шрифт от родителя */
+}
+
+/* Стили для строки, содержащей блок с промптом */
+.prompt-display-row {
+    /* Используем grid, чтобы контент мог занять все колонки */
+    display: grid;
+    grid-column: 1 / -1; /* Растягиваем на все колонки от первой до последней */
+    padding: 0 10px 10px 10px; /* Отступы, совпадающие с .recording-table-row */
+    background-color: #f9f9f9; /* Тот же фон, что и при наведении на строку */
+}
+.prompt-display-row .prompt-addition-display {
+    margin-top: 0; /* Убираем верхний отступ, так как он уже есть у строки */
+}
+.audio-link {
+    color: #3498db;
+    border-color: #aed6f1;
+    background-color: #eaf2f8;
+    text-decoration: none;
+}
+.transcription-link, .protocol-link {
+    color: #95a5a6;
+    background-color: #f8f9f9;
+    border-color: #dfe6e9;
+    text-decoration: none;
+}
+.transcription-link:hover, .protocol-link:hover {
+    background-color: #ecf0f1;
+}
+
+.transcription-link.exists, .protocol-link.exists {
+    color: #27ae60;
+    border-color: #a3d9b1;
+    background-color: #e8f8ee;
+}
+.transcription-link.exists:hover, .protocol-link.exists:hover {
+    background-color: #dff3e6;
+}

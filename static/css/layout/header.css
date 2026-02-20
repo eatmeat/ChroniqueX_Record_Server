@@ -1,0 +1,65 @@
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.header-logo {
+    max-width: 350px; /* Ограничиваем максимальную ширину */
+    height: auto;     /* Высота подстроится автоматически для сохранения пропорций */
+    flex-shrink: 2;   /* Позволяем логотипу сжиматься, если не хватает места */
+}
+
+.status-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 1.1em;
+}
+
+.status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+.status-indicator.stop { background-color: #7f8c8d; }
+.status-indicator.rec { background-color: #e74c3c; animation: pulse 1.5s infinite; }
+.status-indicator.pause { background-color: #f39c12; }
+
+@keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+}
+
+.status-wrapper {
+    display: flex;
+    flex-direction: column;
+    width: 100%; /* Позволяет центрировать контент внутри */
+    align-items: flex-end;
+}
+
+.post-process-status {
+    font-size: 1.1em;
+    color: #3498db;
+    text-align: right;
+    margin-top: 5px;
+}
+
+/* Ссылка для выхода из системы */
+.logout-link {
+    display: block;
+    text-align: right;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+    color: #7f8c8d;
+    text-decoration: none;
+    transition: color 0.2s;
+}
+
+.logout-link:hover {
+    color: #3498db;
+}
