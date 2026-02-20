@@ -1018,10 +1018,16 @@ h1, h2, h3, h4 {
     padding-right: 10px; /* Небольшой отступ для скроллбара */
 }
 
-.modal-column h4 {
+/* Применяем стиль только к прямым дочерним h4 в колонке (заголовкам колонок) */
+.modal-column > h4 {
     margin-top: 0;
-    border-bottom: 1px solid #ccc;
+    /* border-bottom: 1px solid #ccc; - убрали ранее */
     padding-bottom: 10px;
+}
+
+/* Исправляем вертикальное выравнивание заголовка группы в модальном окне */
+.modal-column .contact-group-name {
+    margin-bottom: 0;
 }
 
 /* Адаптация модального окна для мобильных */

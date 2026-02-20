@@ -1951,17 +1951,103 @@ document.addEventListener('DOMContentLoaded', function () {
                     input.value = '';
                 };
             });
-            // Редактирование и удаление
+            
+            // --- Редактирование и удаление УЧАСТНИКОВ в модальном окне ---
             modal.querySelectorAll('.contact-name').forEach(nameSpan => {
                 nameSpan.onclick = () => {
-                    // Эта логика слишком сложна для простого переназначения,
-                    // поэтому мы просто запрещаем редактирование в модальном окне.
-                    // Пользователь может отредактировать на основной вкладке.
-                    nameSpan.style.cursor = 'default';
+                    const itemEl = nameSpan.closest('li');
+                    const labelEl = nameSpan.closest('label');
+                    const contactId = labelEl.querySelector('input[type="checkbox"]').value;
+                    const currentName = nameSpan.textContent;
+
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.value = currentName;
+                    input.className = 'contact-name-edit input-field';
+
+                    const buttonsContainer = document.createElement('div');
+                    buttonsContainer.className = 'item-actions';
+                    const deleteBtn = document.createElement('button');
+                    deleteBtn.textContent = '×';
+                    deleteBtn.className = 'action-btn delete-btn';
+                    deleteBtn.onmousedown = (e) => {
+                        e.preventDefault();
+                        if (confirm(`Удалить участника "${currentName}"?`)) {
+                            fetch(`/contacts/delete/${contactId}`, { method: 'POST' })
+                                .then(() => {
+                                    itemEl.remove();
+                                    saveAndPreviewFromModal();
+                                });
+                        }
+                    };
+                    buttonsContainer.appendChild(deleteBtn);
+
+                    labelEl.replaceChild(input, nameSpan);
+                    itemEl.appendChild(buttonsContainer);
+                    input.focus();
+                    input.select();
+
+                    const saveChanges = async () => {
+                        const newName = input.value.trim();
+                        itemEl.removeChild(buttonsContainer);
+                        if (newName && newName !== currentName) {
+                            await fetch(`/contacts/update/${contactId}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ name: newName })
+                            });
+                            nameSpan.textContent = newName;
+                        }
+                        labelEl.replaceChild(nameSpan, input);
+                        saveAndPreviewFromModal();
+                    };
+
+                    input.addEventListener('blur', saveChanges);
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') input.blur();
+                        else if (e.key === 'Escape') {
+                            itemEl.removeChild(buttonsContainer);
+                            labelEl.replaceChild(nameSpan, input);
+                        }
+                    });
                 };
             });
+
+            // --- Редактирование и удаление ГРУПП в модальном окне ---
             modal.querySelectorAll('.contact-group-name').forEach(nameSpan => {
-                nameSpan.onclick = () => { nameSpan.style.cursor = 'default'; };
+                nameSpan.onclick = () => { 
+                    const groupEl = nameSpan.closest('.contact-group');
+                    const oldName = nameSpan.textContent;
+                    const input = document.createElement('input');
+                    input.value = oldName;
+                    input.className = 'contact-name-edit input-field';
+
+                    nameSpan.replaceWith(input);
+                    input.focus();
+                    input.select();
+
+                    const saveChanges = async () => {
+                        const newName = input.value.trim();
+                        if (newName && newName !== oldName) {
+                            await fetch(`/groups/update`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ old_name: oldName, new_name: newName })
+                            });
+                            nameSpan.textContent = newName;
+                        }
+                        input.replaceWith(nameSpan);
+                        saveAndPreviewFromModal();
+                    };
+
+                    input.addEventListener('blur', saveChanges);
+                    input.addEventListener('keydown', (e) => {
+                        if (e.key === 'Enter') input.blur();
+                        else if (e.key === 'Escape') {
+                            input.replaceWith(nameSpan);
+                        }
+                    });
+                };
             });
 
             // Кнопка "Добавить" для группы
