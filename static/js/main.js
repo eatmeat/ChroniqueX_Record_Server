@@ -1527,9 +1527,6 @@ document.addEventListener('DOMContentLoaded', function () {
             return; // Выходим, чтобы не вызывать saveContactSelection
         }
         if (selectionChanged) await saveContactSelection().then(updatePromptPreview);
-
-        // Обновляем счетчик после всех изменений
-        if (updateCounterCallback) updateCounterCallback();
     }
 
     addGroupBtn.addEventListener('click', async () => {
@@ -1611,7 +1608,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 2. Очищаем колонки модального окна
         modalSettingsCol.innerHTML = '<h4>Настройки</h4>';
-        modalContactsCol.innerHTML = '<h4>Участники</h4>';
+        modalContactsCol.innerHTML = '<h4>Участники <span id="modal-selected-contacts-count" class="selected-count"></span></h4>';
         modalPreviewCol.innerHTML = '<h4>Предпросмотр</h4>';
 
         // 3. Вставляем клонированное содержимое
@@ -1746,13 +1743,7 @@ document.addEventListener('DOMContentLoaded', function () {
         // --- Обновление предпросмотра в модальном окне ---
         const saveAndPreviewFromModal = async () => {
             const settingsFromModal = getSettingsFromDOM(modal);
-            // 1. Сначала сохраняем настройки на сервер
-            await fetch('/save_web_settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(settingsFromModal),
-            });
-            // 2. Затем запрашиваем предпросмотр с уже сохраненными настройками
+            // Запрашиваем предпросмотр с текущими настройками из модального окна, не сохраняя их на сервер
             const response = await fetch('/preview_prompt_addition', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -1762,6 +1753,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const modalPreviewContent = modal.querySelector('#prompt-preview-content');
             if (modalPreviewContent) {
                 modalPreviewContent.textContent = data.prompt_text || '';
+            }
+
+            // --- Обновляем счетчик выбранных участников в заголовке модального окна ---
+            const modalCountElement = modal.querySelector('#modal-selected-contacts-count');
+            if (modalCountElement) {
+                const count = settingsFromModal.selected_contacts.length;
+                modalCountElement.textContent = count > 0 ? `(${count})` : '';
             }
         };
 
@@ -1862,7 +1860,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const rebindContacts = () => {
             modal.querySelectorAll('.contact-group').forEach(groupEl => {
                 const expandIconWrapper = groupEl.querySelector('.expand-icon-wrapper');
-                if (expandIconWrapper) {
+                if (expandIconWrapper) { // Добавляем проверку на существование
                     expandIconWrapper.onclick = (e) => {
                         e.stopPropagation();
                         groupEl.classList.toggle('collapsed');
@@ -1921,6 +1919,29 @@ document.addEventListener('DOMContentLoaded', function () {
                 };
             });
 
+            // --- Обработчики для добавления участников ---
+            // Уточняем селектор, чтобы он не захватывал кнопку добавления группы
+            modal.querySelectorAll('.contact-group .add-item-row .action-btn').forEach(addBtn => {
+                addBtn.onclick = async () => {
+                    const groupEl = addBtn.closest('.contact-group');
+                    const groupName = groupEl.querySelector('.contact-group-name').textContent;
+                    const input = addBtn.previousElementSibling;
+                    const name = input.value.trim();
+
+                    if (!name) return;
+
+                    const response = await fetch('/contacts/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, group_name: groupName })
+                    });
+                    const { contact } = await response.json();
+
+                    // Вместо полной перезагрузки, просто добавляем новый элемент в DOM модального окна
+                    addContactToModalDOM(groupEl, contact);
+                    input.value = '';
+                };
+            });
             // Редактирование и удаление
             modal.querySelectorAll('.contact-name').forEach(nameSpan => {
                 nameSpan.onclick = () => {
@@ -1936,14 +1957,21 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Кнопка "Добавить" для группы
             modal.querySelector('#add-group-btn')?.addEventListener('click', () => {
-                const input = modal.querySelector('#new-group-name');
-                if (input.value.trim()) {
-                    // Простое добавление пустой группы
-                    const newGroupEl = document.createElement('div');
-                    newGroupEl.className = 'contact-group';
-                    newGroupEl.innerHTML = `<div class="contact-group-header"><h4>${input.value.trim()}</h4></div><ul class="contact-group-list"></ul>`;
-                    modal.querySelector('#contacts-list-container').appendChild(newGroupEl);
-                    input.value = '';
+                const groupNameInput = modal.querySelector('#new-group-name');
+                const groupName = groupNameInput.value.trim();
+                if (groupName) {
+                    // Отправляем запрос на сервер для создания группы
+                    fetch('/contacts/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: '_init_group_', group_name: groupName })
+                    }).then(response => response.json()).then(result => {
+                        if (result.status === 'ok') {
+                            // Вместо полной перезагрузки, просто добавляем новую группу в DOM
+                            addGroupToModalDOM(modal, groupName);
+                        }
+                        groupNameInput.value = '';
+                    }).catch(err => console.error("Ошибка при добавлении группы:", err));
                 }
             });
         };
@@ -1953,6 +1981,105 @@ document.addEventListener('DOMContentLoaded', function () {
         rebindContacts();
         saveAndPreviewFromModal();
     }
+
+    // Вспомогательная функция для добавления новой группы в DOM модального окна
+    function addGroupToModalDOM(modal, groupName) {
+        const contactsContainer = modal.querySelector('#contacts-list-container');
+        const groupEl = document.createElement('div');
+        groupEl.className = 'contact-group'; // По умолчанию развернута
+
+        groupEl.innerHTML = `
+            <div class="contact-group-header">
+                <div class="expand-icon-wrapper"><span class="expand-icon"></span></div>
+                <label class="contact-group-header-label">
+                    <input type="checkbox" value="" title="Выбрать/снять всех в группе">
+                    <h4 class="contact-group-name">${groupName}</h4>
+                </label>
+                <span class="group-counter">0 / 0</span>
+            </div>
+            <ul class="contact-group-list">
+                <li class="add-item-row">
+                    <input type="text" placeholder="Новый учасник..." class="add-item-input input-field">
+                    <button type="button" class="action-btn">Добавить</button>
+                </li>
+            </ul>
+        `;
+
+        contactsContainer.appendChild(groupEl);
+
+        // --- Перепривязываем обработчики для новой группы ---
+        const expandIconWrapper = groupEl.querySelector('.expand-icon-wrapper');
+        expandIconWrapper.onclick = (e) => {
+            e.stopPropagation();
+            groupEl.classList.toggle('collapsed');
+        };
+
+        const addBtn = groupEl.querySelector('.add-item-row .action-btn');
+        addBtn.onclick = async () => {
+            const input = addBtn.previousElementSibling;
+            const name = input.value.trim();
+            if (!name) return;
+
+            const response = await fetch('/contacts/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, group_name: groupName })
+            });
+            const { contact } = await response.json();
+
+            addContactToModalDOM(groupEl, contact);
+            input.value = '';
+
+            // Обновляем счетчик
+            const counter = groupEl.querySelector('.group-counter');
+            const total = groupEl.querySelectorAll('.contact-group-list li label input[type="checkbox"]').length;
+            const checked = groupEl.querySelectorAll('.contact-group-list li label input[type="checkbox"]:checked').length;
+            counter.textContent = `${checked} / ${total}`;
+        };
+
+        // Обновляем предпросмотр
+        document.getElementById('confirmation-modal').querySelector('#modal-use-custom-prompt').dispatchEvent(new Event('change'));
+    }
+
+    // Вспомогательная функция для добавления нового участника в DOM модального окна
+    function addContactToModalDOM(groupEl, contact) {
+        const listEl = groupEl.querySelector('.contact-group-list');
+        const itemEl = document.createElement('li');
+
+        const labelEl = document.createElement('label');
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.value = contact.id;
+        checkbox.checked = false; // Новый контакт по умолчанию не выбран
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'contact-name';
+        nameSpan.textContent = contact.name;
+
+        labelEl.appendChild(checkbox);
+        labelEl.appendChild(nameSpan);
+        itemEl.appendChild(labelEl);
+        listEl.appendChild(itemEl);
+
+        // Перепривязываем обработчики для нового элемента
+        checkbox.onchange = () => {
+            const groupCheckbox = groupEl.querySelector('.contact-group-header-label input[type="checkbox"]');
+            const contactCheckboxes = [...groupEl.querySelectorAll('.contact-group-list input[type="checkbox"]')]
+                                        .filter(cb => cb.value);
+            const checkedCount = contactCheckboxes.filter(cb => cb.checked).length;
+            groupCheckbox.checked = checkedCount === contactCheckboxes.length;
+            groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < contactCheckboxes.length;
+
+            const groupCounter = groupEl.querySelector('.group-counter');
+            if (groupCounter) {
+                const totalCount = contactCheckboxes.length;
+                groupCounter.textContent = `${checkedCount} / ${totalCount}`;
+            }
+            // Вызываем функцию обновления предпросмотра из модального окна
+            document.getElementById('confirmation-modal').querySelector('#modal-use-custom-prompt').dispatchEvent(new Event('change'));
+        };
+    }
+
 
     // Переопределяем функцию сохранения, чтобы она могла работать с DOM модального окна
     async function saveModalSettings() {

@@ -157,6 +157,13 @@ h1, h2, h3, h4 {
     color: #3498db;
 }
 
+/* Стиль для счетчика выбранных участников (на вкладке и в модальном окне) */
+.selected-count {
+    color: #3498db;
+    font-weight: normal;
+    margin-left: 5px;
+}
+
 /* Стили для списка участников */
 .contact-group {
     margin-bottom: 15px;
