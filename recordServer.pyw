@@ -495,6 +495,7 @@ DEFAULT_SETTINGS = {
     ],
     "relay_enabled": False,
     "active_meeting_name_template_id": None,
+    "confirm_prompt_on_action": False, # Новая настройка
     "main_window_width": 700,
     "main_window_height": 800,
     "main_window_x": None, 
@@ -1755,20 +1756,34 @@ def recordings_state():
     """Возвращает время последнего изменения в папке с записями."""
     return jsonify({"last_modified": get_recordings_last_modified()})
 
-@app.route('/preview_prompt_addition', methods=['GET'])
+@app.route('/preview_prompt_addition', methods=['POST'])
 def preview_prompt_addition():
     """
     Генерирует и возвращает предпросмотр "добавки к промпту"
-    на основе текущих настроек.
+    на основе данных, переданных из клиента (например, из модального окна).
     """
     try:
+        # Получаем настройки из тела запроса
+        preview_settings = request.get_json()
+        if not preview_settings:
+            return jsonify({"error": "No settings provided"}), 400
+
+        # Временно применяем эти настройки для генерации предпросмотра
+        original_settings = settings.copy()
+        settings.update(preview_settings)
+
         # Для предпросмотра ищем файлы только в папке с текущей датой
-        current_date_str = datetime.now().strftime('%Y-%m-%d')
+        current_date_str = datetime.now().strftime('%Y-%m-%d') # Используем текущую дату для поиска файлов
         preview_path = Path(os.path.join(get_application_path(), 'rec', current_date_str))
         final_prompt_text = build_final_prompt_addition(base_path=preview_path, recording_date=datetime.now(), is_preview=True)
         return jsonify({"prompt_text": final_prompt_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+    finally:
+        # Восстанавливаем оригинальные настройки после генерации
+        if 'original_settings' in locals():
+            settings.clear()
+            settings.update(original_settings)
 
 @app.route('/update_metadata/<date_str>/<filename>', methods=['POST'])
 def update_metadata(date_str, filename):
@@ -1861,7 +1876,7 @@ def save_web_settings():
         # This allows partial updates (e.g., only updating contacts)
         for key in ['use_custom_prompt', 'prompt_addition', 'selected_contacts', 'context_file_rules',
                     'add_meeting_date', 'meeting_date_source', 'meeting_name_templates',
-                    'active_meeting_name_template_id', 'relay_enabled']:
+                    'active_meeting_name_template_id', 'relay_enabled', 'confirm_prompt_on_action']:
             if key in data:
                 settings[key] = data[key]
 
@@ -1884,6 +1899,7 @@ def get_web_settings():
         "meeting_name_templates": settings.get("meeting_name_templates", []),
         "active_meeting_name_template_id": settings.get("active_meeting_name_template_id", None),
         "relay_enabled": settings.get("relay_enabled", False),
+        "confirm_prompt_on_action": settings.get("confirm_prompt_on_action", False),
     }
     return jsonify(web_settings)
 

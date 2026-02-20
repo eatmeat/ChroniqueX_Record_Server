@@ -34,6 +34,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // --- Recording Status and Controls ---
     let currentStatus = 'stop';
+    let settings = {}; // Глобальная переменная для хранения настроек
     let audioContext;
 
     async function updateStatus() {
@@ -566,13 +567,7 @@ document.addEventListener('DOMContentLoaded', function () {
         } catch (error) { console.error('Ошибка при открытии PiP окна:', error); }
     });
 
-    recBtn.addEventListener('click', () => fetch(currentStatus === 'paused' ? '/resume' : '/rec'));
-    pauseBtn.addEventListener('click', () => fetch('/pause'));
-    stopBtn.addEventListener('click', () => {
-        fetch('/stop');
-        // Страница больше не перезагружается, чтобы не сбрасывать график.
-        // Список записей обновится при следующем обновлении страницы вручную.
-    });
+    
 
     // --- Recordings List and Actions ---
     const recordingsListContainer = document.getElementById('recordings-list');
@@ -845,31 +840,12 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         }
 
-        const { date, filename } = target.dataset;
+        // Обработчики для кнопок пересоздания теперь в функции `handleAction`
         if (target.classList.contains('recreate-transcription-btn')) {
-            fetch(`/recreate_transcription/${date}/${filename}`);
-            // Если мы были в режиме редактирования, выходим из него
-            // Принудительно выходим из режима редактирования, если он был активен
-            const input = target.closest('.recording-table-row').querySelector('.title-edit-input');
-            if (input) input.blur();
-            if (input) {
-                // Вызываем blur(), чтобы сработал обработчик сохранения
-                input.blur();
-            }
-            alert(`Задача пересоздания транскрипции для ${filename} отправлена.`);
+            handleAction('recreate_transcription', target.dataset);
         } else if (target.classList.contains('recreate-protocol-btn')) {
-            fetch(`/recreate_protocol/${date}/${filename}`);
-            // Если мы были в режиме редактирования, выходим из него
-            // Принудительно выходим из режима редактирования, если он был активен
-            const input = target.closest('.recording-table-row').querySelector('.title-edit-input');
-            if (input) input.blur();
-            if (input) {
-                // Вызываем blur(), чтобы сработал обработчик сохранения
-                input.blur();
-            }
-            alert(`Задача пересоздания протокола для ${filename} отправлена.`);
+            handleAction('recreate_protocol', target.dataset);
         }
-
         // Обработчик для разворачивания/сворачивания группы ДНЯ
         const groupHeader = e.target.closest('.date-group > h3');
         if (groupHeader) {
@@ -899,71 +875,36 @@ document.addEventListener('DOMContentLoaded', function () {
     const addMeetingDateCheckbox = document.getElementById('add-meeting-date');
     const meetingDateSourceGroup = document.getElementById('meeting-date-source-group');
     const meetingNameTemplatesContainer = document.getElementById('meeting-name-templates-container');
+    const confirmPromptOnActionCheckbox = document.getElementById('confirm-prompt-on-action');
     const addMeetingNameTemplateBtn = document.getElementById('add-meeting-name-template-btn');
 
     async function loadSettings() {
         const response = await fetch('/get_web_settings');
-        const settings = await response.json();
+        settings = await response.json(); // Обновляем глобальную переменную
         document.getElementById('use-custom-prompt').checked = settings.use_custom_prompt;
         document.getElementById('prompt-addition').value = settings.prompt_addition;
         addMeetingDateCheckbox.checked = settings.add_meeting_date;
         const dateSourceRadio = document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
         if (dateSourceRadio) dateSourceRadio.checked = true;
+        confirmPromptOnActionCheckbox.checked = settings.confirm_prompt_on_action;
 
         renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
         toggleMeetingDateSourceVisibility();
-    }
-
-    function getContextFileRulesFromDOM() {
-        const rules = [];
-        document.querySelectorAll('.context-rule-item').forEach(item => {
-            const pattern = item.querySelector('.context-rule-pattern').value.trim();
-            const prompt = item.querySelector('.context-rule-prompt').value; // Не тримим, чтобы сохранить отступы
-            const enabled = item.querySelector('.context-rule-enabled').checked;
-            if (pattern && prompt) {
-                rules.push({ pattern, prompt, enabled });
-            }
-        });
-        return rules;
-    }
-
-    function getMeetingNameTemplatesFromDOM() {
-        const templates = [];
-        document.querySelectorAll('.meeting-name-template-item').forEach(item => {
-            const id = item.dataset.id;
-            const templateInput = item.querySelector('.meeting-name-template-input');
-            if (id && templateInput) {
-                const template = templateInput.value.trim();
-                if (template) {
-                    templates.push({ id, template });
-                }
-            }
-        });
-        return templates;
+        renderContextFileRules(settings.context_file_rules);
+        updatePromptPreview();
     }
 
     async function saveSettings(keysToSave = null) {
-        // Собираем правила из DOM
-        const contextFileRules = getContextFileRulesFromDOM();
-
-        const settings = {
-            use_custom_prompt: document.getElementById('use-custom-prompt').checked,
-            prompt_addition: document.getElementById('prompt-addition').value,
-            add_meeting_date: addMeetingDateCheckbox.checked,
-            meeting_date_source: document.querySelector('input[name="meeting_date_source"]:checked').value,
-            meeting_name_templates: getMeetingNameTemplatesFromDOM(),
-            active_meeting_name_template_id: document.querySelector('input[name="active_meeting_name_template"]:checked')?.value || null,            
-            context_file_rules: contextFileRules,
-            // selected_contacts сохраняются отдельно при изменении на их вкладке
-        };
+        // Используем унифицированную функцию для сбора настроек с основной страницы
+        const currentSettings = getSettingsFromDOM(document);
         
-        let settingsToSave = settings;
+        let settingsToSave = currentSettings;
         // Если передан массив ключей, отправляем только их
         if (Array.isArray(keysToSave)) {
             settingsToSave = {};
             for (const key of keysToSave) {
-                if (key in settings) {
-                    settingsToSave[key] = settings[key];
+                if (key in currentSettings) {
+                    settingsToSave[key] = currentSettings[key];
                 }
             }
         }
@@ -995,21 +936,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function toggleMeetingDateSourceVisibility() { meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; }
 
-    // --- Context File Rules ---
-    const contextRulesContainer = document.getElementById('context-file-rules-container');
-
-    function renderContextFileRules(rules = []) {
-        contextRulesContainer.innerHTML = '';
-        if (rules.length === 0) {
-            // Добавляем правило по умолчанию, если список пуст
-            rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n', enabled: true });
-        }
-        rules.forEach(rule => {
-            addContextRuleRow(rule.pattern, rule.prompt, rule.enabled);
+    if (confirmPromptOnActionCheckbox) {
+        confirmPromptOnActionCheckbox.addEventListener('change', () => {
+            saveSettings(['confirm_prompt_on_action']);
         });
     }
 
-    function addContextRuleRow(pattern = '', prompt = '', isEnabled = true) {
+    // --- Context File Rules ---
+    const contextRulesContainer = document.getElementById('context-file-rules-container');
+
+    function addContextRuleRow(pattern = '', prompt = '', isEnabled = true, container = contextRulesContainer) {
         const ruleItem = document.createElement('div');
         ruleItem.className = 'context-rule-item';
 
@@ -1035,9 +971,23 @@ document.addEventListener('DOMContentLoaded', function () {
         ruleItem.querySelector('.context-rule-pattern').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
         ruleItem.querySelector('.context-rule-prompt').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
 
-        contextRulesContainer.appendChild(ruleItem);
+        container.appendChild(ruleItem);
+        return ruleItem; // Возвращаем созданный элемент для дальнейшей работы
     }
-    
+
+    function renderContextFileRules(rules = []) {
+        contextRulesContainer.innerHTML = '';
+        if (rules.length === 0) {
+            // Добавляем правило по умолчанию, если список пуст
+            rules.push({ pattern: '*.html', prompt: '\n--- НАЧАЛО файла @{filename} ---\n{content}\n--- КОНЕЦ файла @{filename} ---\n', enabled: true });
+        }
+        rules.forEach(rule => {
+            addContextRuleRow(rule.pattern, rule.prompt, rule.enabled);
+        });
+    }
+
+
+
     // --- Prompt Preview ---
     const promptPreviewContainer = document.getElementById('prompt-preview-container');
     const promptPreviewContent = document.getElementById('prompt-preview-content');
@@ -1059,14 +1009,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
     async function updatePromptPreview() {
         try {
-            const response = await fetch('/preview_prompt_addition');
+            // Используем унифицированную функцию для сбора настроек и отправки на предпросмотр
+            const response = await fetch('/preview_prompt_addition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(getSettingsFromDOM(document)) });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
             const data = await response.json();
             if (data.prompt_text) {
-                // Если есть текст, показываем контейнер (но он может быть свернут)
                 promptPreviewContent.textContent = data.prompt_text;
-                promptPreviewContainer.style.display = 'block'; // Показываем контейнер
+                promptPreviewContainer.style.display = 'block';
             } else {
-                promptPreviewContainer.style.display = 'none'; // Скрываем, если текста нет
+                promptPreviewContainer.style.display = 'none';
             }
         } catch (error) { console.error('Error fetching prompt preview:', error); }
     }
@@ -1141,14 +1096,14 @@ document.addEventListener('DOMContentLoaded', function () {
     settingsForm.addEventListener('submit', (e) => e.preventDefault()); // Предотвращаем стандартную отправку формы
     
     // --- Contacts Tab ---
-    const contactsListContainer = document.getElementById('contacts-list-container');
+    const contactsContentWrapper = document.getElementById('contacts-content-wrapper');
+    const contactsListContainer = contactsContentWrapper.querySelector('#contacts-list-container');
     const newGroupNameInput = document.getElementById('new-group-name');
     const addGroupBtn = document.getElementById('add-group-btn');
 
     function setRandomGroupPlaceholder() {
         const adjectives = [
             'Лысый', 'Грустный', 'Танцующий', 'Летающий', 'Пьяный',
-            'Поющий', 'Бегающий', 'Мечтающий', 'Злой', 'Спящий', 'Смеющийся',
             'Голодный', 'Задумчивый', 'Испуганный', 'Счастливый',
             'Прыгающий', 'Влюблённый', 'Уставший', 'Безумный',
             'Сердитый', 'Летающий задом наперёд', 'Танцующий ламбаду'
@@ -1554,20 +1509,23 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
-    async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCounterCallback) {
-        const groupCheckboxes = document.querySelectorAll(`input[type="checkbox"]`);
+    async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCounterCallback, container = document) {
+        const allCheckboxes = container.querySelectorAll(`input[type="checkbox"]`);
         let selectionChanged = false;
-        groupCheckboxes.forEach(cb => {
+        allCheckboxes.forEach(cb => {
             if (contactIdsInGroup.includes(cb.value)) {
                 if (cb.checked !== isChecked) {
                     cb.checked = isChecked;
-                    // Обновляем глобальный массив ID
                     selectionChanged = true;
                 }
             }
         });
 
-        // Сохраняем изменения, только если они были
+        // Если мы в модальном окне, просто обновляем предпросмотр без сохранения на сервер.
+        // Сохранение произойдет при нажатии "Подтвердить".
+        if (container !== document) {
+            return; // Выходим, чтобы не вызывать saveContactSelection
+        }
         if (selectionChanged) await saveContactSelection().then(updatePromptPreview);
 
         // Обновляем счетчик после всех изменений
@@ -1631,6 +1589,406 @@ document.addEventListener('DOMContentLoaded', function () {
             addGroupBtn.click();
         }
     });
+
+    // --- Confirmation Modal Logic ---
+    const modal = document.getElementById('confirmation-modal');
+    const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+    const modalCancelBtn = document.getElementById('modal-cancel-btn');
+    const modalSettingsCol = document.getElementById('modal-settings-col');
+    const modalContactsCol = document.getElementById('modal-contacts-col');
+    const modalPreviewCol = document.getElementById('modal-preview-col');
+
+    let onConfirmCallback = null;
+    let modalPausedRecording = false; // Флаг, что модальное окно поставило запись на паузу
+
+    function showConfirmationModal(onConfirm, newTemplateData = null) {
+        onConfirmCallback = onConfirm;
+
+        // 1. Клонируем содержимое вкладок
+        const settingsContent = document.getElementById('settings-tab').cloneNode(true);
+        const contactsContent = document.getElementById('contacts-content-wrapper').cloneNode(true);
+        const previewContent = document.getElementById('prompt-preview-container').cloneNode(true);
+
+        // 2. Очищаем колонки модального окна
+        modalSettingsCol.innerHTML = '<h4>Настройки</h4>';
+        modalContactsCol.innerHTML = '<h4>Участники</h4>';
+        modalPreviewCol.innerHTML = '<h4>Предпросмотр</h4>';
+
+        // 3. Вставляем клонированное содержимое
+        modalSettingsCol.appendChild(settingsContent);
+        modalContactsCol.appendChild(contactsContent);
+        modalPreviewCol.appendChild(previewContent);
+
+        // --- Удаляем ID у клонированных элементов, чтобы избежать конфликтов ---
+        // ID должны быть уникальными на странице.
+        settingsContent.querySelectorAll('[id]').forEach(el => {
+            if (el.id !== 'settings-tab') el.removeAttribute('id');
+        });
+
+        // --- Добавляем новый сгенерированный шаблон названия собрания ---
+        if (newTemplateData) {
+            const templatesContainer = settingsContent.querySelector('#meeting-name-templates-container');
+            if (templatesContainer) {
+                const newRow = createMeetingNameTemplateRow(newTemplateData, newTemplateData.id, true);
+                templatesContainer.querySelector('.meeting-name-template-item').insertAdjacentElement('afterend', newRow);
+            }
+        }
+
+        // --- Разворачиваем предпросмотр по умолчанию ---
+        const modalPreviewContainer = previewContent.closest('.prompt-preview-container');
+        if (modalPreviewContainer) {
+            modalPreviewContainer.classList.remove('collapsed');
+        }
+
+        // 4. Показываем модальное окно
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden'; // Блокируем прокрутку фона
+
+        // 5. Переназначаем обработчики событий для клонированных элементов
+        rebindModalEventListeners(modal);
+    }
+
+    function hideConfirmationModal() {
+        modal.style.display = 'none';
+        document.body.style.overflow = ''; // Восстанавливаем прокрутку
+
+        // Если окно было отменено и оно ставило запись на паузу, возобновляем запись
+        if (modalPausedRecording && onConfirmCallback) {
+             fetch('/resume');
+        }
+
+        onConfirmCallback = null;
+        modalPausedRecording = false; // Сбрасываем флаг
+    }
+
+    modalConfirmBtn.addEventListener('click', async () => {
+        // Сохраняем все настройки из модального окна
+        await saveModalSettings();
+
+        if (onConfirmCallback) {
+            onConfirmCallback();
+        }
+        hideConfirmationModal();
+    });
+
+    modalCancelBtn.addEventListener('click', hideConfirmationModal);
+
+    // Закрытие модального окна по клику на фон
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            hideConfirmationModal();
+        }
+    });
+
+    // --- Rebinding logic for cloned elements in modal ---
+    // Эта функция должна быть расширена, чтобы покрыть все интерактивные элементы
+    // Вспомогательная функция для сбора настроек из DOM (основного или модального)
+    function getSettingsFromDOM(container = document) {
+        const getVal = (selector) => container.querySelector(selector)?.value;
+        const getChecked = (selector) => container.querySelector(selector)?.checked;
+
+        const getContextFileRulesFromDOM = (cont) => {
+            const rules = [];
+            cont.querySelectorAll('.context-rule-item').forEach(item => {
+                rules.push({
+                    pattern: item.querySelector('.context-rule-pattern').value.trim(),
+                    prompt: item.querySelector('.context-rule-prompt').value,
+                    enabled: item.querySelector('.context-rule-enabled').checked
+                });
+            });
+            return rules;
+        };
+
+        const getMeetingNameTemplatesFromDOM = (cont) => {
+            const templates = [];
+            cont.querySelectorAll('.meeting-name-template-item').forEach(item => {
+                const id = item.dataset.id;
+                if (!id || id === 'null') return; // Пропускаем опцию "Не добавлять"
+
+                const templateInput = item.querySelector('input.meeting-name-template-input');
+                if (templateInput) { // Редактируемый шаблон
+                    templates.push({
+                        id: id,
+                        template: templateInput.value.trim()
+                    });
+                } else { // Нередактируемый шаблон (например, сгенерированный)
+                    const label = item.querySelector('label');
+                    if (label) {
+                        templates.push({ id: id, template: label.textContent.trim() });
+                    }
+                }
+            });
+            return templates;
+        };
+
+        return {
+            use_custom_prompt: getChecked('#use-custom-prompt'),
+            prompt_addition: getVal('#prompt-addition'),
+            add_meeting_date: getChecked('#add-meeting-date'),
+            meeting_date_source: getVal('input[name="meeting_date_source"]:checked'),
+            active_meeting_name_template_id: getVal('input[name="active_meeting_name_template"]:checked'),
+            selected_contacts: [...container.querySelectorAll('.contact-group-list input[type="checkbox"]:checked')].map(cb => cb.value).filter(Boolean),
+            context_file_rules: getContextFileRulesFromDOM(container),
+            meeting_name_templates: getMeetingNameTemplatesFromDOM(container),
+            confirm_prompt_on_action: getChecked('#confirm-prompt-on-action'),
+        };
+    }
+
+    function rebindModalEventListeners(modal) {
+        // --- Обновление предпросмотра в модальном окне ---
+        const saveAndPreviewFromModal = async () => {
+            const settingsFromModal = getSettingsFromDOM(modal);
+            // 1. Сначала сохраняем настройки на сервер
+            await fetch('/save_web_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsFromModal),
+            });
+            // 2. Затем запрашиваем предпросмотр с уже сохраненными настройками
+            const response = await fetch('/preview_prompt_addition', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(settingsFromModal), // Отправляем те же данные для предпросмотра
+            });
+            const data = await response.json();
+            const modalPreviewContent = modal.querySelector('#prompt-preview-content');
+            if (modalPreviewContent) {
+                modalPreviewContent.textContent = data.prompt_text || '';
+            }
+        };
+
+        // --- Общие обработчики для сворачивания/разворачивания ---
+        modal.querySelectorAll('.settings-group-header, .prompt-preview-container h4').forEach(header => {
+            header.addEventListener('click', () => header.parentElement.classList.toggle('collapsed'));
+        });
+
+        // --- Обработчики для вкладки "Настройки" ---
+        const rebindSettings = () => {
+            // Все интерактивные элементы, влияющие на предпросмотр
+            const elementsToRebind = [
+                ...modal.querySelectorAll('#settings-tab input[type="checkbox"]'),
+                ...modal.querySelectorAll('#settings-tab input[type="radio"]'),
+                ...modal.querySelectorAll('#settings-tab textarea'),
+                ...modal.querySelectorAll('#settings-tab input[type="text"]')
+            ];
+            elementsToRebind.forEach(el => {
+                el.addEventListener('input', saveAndPreviewFromModal);
+                el.addEventListener('change', saveAndPreviewFromModal);
+            });
+
+            // Восстанавливаем класс для группы с источником даты, так как ID был удален
+            const dateSourceGroup = modal.querySelector('input[name="meeting_date_source"]')?.closest('.form-group');
+            if (dateSourceGroup) {
+                dateSourceGroup.classList.add('meeting-date-source-group');
+            }
+
+            // Отдельно привязываем обработчик для чекбокса даты, чтобы скрыть/показать зависимые радио-кнопки
+            const addMeetingDateCheckbox = modal.querySelector('input[name="add_meeting_date"]');
+            if (addMeetingDateCheckbox) {
+                addMeetingDateCheckbox.addEventListener('change', () => {
+                    modal.querySelector('.meeting-date-source-group').style.display = addMeetingDateCheckbox.checked ? 'block' : 'none';
+                    saveAndPreviewFromModal();
+                });
+            }
+            modal.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
+                radio.addEventListener('change', saveAndPreviewFromModal);
+            });
+
+            // Кнопки добавления/удаления правил
+            modal.querySelectorAll('#settings-tab .remove-rule-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    btn.closest('.context-rule-item')?.remove();
+                    saveAndPreviewFromModal();
+                });
+            });
+            modal.querySelectorAll('#settings-tab .remove-template-btn').forEach(btn => {
+                btn.onclick = () => {
+                    btn.closest('.meeting-name-template-item')?.remove();
+                    saveAndPreviewFromModal();
+                };
+            });
+
+            // Кнопки "Добавить"
+            modal.querySelector('#add-context-rule-btn')?.addEventListener('click', () => {
+                const container = modal.querySelector('#context-file-rules-container');
+                addContextRuleRow('', '', true, container); // Используем оригинальную функцию с указанием контейнера
+                rebindSettings(); // Перепривязываем события для новой строки
+            });
+            modal.querySelector('#add-meeting-name-template-btn')?.addEventListener('click', () => {
+                const container = modal.querySelector('#meeting-name-templates-container');
+                const newId = `template-${Date.now()}`;
+                // Вызываем оригинальную функцию для создания строки
+                const newRow = createMeetingNameTemplateRow({ id: newId, template: '' }, null, true);
+                container.appendChild(newRow);
+                rebindSettings(); // Перепривязываем события для новой строки
+            });
+        };
+
+        // --- Обработчики для вкладки "Участники" ---
+        const rebindContacts = () => {
+            modal.querySelectorAll('.contact-group').forEach(groupEl => {
+                const expandIconWrapper = groupEl.querySelector('.expand-icon-wrapper');
+                if (expandIconWrapper) {
+                    expandIconWrapper.onclick = (e) => {
+                        e.stopPropagation();
+                        groupEl.classList.toggle('collapsed');
+                    };
+                }
+
+                const groupCheckbox = groupEl.querySelector('.contact-group-header-label input[type="checkbox"]');
+                const groupHeaderLabel = groupEl.querySelector('.contact-group-header-label');
+                const contactIdsInGroup = [...groupEl.querySelectorAll('.contact-group-list input[type="checkbox"]')]
+                                          .map(cb => cb.value).filter(Boolean);
+
+                // --- Обработчик для группового чекбокса ---
+                groupCheckbox.onchange = () => {
+                    contactIdsInGroup.forEach(id => {
+                        const cb = groupEl.querySelector(`input[value="${id}"]`);
+                        if (cb) cb.checked = groupCheckbox.checked;
+                    });
+                    saveAndPreviewFromModal();
+                };
+
+                // --- Клик по заголовку имитирует клик по чекбоксу ---
+                groupHeaderLabel.onclick = (e) => {
+                    if (e.target.tagName !== 'INPUT' && !e.target.classList.contains('contact-name-edit')) {
+                        groupCheckbox.click();
+                    }
+                };
+            });
+
+            modal.querySelectorAll('.contact-group-list input[type="checkbox"]').forEach(checkbox => {
+                checkbox.onchange = () => {
+                    const groupEl = checkbox.closest('.contact-group');
+                    if (groupEl) {
+                        const groupCheckbox = groupEl.querySelector('.contact-group-header-label input[type="checkbox"]');
+                        const contactCheckboxes = [...groupEl.querySelectorAll('.contact-group-list input[type="checkbox"]')]
+                                                  .filter(cb => cb.value);
+                        const checkedCount = contactCheckboxes.filter(cb => cb.checked).length;
+                        groupCheckbox.checked = checkedCount === contactCheckboxes.length && contactCheckboxes.length > 0;
+                        groupCheckbox.indeterminate = checkedCount > 0 && checkedCount < contactCheckboxes.length;
+                    }
+                    saveAndPreviewFromModal();
+                };
+            });
+
+            // Редактирование и удаление
+            modal.querySelectorAll('.contact-name').forEach(nameSpan => {
+                nameSpan.onclick = () => {
+                    // Эта логика слишком сложна для простого переназначения,
+                    // поэтому мы просто запрещаем редактирование в модальном окне.
+                    // Пользователь может отредактировать на основной вкладке.
+                    nameSpan.style.cursor = 'default';
+                };
+            });
+            modal.querySelectorAll('.contact-group-name').forEach(nameSpan => {
+                nameSpan.onclick = () => { nameSpan.style.cursor = 'default'; };
+            });
+
+            // Кнопка "Добавить" для группы
+            modal.querySelector('#add-group-btn')?.addEventListener('click', () => {
+                const input = modal.querySelector('#new-group-name');
+                if (input.value.trim()) {
+                    // Простое добавление пустой группы
+                    const newGroupEl = document.createElement('div');
+                    newGroupEl.className = 'contact-group';
+                    newGroupEl.innerHTML = `<div class="contact-group-header"><h4>${input.value.trim()}</h4></div><ul class="contact-group-list"></ul>`;
+                    modal.querySelector('#contacts-list-container').appendChild(newGroupEl);
+                    input.value = '';
+                }
+            });
+        };
+
+        // Первичная привязка
+        rebindSettings();
+        rebindContacts();
+        saveAndPreviewFromModal();
+    }
+
+    // Переопределяем функцию сохранения, чтобы она могла работать с DOM модального окна
+    async function saveModalSettings() {
+        const modal = document.getElementById('confirmation-modal');
+        const settingsToSave = getSettingsFromDOM(modal);
+
+        // Отдельно сохраняем контакты, так как они не входят в `saveSettings`
+        await fetch('/save_web_settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ selected_contacts: settingsToSave.selected_contacts })
+        });
+
+        // Сохраняем остальные настройки
+        await fetch('/save_web_settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settingsToSave)
+        });
+    }
+
+    // --- Centralized Action Handler ---
+    async function handleAction(action, params = {}) {
+        const { date, filename } = params;
+
+        let newMeetingTemplate = null;
+        // Если останавливаем запись, генерируем новый шаблон названия
+        if (action === 'stop' && currentStatus !== 'stop') {
+            const startTimeText = statusTime.textContent.match(/\((\d{2}:\d{2}:\d{2})\)/);
+            if (startTimeText) {
+                const durationParts = startTimeText[1].split(':');
+                const hours = parseInt(durationParts[0], 10);
+                const minutes = parseInt(durationParts[1], 10);
+                const seconds = parseInt(durationParts[2], 10);
+                const now = new Date();
+                const templateText = `${now.getHours()}.${String(now.getMinutes()).padStart(2, '0')} - ${minutes}м ${seconds}с`;
+
+                newMeetingTemplate = { id: `generated-${Date.now()}`, template: templateText };
+            }
+        }
+
+        // Получаем актуальное состояние чекбокса прямо из DOM
+        const needsConfirmation = document.getElementById('confirm-prompt-on-action')?.checked || false;
+
+        // Если нужно подтверждение и запись активна, ставим на паузу
+        if (needsConfirmation && ['stop', 'recreate_transcription', 'recreate_protocol'].includes(action) && currentStatus === 'rec') {
+            await fetch('/pause');
+            modalPausedRecording = true;
+        }
+
+        const performAction = async () => {
+            switch (action) {
+                case 'stop':
+                    await fetch('/stop');
+                    break;
+                case 'recreate_transcription':
+                    await fetch(`/recreate_transcription/${date}/${filename}`);
+                    alert(`Задача пересоздания транскрипции для ${filename} отправлена.`);
+                    break;
+                case 'recreate_protocol':
+                    await fetch(`/recreate_protocol/${date}/${filename}`);
+                    alert(`Задача пересоздания протокола для ${filename} отправлена.`);
+                    break;
+                case 'rec':
+                    await fetch('/rec');
+                    break;
+                case 'resume':
+                    await fetch('/resume');
+                    break;
+                case 'pause':
+                    await fetch('/pause');
+                    break;
+            }
+        };
+
+        if (needsConfirmation && ['stop', 'recreate_transcription', 'recreate_protocol'].includes(action)) {
+            showConfirmationModal(performAction, newMeetingTemplate);
+        } else {
+            await performAction();
+        }
+    }
+
+    recBtn.addEventListener('click', () => handleAction(currentStatus === 'paused' ? 'resume' : 'rec'));
+    pauseBtn.addEventListener('click', () => handleAction('pause'));
+    stopBtn.addEventListener('click', () => handleAction('stop'));
 
     // --- Initialization ---
     function initialize() {

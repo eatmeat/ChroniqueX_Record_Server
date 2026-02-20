@@ -150,24 +150,67 @@
                             </div>
                         </div>
                     </div>
+
+                    <div class="settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Поведение</h4>
+                        <div class="settings-group-content">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="confirm-prompt-on-action" name="confirm_prompt_on_action">
+                                    Уточнять добавку к промпту при остановке записи / пересоздании файлов
+                                </label>
+                                <p class="prompt-info">Если включено, перед выполнением действия будет показано окно для подтверждения и изменения настроек промпта и участников.</p>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
 
             <div id="contacts-tab" class="tab-content">
-                <p class="prompt-info">Выбранные участники будут добавлены в промпт для генерации протокола. Их количество будет использовано для определения числа спикеров при транскрибации.</p>
- 
-                <div class="contacts-management">
-                    <div class="add-item-row">
-                        <input type="text" id="new-group-name" class="add-item-input" placeholder="Название новой группы...">
-                        <button id="add-group-btn" class="action-btn">Добавить</button>
+                <!-- Этот контейнер будет использоваться для клонирования в модальное окно -->
+                <div id="contacts-content-wrapper">
+                    <p class="prompt-info">Выбранные участники будут добавлены в промпт для генерации протокола. Их количество будет использовано для определения числа спикеров при транскрибации.</p>
+    
+                    <div class="contacts-management">
+                        <div class="add-item-row">
+                            <input type="text" id="new-group-name" class="add-item-input" placeholder="Название новой группы...">
+                            <button id="add-group-btn" class="action-btn">Добавить</button>
+                        </div>
                     </div>
-                </div>
-
-                <div id="contacts-list-container">
-                    <!-- Контакты будут загружены сюда через JS -->
+    
+                    <div id="contacts-list-container">
+                        <!-- Контакты будут загружены сюда через JS -->
+                    </div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Модальное окно для подтверждения настроек -->
+    <div id="confirmation-modal" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Подтверждение настроек</h3>
+                <div class="modal-actions">
+                    <button id="modal-confirm-btn" class="control-btn rec-btn">Подтвердить</button>
+                    <button id="modal-cancel-btn" class="control-btn stop-btn">Отмена</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="modal-column" id="modal-settings-col">
+                    <h4>Настройки</h4>
+                    <!-- Содержимое #settings-tab будет скопировано сюда -->
+                </div>
+                <div class="modal-column" id="modal-contacts-col">
+                    <h4>Участники</h4>
+                    <!-- Содержимое #contacts-tab будет скопировано сюда -->
+                </div>
+                <div class="modal-column" id="modal-preview-col">
+                    <h4>Предпросмотр</h4>
+                    <!-- Содержимое #prompt-preview-container будет скопировано сюда -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
