@@ -1619,6 +1619,9 @@ document.addEventListener('DOMContentLoaded', function () {
         modalContactsCol.appendChild(contactsContent);
         modalPreviewCol.appendChild(previewContent);
 
+        // Убираем класс, который может скрывать вкладку настроек (display: none)
+        settingsContent.classList.remove('tab-content');
+
         // --- Делаем ID клонированных элементов уникальными, добавляя префикс ---
         settingsContent.querySelectorAll('[id]').forEach(el => {
             if (el.id !== 'settings-tab') {
@@ -1771,10 +1774,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const rebindSettings = () => {
             // Все интерактивные элементы, влияющие на предпросмотр
             const elementsToRebind = [
-                ...modal.querySelectorAll('#settings-tab input[type="checkbox"]'),
-                ...modal.querySelectorAll('#settings-tab input[type="radio"]'),
-                ...modal.querySelectorAll('#settings-tab textarea'),
-                ...modal.querySelectorAll('#settings-tab input[type="text"]')
+                ...modal.querySelectorAll('#modal-settings-tab input[type="checkbox"]'),
+                ...modal.querySelectorAll('#modal-settings-tab input[type="radio"]'),
+                ...modal.querySelectorAll('#modal-settings-tab textarea'),
+                ...modal.querySelectorAll('#modal-settings-tab input[type="text"]')
             ];
             elementsToRebind.forEach(el => {
                 el.addEventListener('input', saveAndPreviewFromModal);
@@ -1792,13 +1795,13 @@ document.addEventListener('DOMContentLoaded', function () {
             });
 
             // Кнопки добавления/удаления правил
-            modal.querySelectorAll('#settings-tab .remove-rule-btn').forEach(btn => {
+            modal.querySelectorAll('#modal-settings-tab .remove-rule-btn').forEach(btn => {
                 btn.addEventListener('click', () => {
                     btn.closest('.context-rule-item')?.remove();
                     saveAndPreviewFromModal();
                 });
             });
-            modal.querySelectorAll('#settings-tab .remove-template-btn').forEach(btn => {
+            modal.querySelectorAll('#modal-settings-tab .remove-template-btn').forEach(btn => {
                 btn.onclick = () => {
                     btn.closest('.meeting-name-template-item')?.remove();
                     saveAndPreviewFromModal();
