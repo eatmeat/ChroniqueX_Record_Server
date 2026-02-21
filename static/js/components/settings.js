@@ -201,7 +201,7 @@ export function initSettings() {
 
     if (confirmPromptOnActionCheckbox) {
         confirmPromptOnActionCheckbox.addEventListener('change', () => {
-            saveSettings(['confirm_prompt_on_action']);
+            saveSettings(['confirm_prompt_on_action']).then(updatePromptPreview);
         });
     }
 

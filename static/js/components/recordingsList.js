@@ -172,15 +172,11 @@ async function checkForRecordingUpdates() {
 }
 
 async function handleAction(action, { date, filename }) {
-    // This function would be in a separate module in a larger app
     const settings = await (await fetch('/get_web_settings')).json();
 
     const performFetch = async () => {
-        const finalSettings = getSettingsFromDOM(document);
         await fetch(`/${action}/${date}/${filename}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ settings: finalSettings })
+            method: 'POST' // Settings are saved before this, so no body is needed.
         });
     };
 

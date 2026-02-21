@@ -98,6 +98,19 @@
 
             <div id="settings-tab" class="tab-content">
                 <form id="settings-form">
+                    <div class="settings-group behavior-settings-group collapsed">
+                        <h4 class="settings-group-header"><span class="expand-icon"></span>Поведение</h4>
+                        <div class="settings-group-content">
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="confirm-prompt-on-action" name="confirm_prompt_on_action">
+                                    Уточнять добавку к промпту при остановке записи / пересоздании файлов
+                                </label>
+                                <p class="prompt-info">Если включено, перед выполнением действия будет показано окно для подтверждения и изменения настроек промпта и участников.</p>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="settings-group collapsed">
                         <h4 class="settings-group-header"><span class="expand-icon"></span>Дата собрания</h4>
                         <div class="settings-group-content">
@@ -158,18 +171,6 @@
                         </div>
                     </div>
 
-                    <div class="settings-group collapsed">
-                        <h4 class="settings-group-header"><span class="expand-icon"></span>Поведение</h4>
-                        <div class="settings-group-content">
-                            <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="confirm-prompt-on-action" name="confirm_prompt_on_action">
-                                    Уточнять добавку к промпту при остановке записи / пересоздании файлов
-                                </label>
-                                <p class="prompt-info">Если включено, перед выполнением действия будет показано окно для подтверждения и изменения настроек промпта и участников.</p>
-                            </div>
-                        </div>
-                    </div>
                 </form>
             </div>
 

@@ -211,21 +211,21 @@ def delete_group_web():
     save_contacts(contacts_data)
     return jsonify({"status": "ok"})
 
-@ui_bp.route('/recreate_transcription/<date>/<filename>')
+@ui_bp.route('/recreate_transcription/<date>/<filename>', methods=['POST'])
 def recreate_transcription(date, filename):
     file_path = os.path.join(get_application_path(), 'rec', date, filename)
     if not os.path.exists(file_path): return jsonify({"status": "error", "message": "Аудиофайл не найден"}), 404
     Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
     return jsonify({"status": "ok"})
 
-@ui_bp.route('/recreate_protocol/<date>/<filename>')
+@ui_bp.route('/recreate_protocol/<date>/<filename>', methods=['POST'])
 def recreate_protocol(date, filename):
     txt_file_path = os.path.join(get_application_path(), 'rec', date, os.path.splitext(filename)[0] + ".txt")
     if not os.path.exists(txt_file_path): return jsonify({"status": "error", "message": "Файл транскрипции (.txt) не найден."}), 404
     Thread(target=process_protocol_task, args=(txt_file_path,), daemon=True).start()
     return jsonify({"status": "ok"})
 
-@ui_bp.route('/compress_to_mp3/<date>/<filename>')
+@ui_bp.route('/compress_to_mp3/<date>/<filename>', methods=['POST'])
 def compress_to_mp3(date, filename):
     wav_path = os.path.join(get_application_path(), 'rec', date, filename)
     if not os.path.exists(wav_path) or not wav_path.lower().endswith('.wav'): return jsonify({"status": "error", "message": "WAV файл не найден"}), 404
