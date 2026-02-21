@@ -5,3 +5,5 @@ build/
 record_server_settings.json
 pushall.bat
 contacts.json
+=recordServer.pyw.lnk
+=deploy.bat

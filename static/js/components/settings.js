@@ -146,7 +146,19 @@ async function saveSettings(keysToSave = null) {
 }
 
 function toggleMeetingDateSourceVisibility() { 
-    if(meetingDateSourceGroup) meetingDateSourceGroup.style.display = addMeetingDateCheckbox.checked ? 'block' : 'none'; 
+    if (meetingDateSourceGroup) {
+        const isEnabled = addMeetingDateCheckbox.checked;
+        const radios = meetingDateSourceGroup.querySelectorAll('input[name="meeting_date_source"]');
+        const labels = meetingDateSourceGroup.querySelectorAll('label');
+
+        radios.forEach(radio => {
+            radio.disabled = !isEnabled;
+        });
+
+        labels.forEach(label => {
+            label.style.color = isEnabled ? '' : '#aaa'; // Делаем текст серым, когда опция отключена
+        });
+    }
 }
 
 export async function loadSettings() {
@@ -203,6 +215,16 @@ export function initSettings() {
             });
         }
     }
+
+    document.querySelectorAll('.settings-group-header').forEach(header => {
+        header.addEventListener('click', () => {
+            const group = header.closest('.settings-group');
+            if (group) {
+                group.classList.toggle('collapsed');
+            }
+        });
+    });
+    
     
     addContextRuleBtn?.addEventListener('click', () => {
         addContextRuleRow('', '', true);

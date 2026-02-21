@@ -48,7 +48,7 @@ export async function updateStatus() {
         }
 
         // Update control buttons state
-        recBtn.disabled = data.status === 'rec';
+        recBtn.disabled = data.status === 'rec' && !data.is_paused;
         pauseBtn.disabled = data.status !== 'rec';
         stopBtn.disabled = data.status === 'stop';
         

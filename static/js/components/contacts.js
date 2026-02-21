@@ -8,6 +8,14 @@ import { updatePromptPreview } from './settings.js';
 let contactsData = {};
 let selectedContactIds = [];
 
+const debounce = (fn, delay) => {
+    let timeoutId;
+    return (...args) => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => fn(...args), delay);
+    };
+};
+
 function setRandomGroupPlaceholder() {
     if (!newGroupNameInput) return;
     const adjectives = [ 'Лысый', 'Грустный', 'Танцующий', 'Летающий', 'Пьяный', 'Голодный', 'Задумчивый', 'Испуганный', 'Счастливый', 'Прыгающий', 'Влюблённый', 'Уставший', 'Безумный', 'Сердитый', 'Летающий задом наперёд', 'Танцующий ламбаду' ];
@@ -44,13 +52,44 @@ function updateSelectedContactsCount() {
     }
 }
 
-async function saveContactSelection() {
+function updateLocalSelectionState() {
     selectedContactIds = [...document.querySelectorAll('#contacts-list-container .contact-group-list li label input[type="checkbox"]:checked')].map(cb => cb.value).filter(Boolean);
     updateSelectedContactsCount();
+}
+
+async function saveSelectionToServer() {
     await fetch('/save_web_settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ selected_contacts: selectedContactIds })
+    });
+}
+
+async function syncChangesToServer() {
+    await saveSelectionToServer();
+    await updatePromptPreview();
+}
+const debouncedSyncChanges = debounce(syncChangesToServer, 500);
+
+function updateGroupStates() {
+    document.querySelectorAll('.contact-group').forEach(groupEl => {
+        const groupNameEl = groupEl.querySelector('.contact-group-name');
+        if (!groupNameEl) return;
+        const groupName = groupNameEl.textContent;
+        const group = contactsData.groups.find(g => g.name === groupName);
+        if (!group) return;
+
+        const groupCheckbox = groupEl.querySelector('.contact-group-header input[type="checkbox"]');
+        const groupCounterEl = groupEl.querySelector('.group-counter');
+        if (!groupCheckbox || !groupCounterEl) return;
+
+        const contactIdsInGroup = group.contacts.map(c => c.id);
+        const selectedCount = contactIdsInGroup.filter(id => selectedContactIds.includes(id)).length;
+        
+        groupCounterEl.textContent = `${selectedCount} / ${contactIdsInGroup.length}`;
+        
+        groupCheckbox.checked = selectedCount === contactIdsInGroup.length && contactIdsInGroup.length > 0;
+        groupCheckbox.indeterminate = selectedCount > 0 && selectedCount < contactIdsInGroup.length;
     });
 }
 
@@ -115,7 +154,8 @@ function renderContacts() {
         groupHeaderEl.appendChild(groupCounterEl);
         groupEl.appendChild(groupHeaderEl);
         
-        groupNameEl.addEventListener('click', () => {
+        groupNameEl.addEventListener('click', (e) => {
+            e.stopPropagation();
             const oldName = group.name;
             const input = document.createElement('input');
             input.value = oldName;
@@ -217,6 +257,19 @@ function renderContacts() {
             itemEl.appendChild(labelEl);
             listEl.appendChild(itemEl);
 
+            itemEl.addEventListener('click', (e) => {
+                // Игнорируем клики по элементам, у которых есть свои обработчики
+                // (имя, поле ввода, кнопки, и сам чекбокс).
+                // e.target === checkbox - это для прямого клика по чекбоксу.
+                if (e.target.closest('.contact-name') || e.target.closest('.contact-name-edit') || e.target.closest('.item-actions') || e.target.tagName === 'INPUT') {
+                    return;
+                }
+                // Если клик был по "пустому" месту в строке (li) или на label,
+                // программно кликаем по чекбоксу, чтобы изменить его состояние.
+                e.preventDefault();
+                checkbox.click();
+            });
+
             nameSpan.addEventListener('click', () => {
                 const currentName = nameSpan.textContent;
                 const input = document.createElement('input');
@@ -277,10 +330,7 @@ function renderContacts() {
         updateGroupCheckboxState();
         
         groupCheckbox.addEventListener('change', () => {
-            handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup, () => {
-                const currentSelectedCount = contactIdsInGroup.filter(id => selectedContactIds.includes(id)).length;
-                groupCounterEl.textContent = `${currentSelectedCount} / ${contactIdsInGroup.length}`;
-            });
+            handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup);
         });
         
         expandIconWrapper.addEventListener('click', (e) => {
@@ -291,25 +341,34 @@ function renderContacts() {
             e.stopPropagation();
             groupEl.classList.toggle('collapsed');
         });
-        groupHeaderLabel.addEventListener('click', (e) => {
-            if (e.target.tagName === 'INPUT' || e.target.classList.contains('contact-name-edit')) return;
+
+        groupHeaderEl.addEventListener('click', (e) => {
+            // Определяем, был ли клик по элементу, у которого есть своя функция
+            const isSpecificElementClick = e.target.closest('.expand-icon-wrapper') ||
+                                           e.target.closest('.contact-group-name') ||
+                                           e.target.classList.contains('contact-name-edit') ||
+                                           e.target.closest('.group-counter') ||
+                                           e.target.classList.contains('contact-group-header-label');
+
+            if (isSpecificElementClick) {
+                return;
+            }
             const shouldBeChecked = groupCheckbox.indeterminate || !groupCheckbox.checked;
-            handleGroupCheckboxChange(shouldBeChecked, contactIdsInGroup, () => {
-                const currentSelectedCount = contactIdsInGroup.filter(id => selectedContactIds.includes(id)).length;
-                groupCounterEl.textContent = `${currentSelectedCount} / ${contactIdsInGroup.length}`;
-            });
+            handleGroupCheckboxChange(shouldBeChecked, contactIdsInGroup);
         });
     });
     
     contactsListContainer.addEventListener('change', (e) => {
         if (e.target.matches('.contact-group-list input[type="checkbox"]')) {
-            saveContactSelection().then(updatePromptPreview).then(renderContacts);
+            updateLocalSelectionState();
+            updateGroupStates();
+            debouncedSyncChanges();
         }
     });
 }
 
-async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCounterCallback) {
-    const allCheckboxes = document.querySelectorAll(`input[type="checkbox"]`);
+function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
+    const allCheckboxes = document.querySelectorAll('.contact-group-list input[type="checkbox"]');
     let selectionChanged = false;
     allCheckboxes.forEach(cb => {
         if (contactIdsInGroup.includes(cb.value)) {
@@ -319,8 +378,12 @@ async function handleGroupCheckboxChange(isChecked, contactIdsInGroup, updateCou
             }
         }
     });
-    if (selectionChanged) await saveContactSelection().then(updatePromptPreview);
-    if (updateCounterCallback) updateCounterCallback();
+
+    if (selectionChanged) {
+        updateLocalSelectionState();
+        updateGroupStates();
+        debouncedSyncChanges();
+    }
 }
 
 async function loadContactsAndSettings() {

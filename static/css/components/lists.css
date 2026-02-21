@@ -44,6 +44,7 @@
     align-items: center;
     padding: 8px;
     border-radius: 8px;
+    cursor: default; /* Возвращаем обычный курсор для всей строки */
 }
 
 .contact-group-list li:hover {
@@ -56,7 +57,7 @@
     flex-grow: 1; /* Позволяет label занять доступное пространство */
     min-width: 0; /* Необходимо для корректного сжатия flex-элемента */
     gap: 8px;
-    cursor: pointer;
+    cursor: default; /* Делаем курсор-руку только для label */
 }
 
 /* Счетчик участников в группе */
@@ -74,6 +75,14 @@
     flex-grow: 1; /* Позволяет label занять доступное пространство */
     min-width: 0; /* Необходимо для корректного сжатия flex-элемента */
     gap: 8px;
+    cursor: default; /* Меняем курсор на обычную стрелку */
+}
+
+/* Добавляем курсор-руку для иконки сворачивания/разворачивания */
+.expand-icon-wrapper {
+    display: flex; /* Включаем flex для центрирования иконки внутри */
+    align-items: center; /* Выравниваем иконку по вертикали */
+    align-self: stretch; /* Растягиваем обертку на всю высоту родителя */
     cursor: pointer;
 }
 

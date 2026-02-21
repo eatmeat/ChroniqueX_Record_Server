@@ -1,6 +1,6 @@
 import { recBtn, pauseBtn, stopBtn } from './dom.js';
 import { initTabs } from './components/tabs.js';
-import { updateStatus } from './components/status.js';
+import { updateStatus, getCurrentStatus } from './components/status.js';
 import { initChart } from './components/chart.js';
 import { initPiP } from './components/pip.js';
 import { initRecordingsList } from './components/recordingsList.js';
@@ -23,7 +23,13 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(updateStatus, 1000);
 
     // Control button event listeners
-    recBtn?.addEventListener('click', () => fetch('/record'));
+    recBtn?.addEventListener('click', () => {
+        if (getCurrentStatus() === 'paused') {
+            fetch('/resume');
+        } else {
+            fetch('/rec');
+        }
+    });
     pauseBtn?.addEventListener('click', () => fetch('/pause'));
     stopBtn?.addEventListener('click', async () => {
         const response = await fetch('/get_web_settings');
