@@ -1,5 +1,6 @@
-import { modal, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
+import { modal, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol, recreateModal } from '../dom.js';
 import { getSettingsFromDOM } from '../utils/helpers.js';
+import { getSettings } from './settings.js';
 
 let onConfirmCallback = null;
 let modalPausedRecording = false;
@@ -114,4 +115,52 @@ export function initModal() {
             modalCancelBtn.click(); // Эмулируем клик по кнопке отмены, чтобы сохранить
         }
     });
+}
+
+export function showRecreateConfirmationModal({ taskType, date, filename }) {
+    if (!recreateModal) return;
+
+    const titleEl = recreateModal.querySelector('h2');
+    const useCurrentBtn = recreateModal.querySelector('#recreate-use-current-btn');
+    const useSavedBtn = recreateModal.querySelector('#recreate-use-saved-btn');
+    const cancelBtn = recreateModal.querySelector('#recreate-cancel-btn');
+
+    const taskName = taskType === 'transcription' ? 'транскрипции' : 'протокола';
+    titleEl.textContent = `Пересоздание ${taskName}`;
+
+    const hide = () => {
+        recreateModal.style.display = 'none';
+        // Удаляем обработчики, чтобы избежать утечек памяти
+        useCurrentBtn.replaceWith(useCurrentBtn.cloneNode(true));
+        useSavedBtn.replaceWith(useSavedBtn.cloneNode(true));
+        cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+    };
+
+    // Перепривязываем обработчики, так как мы их удаляем
+    recreateModal.querySelector('#recreate-use-current-btn').addEventListener('click', async () => {
+        const currentSettings = getSettingsFromDOM(document);
+        await fetch(`/update_metadata_and_recreate/${taskType}/${date}/${filename}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentSettings)
+        });
+        hide();
+    });
+
+    recreateModal.querySelector('#recreate-use-saved-btn').addEventListener('click', async () => {
+        await fetch(`/recreate_${taskType}/${date}/${filename}`, {
+            method: 'POST'
+        });
+        hide();
+    });
+
+    recreateModal.querySelector('#recreate-cancel-btn').addEventListener('click', hide);
+
+    recreateModal.addEventListener('click', (e) => {
+        if (e.target === recreateModal) {
+            hide();
+        }
+    });
+
+    recreateModal.style.display = 'flex';
 }

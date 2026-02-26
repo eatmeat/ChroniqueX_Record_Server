@@ -8,6 +8,7 @@ import queue
 import tempfile
 import json
 import logging
+from pathlib import Path
 
 import sounddevice as sd
 import numpy as np
@@ -22,6 +23,7 @@ from app_state import (
 )
 import app_state
 from postprocessing import process_recording_tasks
+from utils import build_final_prompt_addition
 
 def get_elapsed_record_time():
     if not app_state.start_time: return 0
@@ -216,10 +218,26 @@ def stop_recording():
         active_template_id = settings.get("active_meeting_name_template_id")
         if active_template_id:
             templates = settings.get("meeting_name_templates", [])
-            active_template = next((t for t in templates if t.get("id") == active_template_id), None)
-            if active_template and active_template.get("template"): title = active_template.get("template")
-        metadata = {"startTime": app_state.start_time.isoformat(), "duration": duration.total_seconds(), "title": title, "promptAddition": ""}
+            active_template = next((t for t in templates if t.get("id") == active_template_id), None) # pragma: no cover
+            if active_template and active_template.get("template"): title = active_template.get("template") # pragma: no cover
+        
+        # Собираем дополнение к промпту на основе текущих настроек
+        final_prompt_addition = build_final_prompt_addition(base_path=Path(day_dir), recording_date=app_state.start_time)
+
+        # Сохраняем настройки, которые были на момент записи
+        recording_settings = {
+            "use_custom_prompt": settings.get("use_custom_prompt", False),
+            "prompt_addition": settings.get("prompt_addition", ""),
+            "selected_contacts": settings.get("selected_contacts", []),
+            "context_file_rules": settings.get("context_file_rules", []),
+            "add_meeting_date": settings.get("add_meeting_date", True),
+            "meeting_date_source": settings.get("meeting_date_source", "current"),
+        }
+
+        metadata = {"startTime": app_state.start_time.isoformat(), "duration": duration.total_seconds(), "title": title, "promptAddition": final_prompt_addition, "settings": recording_settings}
+        
         with open(json_path, 'w', encoding='utf-8') as f: json.dump(metadata, f, indent=4, ensure_ascii=False)
+        
         Thread(target=process_recording_tasks, args=(final_audio_path,), daemon=True).start()
 
 def pause_recording():

@@ -91,19 +91,21 @@ def process_protocol_task(txt_file_path):
     except (ValueError, IndexError):
         recording_date = datetime.now()
 
-    final_prompt_addition = build_final_prompt_addition(base_path=txt_path.parent, recording_date=recording_date)
+    # По умолчанию используем промпт из метаданных
+    final_prompt_addition = ""
+    json_path = txt_path.with_suffix('.json')
+    if os.path.exists(json_path):
+        try:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+                final_prompt_addition = metadata.get('promptAddition', '')
+        except Exception as e:
+            logging.error(f"Не удалось прочитать promptAddition из {json_path}: {e}")
+
     protocol_task_id = post_task(txt_file_path, "protocol", prompt_addition_str=final_prompt_addition)
     if protocol_task_id:
         base_name, _ = os.path.splitext(txt_file_path)
         protocol_output_path = base_name + "_protocol.pdf"
-        json_path = base_name + '.json'
-        if os.path.exists(json_path):
-            try:
-                with open(json_path, 'r+', encoding='utf-8') as f:
-                    metadata = json.load(f)
-                    metadata['promptAddition'] = final_prompt_addition
-                    f.seek(0); json.dump(metadata, f, indent=4, ensure_ascii=False); f.truncate()
-            except Exception as e: print(f"Не удалось обновить метаданные с промптом для {json_path}: {e}")
         poll_and_save_result(protocol_task_id, protocol_output_path)
     app_state.is_post_processing = False
 

@@ -105,6 +105,14 @@ def update_metadata(date_str, filename):
         f.seek(0); json.dump(metadata, f, indent=4, ensure_ascii=False); f.truncate()
     return jsonify({"status": "ok"})
 
+@ui_bp.route('/get_metadata/<date_str>/<filename>')
+def get_metadata(date_str, filename):
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date_str): return jsonify({"error": "Invalid date format"}), 400
+    json_path = os.path.join(get_application_path(), 'rec', date_str, os.path.splitext(filename)[0] + '.json')
+    if not os.path.exists(json_path): return jsonify({"error": "Metadata file not found"}), 404
+    with open(json_path, 'r', encoding='utf-8') as f: metadata = json.load(f)
+    return jsonify(metadata)
+
 @ui_bp.route('/files/<path:filepath>')
 def serve_recorded_file(filepath):
     rec_dir = os.path.join(get_application_path(), 'rec')
@@ -240,19 +248,47 @@ def delete_group_web():
     save_contacts(contacts_data)
     return jsonify({"status": "ok"})
 
+@ui_bp.route('/update_metadata_and_recreate/<task_type>/<date>/<filename>', methods=['POST'])
+def update_metadata_and_recreate(task_type, date, filename):
+    from datetime import datetime
+    from pathlib import Path
+
+    data = request.get_json()
+    if not data: return jsonify({"status": "error", "message": "Нет данных"}), 400
+
+    json_path = Path(get_application_path()) / 'rec' / date / (os.path.splitext(filename)[0] + '.json')
+    if not json_path.exists(): return jsonify({"status": "error", "message": "Файл метаданных не найден"}), 404
+
+    # Обновляем метаданные из запроса
+    with open(json_path, 'r+', encoding='utf-8') as f:
+        metadata = json.load(f)
+        metadata["settings"] = data
+        # Пересчитываем и сохраняем promptAddition
+        recording_date = datetime.fromisoformat(metadata.get("startTime", datetime.now().isoformat()))
+        metadata["promptAddition"] = build_final_prompt_addition(base_path=json_path.parent, recording_date=recording_date, override_settings=data)
+        f.seek(0)
+        json.dump(metadata, f, indent=4, ensure_ascii=False)
+        f.truncate()
+
+    if task_type == 'transcription':
+        return recreate_transcription(date, filename)
+    elif task_type == 'protocol':
+        return recreate_protocol(date, filename)
+    return jsonify({"status": "error", "message": "Неизвестный тип задачи"}), 400
+
 @ui_bp.route('/recreate_transcription/<date>/<filename>', methods=['POST'])
 def recreate_transcription(date, filename):
     file_path = os.path.join(get_application_path(), 'rec', date, filename)
     if not os.path.exists(file_path): return jsonify({"status": "error", "message": "Аудиофайл не найден"}), 404
     Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "message": "Задача пересоздания транскрипции запущена."})
 
 @ui_bp.route('/recreate_protocol/<date>/<filename>', methods=['POST'])
 def recreate_protocol(date, filename):
     txt_file_path = os.path.join(get_application_path(), 'rec', date, os.path.splitext(filename)[0] + ".txt")
     if not os.path.exists(txt_file_path): return jsonify({"status": "error", "message": "Файл транскрипции (.txt) не найден."}), 404
     Thread(target=process_protocol_task, args=(txt_file_path,), daemon=True).start()
-    return jsonify({"status": "ok"})
+    return jsonify({"status": "ok", "message": "Задача пересоздания протокола запущена."})
 
 @ui_bp.route('/compress_to_mp3/<date>/<filename>', methods=['POST'])
 def compress_to_mp3(date, filename):
