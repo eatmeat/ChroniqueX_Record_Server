@@ -3,6 +3,8 @@ import { showConfirmationModal } from './modal.js';
 
 let expandedGroups = new Set();
 let lastRecordingsState = 0;
+let updatesIntervalId = null;
+let isUpdatesPaused = false;
 
 // Function to escape HTML special characters
 function escapeHtml(unsafe) {
@@ -79,17 +81,8 @@ async function updateRecordingsList() {
 
         const weeks = {};
         dateGroupsData.forEach(group => {
-            const year = new Date(group.date).getFullYear();
-            const weekId = `${year}-W${group.week_number}`;
-            if (!weeks[weekId]) {
-                weeks[weekId] = {
-                    id: weekId,
-                    year: year,
-                    number: group.week_number,
-                    header_text: group.week_header_text,
-                    dates: []
-                };
-            }
+            const weekId = group.week_header_text; // Use the full header text as a unique key
+            if (!weeks[weekId]) weeks[weekId] = { header_text: group.week_header_text, dates: [] };
             weeks[weekId].dates.push(group);
         });
 
@@ -110,7 +103,6 @@ async function updateRecordingsList() {
             const headerParts = weekData.header_text.split(' : ');
             const weekDateRange = headerParts[0] || '';
             const weekNumberText = headerParts[1] || '';
-
             weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span><span class="week-title">${weekDateRange}</span><span class="week-number">${weekNumberText}</span></h4>`;
 
             recordingsListContainer.appendChild(weekGroupEl);
@@ -154,6 +146,7 @@ async function updateRecordingsList() {
 }
 
 async function checkForRecordingUpdates() {
+    if (isUpdatesPaused) return;
     try {
         const response = await fetch('/recordings_state');
         if (response.status === 401) {
@@ -282,11 +275,22 @@ function handleRecordingsListClick(e) {
     }
 }
 
+export function pauseRecordingUpdates() {
+    isUpdatesPaused = true;
+    console.log('Проверка обновлений записей приостановлена.');
+}
+
+export function resumeRecordingUpdates() {
+    isUpdatesPaused = false;
+    console.log('Проверка обновлений записей возобновлена.');
+}
+
 export function initRecordingsList() {
     if (!recordingsListContainer) return;
 
     updateRecordingsList();
-    setInterval(checkForRecordingUpdates, 5000);
+    if (updatesIntervalId) clearInterval(updatesIntervalId);
+    updatesIntervalId = setInterval(checkForRecordingUpdates, 5000);
 
     recordingsListContainer.addEventListener('click', handleRecordingsListClick);
 }

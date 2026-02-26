@@ -12,10 +12,13 @@ def create_app():
     @app.before_request
     def before_request_func():
         # Skip auth check for static files, login, favicon, and logout
-        if request.endpoint in ['static', 'ui.login', 'ui.favicon', 'ui.logout']:
+        is_public_endpoint = request.endpoint in ['static', 'ui.login', 'ui.favicon', 'ui.logout']
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+
+        if is_public_endpoint:
             return
         if not session.get('logged_in'):
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            if is_ajax:
                 return jsonify(error='Unauthorized'), 401
             return redirect(url_for('ui.login'))
 

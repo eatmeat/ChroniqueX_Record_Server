@@ -1,9 +1,11 @@
 import {
     contactsListContainer,
+    contactsContentWrapper,
     newGroupNameInput,
     addGroupBtn
 } from '../dom.js';
 import { updatePromptPreview } from './settings.js';
+import { pauseRecordingUpdates, resumeRecordingUpdates } from './recordingsList.js';
 
 let contactsData = {};
 let selectedContactIds = [];
@@ -57,26 +59,29 @@ function updateLocalSelectionState() {
     updateSelectedContactsCount();
 }
 
-async function saveSelectionToServer() {
-    await fetch('/save_web_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ selected_contacts: selectedContactIds })
-    });
+async function handleFetchResponse(response) {
+    if (response.status === 401) {
+        console.error("Сессия истекла. Перезагрузка страницы.");
+        alert("Ваша сессия истекла. Страница будет перезагружена.");
+        window.location.reload();
+        return null; // Возвращаем null, чтобы прервать дальнейшую обработку
+    }
+    return response;
 }
 
-async function syncChangesToServer() {
-    await saveSelectionToServer();
-    await updatePromptPreview();
+async function saveSelectionToServer(ids) {
+    return fetch('/save_web_settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ selected_contacts: ids })
+    });
 }
-const debouncedSyncChanges = debounce(syncChangesToServer, 500);
 
 function updateGroupStates() {
     document.querySelectorAll('.contact-group').forEach(groupEl => {
         const groupNameEl = groupEl.querySelector('.contact-group-name');
         if (!groupNameEl) return;
-        const groupName = groupNameEl.textContent;
-        const group = contactsData.groups.find(g => g.name === groupName);
+        const group = contactsData.groups.find(g => g.name === groupNameEl.textContent);
         if (!group) return;
 
         const groupCheckbox = groupEl.querySelector('.contact-group-header input[type="checkbox"]');
@@ -95,31 +100,25 @@ function updateGroupStates() {
 
 async function deleteContact(id, name) {
     if (!confirm(`Вы уверены, что хотите удалить участника "${name}"?`)) return;
-    await fetch(`/contacts/delete/${id}`, { method: 'POST' });
-    loadContactsAndSettings();
+    const response = await fetch(`/contacts/delete/${id}`, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if (await handleFetchResponse(response)) {
+        await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+    }
 }
 
 async function deleteGroup(name) {
     if (!confirm(`Вы уверены, что хотите удалить группу "${name}" и всех ее участников?`)) return;
-    await fetch(`/groups/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-    loadContactsAndSettings();
+    const response = await fetch(`/groups/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ name }) });
+    if (await handleFetchResponse(response)) {
+        await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+    }
 }
 
-function renderContacts() {
+function renderContacts(forceFullRedraw = false) {
     if (!contactsListContainer) return;
-    contactsListContainer.innerHTML = '';
 
-    if (!contactsData.groups || contactsData.groups.length === 0) {
-        contactsListContainer.insertAdjacentHTML('beforeend', '<p>Список участников пуст. Создайте первую группу.</p>');
-        return;
-    }
-
-    const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
-    sortedGroups.forEach(group => {
-        const groupEl = document.createElement('div');
-        groupEl.className = 'contact-group collapsed';
-
-        const groupHeaderEl = document.createElement('div');
+    function createGroupHeader(group) {
+         const groupHeaderEl = document.createElement('div');
         groupHeaderEl.className = 'contact-group-header';
         
         const groupHeaderLabel = document.createElement('label');
@@ -152,8 +151,10 @@ function renderContacts() {
         groupHeaderLabel.appendChild(groupNameEl);
         groupHeaderEl.appendChild(groupHeaderLabel);
         groupHeaderEl.appendChild(groupCounterEl);
-        groupEl.appendChild(groupHeaderEl);
-        
+
+        return { groupHeaderEl, groupNameEl, groupCounterEl, groupCheckbox, expandIconWrapper };
+    }
+    function bindGroupNameEditing(group, groupHeaderEl, groupNameEl, groupCounterEl, groupHeaderLabel) {
         groupNameEl.addEventListener('click', (e) => {
             e.stopPropagation();
             const oldName = group.name;
@@ -186,12 +187,13 @@ function renderContacts() {
                 }
                 const response = await fetch(`/groups/update`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                     body: JSON.stringify({ old_name: oldName, new_name: newName })
                 });
 
-                if (response.ok) {
-                    loadContactsAndSettings();
+                const handledResponse = await handleFetchResponse(response);
+                if (handledResponse && handledResponse.ok) {
+                    await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
                 } else {
                     alert(`Ошибка: ${(await response.json()).message}`);
                     groupHeaderLabel.replaceChild(groupNameEl, input);
@@ -208,8 +210,9 @@ function renderContacts() {
                 }
             });
         });
-
-        const listEl = document.createElement('ul');
+    }
+    function createContactList(group) {
+         const listEl = document.createElement('ul');
         listEl.className = 'contact-group-list';
 
         const addItemEl = document.createElement('li');
@@ -227,13 +230,15 @@ function renderContacts() {
                 alert('Имя участника не может быть пустым.');
                 return;
             }
-            await fetch('/contacts/add', {
+            const response = await fetch('/contacts/add', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: JSON.stringify({ name, group_name: group.name })
             });
-            addInput.value = '';
-            loadContactsAndSettings();
+            if (await handleFetchResponse(response)) {
+                addInput.value = '';
+                await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+            }
         };
         addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
         addItemEl.appendChild(addInput);
@@ -300,13 +305,16 @@ function renderContacts() {
                         labelEl.replaceChild(nameSpan, input);
                         return;
                     }
-                    await fetch(`/contacts/update/${contact.id}`, {
+                    const response = await fetch(`/contacts/update/${contact.id}`, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                         body: JSON.stringify({ name: newName })
                     });
-                    nameSpan.textContent = newName;
-                    labelEl.replaceChild(nameSpan, input);
+                    if (await handleFetchResponse(response)) {
+                        nameSpan.textContent = newName;
+                        labelEl.replaceChild(nameSpan, input);
+                        await loadContactsAndSettings();
+                    }
                 };
                 input.addEventListener('blur', saveChanges);
                 input.addEventListener('keydown', (e) => {
@@ -318,10 +326,63 @@ function renderContacts() {
                 });
             });
         });
+        return listEl;
+    }
 
-        groupEl.appendChild(listEl);
-        contactsListContainer.appendChild(groupEl);
+    // --- Основная логика рендеринга ---
 
+    if (forceFullRedraw) {
+        contactsListContainer.innerHTML = '';
+    }
+
+    if (!contactsData.groups || contactsData.groups.length === 0) {
+        contactsListContainer.innerHTML = '<p>Список участников пуст. Создайте первую группу.</p>';
+        return;
+    }
+
+    const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const existingGroupNames = new Set([...contactsListContainer.querySelectorAll('.contact-group-name')].map(el => el.textContent));
+    const newGroupNames = new Set(sortedGroups.map(g => g.name));
+
+    // Удаляем группы, которых больше нет
+    existingGroupNames.forEach(name => {
+        if (!newGroupNames.has(name)) {
+            const groupEl = [...contactsListContainer.querySelectorAll('.contact-group-name')].find(el => el.textContent === name)?.closest('.contact-group');
+            groupEl?.remove();
+        }
+    });
+
+    sortedGroups.forEach(group => {
+        let groupEl = [...contactsListContainer.querySelectorAll('.contact-group-name')].find(el => el.textContent === group.name)?.closest('.contact-group');
+
+        // Если группа уже существует, обновляем ее
+        if (groupEl) {
+            // TODO: Более тонкое обновление списка контактов внутри группы
+            // Пока что для простоты перерисовываем внутренности
+            const isCollapsed = groupEl.classList.contains('collapsed');
+            const listEl = createContactList(group);
+            groupEl.querySelector('.contact-group-list')?.remove();
+            groupEl.appendChild(listEl);
+            if (isCollapsed) listEl.style.display = 'none'; // Сохраняем состояние
+
+        } else { // Иначе создаем новую
+            groupEl = document.createElement('div');
+            groupEl.className = 'contact-group collapsed';
+
+            const { groupHeaderEl, groupNameEl, groupCounterEl, groupCheckbox, expandIconWrapper } = createGroupHeader(group);
+            groupEl.appendChild(groupHeaderEl);
+            bindGroupNameEditing(group, groupHeaderEl, groupNameEl, groupCounterEl, groupHeaderEl.querySelector('.contact-group-header-label'));
+
+            const listEl = createContactList(group);
+            groupEl.appendChild(listEl);
+            contactsListContainer.appendChild(groupEl);
+
+            // Привязываем события к новой группе, передавая listEl
+            bindGroupEvents(groupEl, groupHeaderEl, groupCheckbox, expandIconWrapper, groupCounterEl, group.contacts.map(c => c.id), listEl);
+        }
+    });
+
+    function bindGroupEvents(groupEl, groupHeaderEl, groupCheckbox, expandIconWrapper, groupCounterEl, contactIdsInGroup, listEl) {
         const updateGroupCheckboxState = () => {
             const checkedInGroup = contactIdsInGroup.filter(id => selectedContactIds.includes(id));
             groupCheckbox.checked = checkedInGroup.length === contactIdsInGroup.length && contactIdsInGroup.length > 0;
@@ -332,17 +393,12 @@ function renderContacts() {
         groupCheckbox.addEventListener('change', () => {
             handleGroupCheckboxChange(groupCheckbox.checked, contactIdsInGroup);
         });
-        
+
         expandIconWrapper.addEventListener('click', (e) => {
             e.stopPropagation();
             groupEl.classList.toggle('collapsed');
         });
-        groupCounterEl.addEventListener('click', (e) => {
-            e.stopPropagation();
-            groupEl.classList.toggle('collapsed');
-        });
-
-        groupHeaderEl.addEventListener('click', (e) => {
+         groupHeaderEl.addEventListener('click', (e) => {
             // Определяем, был ли клик по элементу, у которого есть своя функция
             const isSpecificElementClick = e.target.closest('.expand-icon-wrapper') ||
                                            e.target.closest('.contact-group-name') ||
@@ -356,15 +412,11 @@ function renderContacts() {
             const shouldBeChecked = groupCheckbox.indeterminate || !groupCheckbox.checked;
             handleGroupCheckboxChange(shouldBeChecked, contactIdsInGroup);
         });
-    });
-    
-    contactsListContainer.addEventListener('change', (e) => {
-        if (e.target.matches('.contact-group-list input[type="checkbox"]')) {
-            updateLocalSelectionState();
-            updateGroupStates();
-            debouncedSyncChanges();
-        }
-    });
+        groupCounterEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            groupEl.classList.toggle('collapsed');
+        });
+    }
 }
 
 function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
@@ -382,18 +434,29 @@ function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
     if (selectionChanged) {
         updateLocalSelectionState();
         updateGroupStates();
-        debouncedSyncChanges();
+        // Вызываем сохранение и обновление предпросмотра напрямую, без debounce
+        saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview());
     }
 }
 
 async function loadContactsAndSettings() {
-    const [contactsRes, settingsRes] = await Promise.all([fetch('/get_contacts'), fetch('/get_web_settings')]);
+    pauseRecordingUpdates();
+
+    const [contactsRes, settingsRes] = await Promise.all([
+        fetch('/get_contacts', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }),
+        fetch('/get_web_settings', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    ]);
+
+    if (!await handleFetchResponse(contactsRes) || !await handleFetchResponse(settingsRes)) return;
+
     contactsData = await contactsRes.json();
     const settings = await settingsRes.json();
     selectedContactIds = settings.selected_contacts || [];
-    renderContacts();
+    if (contactsContentWrapper) renderContacts(true); // Принудительная полная перерисовка при первой загрузке
     updateSelectedContactsCount();
     updatePromptPreview();
+
+    resumeRecordingUpdates();
 }
 
 export function initContacts() {
@@ -403,21 +466,40 @@ export function initContacts() {
     loadContactsAndSettings();
     
     addGroupBtn?.addEventListener('click', async () => {
-        const groupName = newGroupNameInput.value.trim();
-        if (!groupName) {
-            alert('Имя группы не может быть пустым.');
-            return;
-        }
-        await fetch('/contacts/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: `_init_group_`, group_name: groupName })
-        });
-        newGroupNameInput.value = '';
-        loadContactsAndSettings();
+         const groupName = newGroupNameInput.value.trim();
+         console.log(`[Contacts] Попытка добавить группу с именем: "${groupName}"`);
+         if (!groupName) {
+             alert('Имя группы не может быть пустым.');
+             return;
+         }
+         let response = await fetch('/groups/add', {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+             body: JSON.stringify({ group_name: groupName })
+         });
+         response = await handleFetchResponse(response);
+         if (response && response.ok) {
+             console.log('[Contacts] Группа успешно добавлена на сервере. Обновляем список.');
+             newGroupNameInput.value = '';
+             setRandomGroupPlaceholder();
+             await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+         } else {
+             const error = await response.json();
+             console.error(`[Contacts] Ошибка при добавлении группы: ${error.message}`);
+             alert(`Ошибка: ${error.message}`);
+         }
     });
 
     newGroupNameInput?.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') addGroupBtn.click();
+    });
+
+    // Единый обработчик на контейнер для всех чекбоксов
+    contactsListContainer.addEventListener('change', (e) => {
+        if (e.target.matches('.contact-group-list input[type="checkbox"]') || e.target.matches('.contact-group-header input[type="checkbox"]')) {
+            updateLocalSelectionState();
+            updateGroupStates();
+            saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview());
+        }
     });
 }

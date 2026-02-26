@@ -58,18 +58,36 @@ def get_recordings_for_date(date_str):
 def recordings_state():
     return jsonify({"last_modified": get_recordings_last_modified()})
 
+@ui_bp.route('/contacts_state')
+def contacts_state():
+    contacts_file_path = os.path.join(get_application_path(), 'contacts.json')
+    if os.path.exists(contacts_file_path):
+        return jsonify({"last_modified": os.path.getmtime(contacts_file_path)})
+    return jsonify({"last_modified": 0})
+
+
 @ui_bp.route('/preview_prompt_addition', methods=['POST'])
 def preview_prompt_addition():
     from datetime import datetime
     from pathlib import Path
     try:
-        preview_settings = request.get_json()
-        if not preview_settings: return jsonify({"error": "No settings provided"}), 400
+        # Получаем настройки из тела запроса
+        current_settings_from_request = request.get_json()
+        if not current_settings_from_request:
+            return jsonify({"error": "No settings provided"}), 400
+
+        # Создаем временную копию глобальных настроек и обновляем ее данными из запроса
+        # Это гарантирует, что предпросмотр будет сгенерирован на основе самых актуальных данных,
+        # даже если они еще не были сохранены в файл.
         original_settings = settings.copy()
-        settings.update(preview_settings)
+        temp_settings_for_preview = original_settings.copy()
+        temp_settings_for_preview.update(current_settings_from_request)
+
+        # Передаем временные настройки в функцию построения промпта
+        # Это ключевое изменение: build_final_prompt_addition теперь будет работать с актуальными данными
         preview_path = Path(os.path.join(get_application_path(), 'rec', datetime.now().strftime('%Y-%m-%d')))
-        final_prompt_text = build_final_prompt_addition(base_path=preview_path, recording_date=datetime.now(), is_preview=True)
-        settings.clear(); settings.update(original_settings)
+        final_prompt_text = build_final_prompt_addition(base_path=preview_path, recording_date=datetime.now(), is_preview=True, override_settings=temp_settings_for_preview)
+        
         return jsonify({"prompt_text": final_prompt_text})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -139,20 +157,33 @@ def get_group_names():
     group_names = sorted(list(set([g.get("name") for g in contacts_data.get("groups", []) if g.get("name")])))
     return jsonify(group_names)
 
+@ui_bp.route('/groups/add', methods=['POST'])
+def add_group_web():
+    import logging
+    data = request.json
+    group_name = data.get('group_name', '').strip()
+    logging.info(f"Получен запрос на добавление группы: '{group_name}'")
+    if not group_name:
+        logging.warning("Имя группы пустое, возвращаем ошибку 400.")
+        return jsonify({"status": "error", "message": "Имя группы не может быть пустым"}), 400
+    if any(g['name'] == group_name for g in contacts_data.get("groups", [])):
+        logging.warning(f"Группа '{group_name}' уже существует, возвращаем ошибку 409.")
+        return jsonify({"status": "error", "message": f"Группа '{group_name}' уже существует"}), 409
+    
+    contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": []})
+    save_contacts(contacts_data)
+    logging.info(f"Группа '{group_name}' успешно создана и сохранена.")
+    return jsonify({"status": "ok"})
+
 @ui_bp.route('/contacts/add', methods=['POST'])
 def add_contact_web():
     data = request.json
     name = data.get('name', '').strip()
     group_name = data.get('group_name', 'Без группы').strip() or 'Без группы'
     if not name: return jsonify({"status": "error", "message": "Имя не может быть пустым"}), 400
-    if name == '_init_group_':
-        if group_name and not any(g['name'] == group_name for g in contacts_data.get("groups", [])):
-            contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": []})
-            save_contacts(contacts_data)
-        return jsonify({"status": "ok"})
     new_contact = {"id": str(uuid.uuid4()), "name": name}
     group = next((g for g in contacts_data.get("groups", []) if g['name'] == group_name), None)
-    if group: group.setdefault('contacts', []).append(new_contact)
+    if group is not None: group.setdefault('contacts', []).append(new_contact)
     else: contacts_data.setdefault('groups', []).append({"name": group_name, "contacts": [new_contact]})
     save_contacts(contacts_data)
     return jsonify({"status": "ok", "contact": new_contact})
@@ -175,7 +206,7 @@ def delete_contact_web(contact_id):
         original_len = len(group.get("contacts", []))
         group["contacts"] = [c for c in group.get("contacts", []) if c.get("id") != contact_id]
         if len(group.get("contacts", [])) < original_len:
-            contacts_data["groups"] = [g for g in contacts_data.get("groups", []) if g.get("contacts")]
+            # Группу не удаляем, даже если она стала пустой
             if contact_id in settings.get("selected_contacts", []):
                 settings["selected_contacts"].remove(contact_id)
                 save_settings(settings)

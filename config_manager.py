@@ -98,7 +98,9 @@ def load_contacts():
 def save_contacts(new_contacts_data):
     """Saves contacts to the JSON file."""
     global contacts_data
-    contacts_data.clear()
-    contacts_data.update(new_contacts_data)
+    # Создаем копию, чтобы избежать проблем с изменением объекта, по которому итерируемся
+    data_to_save = new_contacts_data.copy()
+    contacts_data.clear() # Очищаем глобальный объект
+    contacts_data.update(data_to_save) # Обновляем его свежими данными
     with open(CONTACTS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(contacts_data, f, indent=4, ensure_ascii=False)
+        json.dump(data_to_save, f, indent=4, ensure_ascii=False)

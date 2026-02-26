@@ -149,16 +149,17 @@ def get_recordings_last_modified():
     """Возвращает время последнего изменения в папке с записями."""
     from app_state import get_application_path
     rec_dir = os.path.join(get_application_path(), 'rec')
-    if not os.path.exists(rec_dir): return 0
-    
-    latest_mtime = 0
-    for root, _, files in os.walk(rec_dir):
-        for file in files:
-            if file.endswith(('.wav', '.mp3', '.txt', '.pdf', '.json')):
-                try:
-                    mtime = os.path.getmtime(os.path.join(root, file))
-                    if mtime > latest_mtime: latest_mtime = mtime
-                except OSError: continue
+    if not os.path.exists(rec_dir):
+        return 0
+
+    latest_mtime = os.path.getmtime(rec_dir)
+    for root, dirs, files in os.walk(rec_dir):
+        for name in files + dirs:
+            try:
+                path = os.path.join(root, name)
+                latest_mtime = max(latest_mtime, os.path.getmtime(path))
+            except (IOError, OSError):
+                continue
     return latest_mtime
 
 def _clean_html_content(html_content):
@@ -180,29 +181,32 @@ def _clean_html_content(html_content):
         print(f"Ошибка при очистке HTML: {e}")
         return html_content
 
-def build_final_prompt_addition(base_path, recording_date, is_preview=False):
-    load_settings()
-    load_contacts()
-
-    prompt_addition = settings.get("prompt_addition", "") if settings.get("use_custom_prompt", False) else ""
+def build_final_prompt_addition(base_path, recording_date, is_preview=False, override_settings=None):
+    current_settings = settings
+    if override_settings:
+        current_settings = override_settings
+    else:
+        load_settings() # Загружаем, если не переданы временные
+    
+    prompt_addition = current_settings.get("prompt_addition", "") if current_settings.get("use_custom_prompt", False) else ""
     prompt_addition = prompt_addition.replace("{current_date}", format_date_russian(recording_date))
 
     meeting_name_prompt_addition = ""
-    active_template_id = settings.get("active_meeting_name_template_id")
+    active_template_id = current_settings.get("active_meeting_name_template_id")
     if active_template_id:
-        templates = settings.get("meeting_name_templates", [])
+        templates = current_settings.get("meeting_name_templates", [])
         active_template = next((t for t in templates if t.get("id") == active_template_id), None)
         if active_template and active_template.get("template"):
             meeting_name_prompt_addition = f"# Название собрания: {active_template.get('template')}\n\n"
 
     date_prompt_addition = ""
-    if settings.get("add_meeting_date", False):
-        date_source = settings.get("meeting_date_source", "current")
+    if current_settings.get("add_meeting_date", False):
+        date_source = current_settings.get("meeting_date_source", "current")
         date_to_format = recording_date if date_source == 'folder' else datetime.now()
         date_prompt_addition = f"# Дата собрания: {format_date_russian(date_to_format)}\n\n"
 
     context_files_prompt_addition = ""
-    context_rules = settings.get("context_file_rules", [])
+    context_rules = current_settings.get("context_file_rules", [])
     if base_path.exists() and context_rules:
         for rule in context_rules:
             if not rule.get("enabled", False): continue
@@ -220,7 +224,7 @@ def build_final_prompt_addition(base_path, recording_date, is_preview=False):
     filtered_prompt_addition = "\n".join([line for line in combined_prompt_addition.splitlines() if not line.strip().startswith("//")])
 
     participants_prompt = ""
-    selected_contact_ids = set(settings.get("selected_contacts", []))
+    selected_contact_ids = set(current_settings.get("selected_contacts", []))
     if selected_contact_ids:
         participants_by_group = {}
         for group in contacts_data.get("groups", []):
