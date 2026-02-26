@@ -331,6 +331,15 @@ function renderContacts(forceFullRedraw = false) {
 
     // --- Основная логика рендеринга ---
 
+    // Запоминаем, какие группы были развернуты
+    const expandedGroupNames = new Set();
+    if (forceFullRedraw) {
+        document.querySelectorAll('.contact-group:not(.collapsed)').forEach(groupEl => {
+            const nameEl = groupEl.querySelector('.contact-group-name');
+            if (nameEl) expandedGroupNames.add(nameEl.textContent);
+        });
+    }
+
     if (forceFullRedraw) {
         contactsListContainer.innerHTML = '';
     }
@@ -367,7 +376,12 @@ function renderContacts(forceFullRedraw = false) {
 
         } else { // Иначе создаем новую
             groupEl = document.createElement('div');
-            groupEl.className = 'contact-group collapsed';
+            // Если группа была развернута, создаем ее сразу развернутой
+            if (expandedGroupNames.has(group.name)) {
+                groupEl.className = 'contact-group';
+            } else {
+                groupEl.className = 'contact-group collapsed';
+            }
 
             const { groupHeaderEl, groupNameEl, groupCounterEl, groupCheckbox, expandIconWrapper } = createGroupHeader(group);
             groupEl.appendChild(groupHeaderEl);
