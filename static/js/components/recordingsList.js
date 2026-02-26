@@ -1,5 +1,5 @@
 import { recordingsListContainer } from '../dom.js';
-import { showConfirmationModal, showRecreateConfirmationModal } from './modal.js';
+import { showConfirmationModal } from './modal.js';
 
 let expandedGroups = new Set();
 let lastRecordingsState = 0;
@@ -169,12 +169,20 @@ async function checkForRecordingUpdates() {
 }
 
 async function handleAction(action, { date, filename }) {
-    const taskType = action.split('_')[1]; // 'transcription' or 'protocol'
-    showRecreateConfirmationModal({
-        taskType,
-        date,
-        filename
-    });
+    const settings = await (await fetch('/get_web_settings')).json();
+
+    const performFetch = async () => {
+        await fetch(`/${action}/${date}/${filename}`, {
+            method: 'POST'
+        });
+    };
+
+    if (settings.confirm_prompt_on_action) {
+        // Показываем большое модальное окно для подтверждения и изменения настроек
+        showConfirmationModal(performFetch);
+    } else {
+        performFetch();
+    }
 }
 
 function handleRecordingsListClick(e) {

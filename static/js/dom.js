@@ -31,4 +31,3 @@ export const modalCancelBtn = document.getElementById('modal-cancel-btn');
 export const modalSettingsCol = document.getElementById('modal-settings-col');
 export const modalContactsCol = document.getElementById('modal-contacts-col');
 export const modalPreviewCol = document.getElementById('modal-preview-col');
-export const recreateModal = document.getElementById('recreate-confirmation-modal');
