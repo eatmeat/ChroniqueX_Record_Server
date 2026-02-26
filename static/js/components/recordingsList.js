@@ -88,7 +88,12 @@ async function updateRecordingsList() {
 
         recordingsListContainer.innerHTML = '';
 
-        const sortedWeekKeys = Object.keys(weeks).sort().reverse();
+        // Sort weeks by the latest date within each week group, in descending order.
+        const sortedWeekKeys = Object.keys(weeks).sort((a, b) => {
+            const lastDateA = weeks[a].dates.reduce((latest, curr) => curr.date > latest ? curr.date : latest, '0000-00-00');
+            const lastDateB = weeks[b].dates.reduce((latest, curr) => curr.date > latest ? curr.date : latest, '0000-00-00');
+            return lastDateB.localeCompare(lastDateA);
+        });
 
         for (const [index, weekId] of sortedWeekKeys.entries()) {
             const weekData = weeks[weekId];
@@ -96,11 +101,12 @@ async function updateRecordingsList() {
             weekGroupEl.className = 'week-group';
             weekGroupEl.dataset.weekId = weekId;
 
+            
             if (index > 0) {
                 weekGroupEl.classList.add('collapsed');
             }
 
-            const headerParts = weekData.header_text.split(' : ');
+            const headerParts = (weekData.header_text || '').split(' : ');
             const weekDateRange = headerParts[0] || '';
             const weekNumberText = headerParts[1] || '';
             weekGroupEl.innerHTML = `<h4><span class="expand-icon"></span><span class="week-title">${weekDateRange}</span><span class="week-number">${weekNumberText}</span></h4>`;
@@ -108,7 +114,7 @@ async function updateRecordingsList() {
             recordingsListContainer.appendChild(weekGroupEl);
 
             weekData.dates.sort((a, b) => a.date.localeCompare(b.date));
-
+            
             for (const groupData of weekData.dates) {
                 let groupEl = document.createElement('div');
                 groupEl.className = 'date-group';
@@ -129,11 +135,9 @@ async function updateRecordingsList() {
                 
                 const tableContainer = document.createElement('div');
                 tableContainer.innerHTML = `<div class="recording-table"><div class="recording-table-header"><div class="recording-cell cell-time">Начало</div><div class="recording-cell cell-duration">Длит.</div><div class="recording-cell cell-title">Наименование</div><div class="recording-cell cell-files">Файлы</div></div><div class="recording-table-body"></div></div>`;
-                groupEl.appendChild(tableContainer);
-                weekGroupEl.appendChild(groupEl);
-            }
-            
-            for (const groupData of weekData.dates) {
+                groupEl.appendChild(tableContainer); // Append table to the date group
+                weekGroupEl.appendChild(groupEl); // Append the date group to the correct week group
+
                 if (expandedGroups.has(groupData.date)) {
                     const groupEl = weekGroupEl.querySelector(`.date-group[data-date="${groupData.date}"]`);
                     if (groupEl) await loadRecordingsForGroup(groupEl, groupData.date);
@@ -273,16 +277,6 @@ function handleRecordingsListClick(e) {
         const weekGroupEl = weekHeader.parentElement;
         weekGroupEl.classList.toggle('collapsed');
     }
-}
-
-export function pauseRecordingUpdates() {
-    isUpdatesPaused = true;
-    console.log('Проверка обновлений записей приостановлена.');
-}
-
-export function resumeRecordingUpdates() {
-    isUpdatesPaused = false;
-    console.log('Проверка обновлений записей возобновлена.');
 }
 
 export function initRecordingsList() {

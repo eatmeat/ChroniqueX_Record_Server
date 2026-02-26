@@ -49,9 +49,11 @@ async function saveModalSettings() {
 }
 
 function hideConfirmationModal() {
-    saveModalSettings().then(() => {
-        if(window.location) window.location.reload(); // Reload to reflect all changes
-    });
+    // Не вызываем saveModalSettings() здесь, так как оно уже вызывается
+    // в обработчиках кнопок Confirm и Cancel.
+    // Просто перезагружаем страницу, чтобы отразить сохраненные изменения.
+    if(window.location) window.location.reload();
+
     modal.style.display = 'none';
     document.body.style.overflow = '';
 
@@ -97,18 +99,19 @@ export function initModal() {
     if (!modal) return;
 
     modalConfirmBtn.addEventListener('click', async () => {
-        await saveModalSettings();
-        if (onConfirmCallback) {
-            onConfirmCallback();
-        }
+        await saveModalSettings(); // Сначала сохраняем
+        if (onConfirmCallback) onConfirmCallback(); // Затем выполняем действие
+        hideConfirmationModal(); // Затем скрываем и перезагружаем
+    });
+
+    modalCancelBtn.addEventListener('click', async () => {
+        await saveModalSettings(); // Сохраняем изменения даже при отмене
         hideConfirmationModal();
     });
 
-    modalCancelBtn.addEventListener('click', hideConfirmationModal);
-
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
-            hideConfirmationModal();
+            modalCancelBtn.click(); // Эмулируем клик по кнопке отмены, чтобы сохранить
         }
     });
 }

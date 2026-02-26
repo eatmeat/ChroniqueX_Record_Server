@@ -122,12 +122,10 @@ def serve_recorded_file(filepath):
 def save_web_settings():
     try:
         data = request.get_json()
-        if not data: return jsonify({"status": "error", "message": "Нет данных"}), 400
-        for key in ['use_custom_prompt', 'prompt_addition', 'selected_contacts', 'context_file_rules',
-                    'add_meeting_date', 'meeting_date_source', 'meeting_name_templates',
-                    'active_meeting_name_template_id', 'relay_enabled', 'confirm_prompt_on_action']:
-            if key in data: settings[key] = data[key]
-        save_settings(settings)
+        if not data:
+            return jsonify({"status": "error", "message": "Нет данных"}), 400
+        settings.update(data)
+        save_settings(settings.copy())
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"status": "error", "message": f"Ошибка: {e}"}), 500

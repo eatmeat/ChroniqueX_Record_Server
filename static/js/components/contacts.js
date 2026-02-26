@@ -4,8 +4,7 @@ import {
     newGroupNameInput,
     addGroupBtn
 } from '../dom.js';
-import { updatePromptPreview } from './settings.js';
-import { pauseRecordingUpdates, resumeRecordingUpdates } from './recordingsList.js';
+import { updatePromptPreview, getSettings } from './settings.js';
 
 let contactsData = {};
 let selectedContactIds = [];
@@ -70,10 +69,13 @@ async function handleFetchResponse(response) {
 }
 
 async function saveSelectionToServer(ids) {
+    const currentSettings = await getSettings();
+    const settingsToSave = { ...currentSettings, selected_contacts: ids };
+
     return fetch('/save_web_settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify({ selected_contacts: ids })
+        body: JSON.stringify(settingsToSave)
     });
 }
 
@@ -454,8 +456,6 @@ function handleGroupCheckboxChange(isChecked, contactIdsInGroup) {
 }
 
 async function loadContactsAndSettings() {
-    pauseRecordingUpdates();
-
     const [contactsRes, settingsRes] = await Promise.all([
         fetch('/get_contacts', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }),
         fetch('/get_web_settings', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -469,8 +469,6 @@ async function loadContactsAndSettings() {
     if (contactsContentWrapper) renderContacts(true); // Принудительная полная перерисовка при первой загрузке
     updateSelectedContactsCount();
     updatePromptPreview();
-
-    resumeRecordingUpdates();
 }
 
 export function initContacts() {

@@ -239,4 +239,9 @@ export function initSettings() {
     settingsForm.addEventListener('submit', (e) => e.preventDefault());
 }
 
+export async function getSettings() {
+    const response = await fetch('/get_web_settings');
+    return await response.json();
+}
+
 export { updatePromptPreview };

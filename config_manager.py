@@ -67,10 +67,11 @@ def load_settings():
 def save_settings(new_settings):
     """Saves settings to the JSON file."""
     global settings
+    data_to_save = new_settings.copy()
     settings.clear()
-    settings.update(new_settings)
+    settings.update(data_to_save)
     with open(SETTINGS_FILE, 'w') as f:
-        json.dump(settings, f, indent=4)
+        json.dump(data_to_save, f, indent=4)
     print("Settings saved.")
 
 # --- Contacts Management ---
