@@ -2,8 +2,10 @@ import {
     contactsListContainer,
     contactsContentWrapper,
     newGroupNameInput,
-    addGroupBtn
+    addGroupBtn,
+    modal
 } from '../dom.js';
+import { getSettingsFromDOM } from '../utils/helpers.js';
 import { updatePromptPreview, getSettings } from './settings.js';
 
 let contactsData = {};
@@ -139,6 +141,7 @@ function renderContacts(forceFullRedraw = false, container = document) {
         const groupNameEl = document.createElement('h4');
         groupNameEl.className = 'contact-group-name';
         groupNameEl.textContent = group.name;
+        groupNameEl.dataset.groupName = group.name; // Add data attribute for easier lookup
         groupNameEl.style.cursor = 'text';
         
         const groupCheckbox = document.createElement('input');
@@ -339,13 +342,13 @@ function renderContacts(forceFullRedraw = false, container = document) {
     }
 
     // --- Основная логика рендеринга ---
-
-    // Запоминаем, какие группы были развернуты
-    const expandedGroupNames = new Set();
-    if (forceFullRedraw) {
+    // Capture expanded state from the current DOM before clearing/rebuilding
+    const expandedGroupNamesToRestore = new Set();
+    // Capture for modal or if full redraw on main page
+    if (isModal || forceFullRedraw) {
         document.querySelectorAll('.contact-group:not(.collapsed)').forEach(groupEl => {
             const nameEl = groupEl.querySelector('.contact-group-name');
-            if (nameEl && !isModal) expandedGroupNames.add(nameEl.textContent);
+            if (nameEl) expandedGroupNamesToRestore.add(nameEl.textContent);
         });
     }
 
@@ -358,12 +361,14 @@ function renderContacts(forceFullRedraw = false, container = document) {
         return;
     }
 
-    const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru'));
+    const sortedGroups = [...contactsData.groups].sort((a, b) => a.name.localeCompare(b.name, 'ru')); // contactsData is global
     const existingGroupNames = new Set([...listContainer.querySelectorAll('.contact-group-name')].map(el => el.textContent));
     const newGroupNames = new Set(sortedGroups.map(g => g.name));
 
     // Удаляем группы, которых больше нет
     existingGroupNames.forEach(name => {
+        // Note: This assumes group names are unique and stable identifiers.
+        // If group names can change, a more robust ID-based lookup would be better.
         if (!newGroupNames.has(name)) {
             const groupEl = [...contactsListContainer.querySelectorAll('.contact-group-name')].find(el => el.textContent === name)?.closest('.contact-group');
             groupEl?.remove();
@@ -373,23 +378,36 @@ function renderContacts(forceFullRedraw = false, container = document) {
     sortedGroups.forEach(group => {
         let groupEl = [...listContainer.querySelectorAll('.contact-group-name')].find(el => el.textContent === group.name)?.closest('.contact-group');
 
-        // Если группа уже существует, обновляем ее
+        // If group already exists, update its content and re-bind events
         if (groupEl) {
-            // TODO: Более тонкое обновление списка контактов внутри группы
-            // Пока что для простоты перерисовываем внутренности
-            const isCollapsed = groupEl.classList.contains('collapsed');
+            // Rebuild the contact list within the existing group element
+            // This will re-attach event listeners for individual contacts
             const listEl = createContactList(group);
+
+            // Re-find existing header elements to re-bind events
+            const groupHeaderEl = groupEl.querySelector('.contact-group-header');
+            const groupNameEl = groupEl.querySelector('.contact-group-name');
+            const groupCounterEl = groupEl.querySelector('.group-counter');
+            const groupCheckbox = groupEl.querySelector('.contact-group-header input[type="checkbox"]');
+            const expandIconWrapper = groupEl.querySelector('.expand-icon-wrapper');
+
+            // Update group name text if needed (though group.name should be stable here)
+            if (groupNameEl) groupNameEl.textContent = group.name;
+            // updateGroupStates will handle the counter and checkbox state
+
+            // Replace the contact list and re-bind events
             groupEl.querySelector('.contact-group-list')?.remove();
             groupEl.appendChild(listEl);
             if (isCollapsed) listEl.style.display = 'none'; // Сохраняем состояние
 
         } else { // Иначе создаем новую
             groupEl = document.createElement('div');
-            // Если группа была развернута, создаем ее сразу развернутой
-            if (expandedGroupNames.has(group.name)) {
-                groupEl.className = 'contact-group';
+            groupEl.className = 'contact-group';
+            // Set initial collapsed state based on what was captured
+            if (expandedGroupNamesToRestore.has(group.name)) {
+                groupEl.classList.remove('collapsed');
             } else {
-                groupEl.className = 'contact-group collapsed';
+                groupEl.classList.add('collapsed');
             }
 
             const { groupHeaderEl, groupNameEl, groupCounterEl, groupCheckbox, expandIconWrapper } = createGroupHeader(group);
@@ -493,6 +511,11 @@ export function initContacts(container = document, onUpdate = null) {
     if (!isModal) {
         setRandomGroupPlaceholder();
         loadContactsAndSettings();
+    } else {
+        // Для модального окна нужно перерисовать контакты с текущими настройками
+        // и привязать события.
+        renderContacts(true, container);
+        updateGroupStates(container);
     }
 
     container.querySelector(isModal ? '#modal-contacts-content-wrapper #add-group-btn' : '#add-group-btn')?.addEventListener('click', async () => {

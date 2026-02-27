@@ -220,12 +220,16 @@ export function initSettings(container = document, onUpdate = null) {
         }
     }
 
-    form.querySelectorAll('.settings-group-header').forEach(header => {
-        header.addEventListener('click', () => {
-            const group = header.closest('.settings-group');
-            if (group) group.classList.toggle('collapsed');
+    // Этот обработчик нужен только для основной страницы, а не для модального окна,
+    // так как в модальном окне используется делегирование событий.
+    if (!isModal) {
+        form.querySelectorAll('.settings-group-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const group = header.closest('.settings-group');
+                if (group) group.classList.toggle('collapsed');
+            });
         });
-    });
+    }
     
     const localContextRulesContainer = form.querySelector(isModal ? '#modal-settings-tab #context-file-rules-container' : '#context-file-rules-container');
     form.querySelector(isModal ? '#modal-settings-tab #add-context-rule-btn' : '#add-context-rule-btn')?.addEventListener('click', () => {

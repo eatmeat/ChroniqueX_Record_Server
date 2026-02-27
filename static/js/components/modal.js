@@ -6,34 +6,18 @@ import { initContacts } from './contacts.js';
 let onConfirmCallback = null;
 let modalPausedRecording = false;
 
-function rebindModalEventListeners(modal) {
-    const saveAndPreviewFromModal = async () => {
-        const settingsFromModal = getSettingsFromDOM(modal);
-        const response = await fetch('/preview_prompt_addition', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settingsFromModal),
-        });
-        const data = await response.json();
-        const modalPreviewContent = modal.querySelector('#prompt-preview-content');
-        if (modalPreviewContent) {
-            modalPreviewContent.textContent = data.prompt_text || '';
-        }
-
-        const modalCountElement = modal.querySelector('#modal-selected-contacts-count');
-        if (modalCountElement) {
-            const count = settingsFromModal.selected_contacts.length;
-            modalCountElement.textContent = count > 0 ? `(${count})` : '';
-        }
-    };
-
+function rebindModalEventListeners(modal, saveAndPreviewFromModal) {
     // Используем делегирование событий, чтобы обработчики работали для динамически добавленных элементов
+    // Этот обработчик ТОЛЬКО для групп настроек и предпросмотра. Группы контактов имеют свою логику.
     modal.addEventListener('click', (e) => {
-        const header = e.target.closest('.settings-group-header, .prompt-preview-container h4');
-        if (header) {
-            header.parentElement.classList.toggle('collapsed');
+        const settingsHeader = e.target.closest('.settings-group-header');
+        const previewHeader = e.target.closest('#modal-preview-col h4');
+        if (settingsHeader) {
+            settingsHeader.closest('.settings-group')?.classList.toggle('collapsed');
+        } else if (previewHeader) {
+            previewHeader.parentElement.classList.toggle('collapsed');
         }
-    })
+    });
 
     // Делегирование для всех input/change событий в модальном окне
     modal.addEventListener('input', (e) => {
@@ -73,6 +57,26 @@ function hideConfirmationModal() {
 export function showConfirmationModal(onConfirm, newTemplateData = null) {
     onConfirmCallback = onConfirm;
 
+    const saveAndPreviewFromModal = async () => {
+        const settingsFromModal = getSettingsFromDOM(modal);
+        const response = await fetch('/preview_prompt_addition', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settingsFromModal),
+        });
+        const data = await response.json();
+        const modalPreviewContent = modal.querySelector('#prompt-preview-content');
+        if (modalPreviewContent) {
+            modalPreviewContent.textContent = data.prompt_text || '';
+        }
+
+        const modalCountElement = modal.querySelector('#modal-selected-contacts-count');
+        if (modalCountElement) {
+            const count = settingsFromModal.selected_contacts.length;
+            modalCountElement.textContent = count > 0 ? `(${count})` : '';
+        }
+    };
+
     const settingsContent = document.getElementById('settings-tab').cloneNode(true);
     const contactsContent = document.getElementById('contacts-content-wrapper').cloneNode(true);
     const previewContent = document.getElementById('prompt-preview-container').cloneNode(true);
@@ -97,7 +101,7 @@ export function showConfirmationModal(onConfirm, newTemplateData = null) {
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    rebindModalEventListeners(modal);
+    rebindModalEventListeners(modal, saveAndPreviewFromModal);
 
     // Переинициализируем логику компонентов внутри модального окна
     initSettings(modal, saveAndPreviewFromModal);
