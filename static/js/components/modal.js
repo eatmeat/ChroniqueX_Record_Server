@@ -1,6 +1,7 @@
 import { modal, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
 import { getSettingsFromDOM } from '../utils/helpers.js';
-import { getSettings } from './settings.js';
+import { initSettings } from './settings.js';
+import { initContacts } from './contacts.js';
 
 let onConfirmCallback = null;
 let modalPausedRecording = false;
@@ -26,17 +27,20 @@ function rebindModalEventListeners(modal) {
         }
     };
 
-    modal.querySelectorAll('.settings-group-header, .prompt-preview-container h4').forEach(header => {
-        header.addEventListener('click', () => header.parentElement.classList.toggle('collapsed'));
-    });
+    // Используем делегирование событий, чтобы обработчики работали для динамически добавленных элементов
+    modal.addEventListener('click', (e) => {
+        const header = e.target.closest('.settings-group-header, .prompt-preview-container h4');
+        if (header) {
+            header.parentElement.classList.toggle('collapsed');
+        }
+    })
 
-    const elementsToRebind = [
-        ...modal.querySelectorAll('#modal-settings-tab input, #modal-settings-tab textarea'),
-        ...modal.querySelectorAll('#contacts-content-wrapper input')
-    ];
-    elementsToRebind.forEach(el => {
-        el.addEventListener('input', saveAndPreviewFromModal);
-        el.addEventListener('change', saveAndPreviewFromModal);
+    // Делегирование для всех input/change событий в модальном окне
+    modal.addEventListener('input', (e) => {
+        if (e.target.matches('input, textarea')) saveAndPreviewFromModal();
+    });
+    modal.addEventListener('change', (e) => {
+        if (e.target.matches('input')) saveAndPreviewFromModal();
     });
 }
 
@@ -94,6 +98,10 @@ export function showConfirmationModal(onConfirm, newTemplateData = null) {
     document.body.style.overflow = 'hidden';
 
     rebindModalEventListeners(modal);
+
+    // Переинициализируем логику компонентов внутри модального окна
+    initSettings(modal, saveAndPreviewFromModal);
+    initContacts(modal, saveAndPreviewFromModal);
 }
 
 export function initModal() {

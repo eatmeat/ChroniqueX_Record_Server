@@ -15,7 +15,7 @@ import { getSettingsFromDOM } from '../utils/helpers.js';
 
 let settings = {};
 
-function addContextRuleRow(pattern = '', prompt = '', isEnabled = true, container = contextRulesContainer) {
+function addContextRuleRow(pattern = '', prompt = '', isEnabled = true, container, onUpdate) {
     const ruleItem = document.createElement('div');
     ruleItem.className = 'context-rule-item';
 
@@ -33,12 +33,12 @@ function addContextRuleRow(pattern = '', prompt = '', isEnabled = true, containe
 
     ruleItem.querySelector('.remove-rule-btn').addEventListener('click', () => {
         ruleItem.remove();
-        saveSettings().then(updatePromptPreview);
+        onUpdate();
     });
 
-    ruleItem.querySelector('.context-rule-enabled').addEventListener('change', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
-    ruleItem.querySelector('.context-rule-pattern').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
-    ruleItem.querySelector('.context-rule-prompt').addEventListener('input', () => { saveSettings(['context_file_rules']).then(updatePromptPreview); });
+    ruleItem.querySelector('.context-rule-enabled').addEventListener('change', onUpdate);
+    ruleItem.querySelector('.context-rule-pattern').addEventListener('input', onUpdate);
+    ruleItem.querySelector('.context-rule-prompt').addEventListener('input', onUpdate);
 
     container.appendChild(ruleItem);
     return ruleItem;
@@ -49,10 +49,10 @@ function renderContextFileRules(rules = []) {
     contextRulesContainer.innerHTML = '';
     if (rules && rules.length > 0) {
         rules.forEach(rule => {
-            addContextRuleRow(rule.pattern, rule.prompt, rule.enabled);
+            addContextRuleRow(rule.pattern, rule.prompt, rule.enabled, contextRulesContainer, () => saveSettings(['context_file_rules']).then(updatePromptPreview));
         });
     } else {
-        addContextRuleRow('', '', true);
+        addContextRuleRow('', '', true, contextRulesContainer, () => saveSettings(['context_file_rules']).then(updatePromptPreview));
     }
 }
 
@@ -184,59 +184,62 @@ export async function loadSettings() {
     updatePromptPreview();
 }
 
-export function initSettings() {
-    if (!settingsForm) return;
+export function initSettings(container = document, onUpdate = null) {
+    const isModal = container !== document;
+    const form = container.querySelector(isModal ? '#modal-settings-tab' : '#settings-form');
+    if (!form) return;
 
-    loadSettings();
+    const updateCallback = onUpdate || (() => saveSettings().then(updatePromptPreview));
 
-    document.getElementById('use-custom-prompt')?.addEventListener('change', () => { saveSettings(['use_custom_prompt']).then(updatePromptPreview); });
-    document.getElementById('prompt-addition')?.addEventListener('input', () => { saveSettings(['prompt_addition']).then(updatePromptPreview); }); 
-    addMeetingDateCheckbox?.addEventListener('change', () => {
-        toggleMeetingDateSourceVisibility();
-        saveSettings(['add_meeting_date']).then(updatePromptPreview);
-    });
-    document.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
-        radio.addEventListener('change', () => { saveSettings(['meeting_date_source']).then(updatePromptPreview); });
-    });
+    if (!isModal) {
+        loadSettings();
 
-    if (confirmPromptOnActionCheckbox) {
-        confirmPromptOnActionCheckbox.addEventListener('change', () => { saveSettings(['confirm_prompt_on_action']).then(updatePromptPreview); });
+        form.querySelector('#use-custom-prompt')?.addEventListener('change', () => { saveSettings(['use_custom_prompt']).then(updatePromptPreview); });
+        form.querySelector('#prompt-addition')?.addEventListener('input', () => { saveSettings(['prompt_addition']).then(updatePromptPreview); });
+        form.querySelector('#add-meeting-date')?.addEventListener('change', () => {
+            toggleMeetingDateSourceVisibility();
+            saveSettings(['add_meeting_date']).then(updatePromptPreview);
+        });
+        form.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
+            radio.addEventListener('change', () => { saveSettings(['meeting_date_source']).then(updatePromptPreview); });
+        });
+        form.querySelector('#confirm-prompt-on-action')?.addEventListener('change', () => { saveSettings(['confirm_prompt_on_action']).then(updatePromptPreview); });
+
+        form.addEventListener('submit', (e) => e.preventDefault());
     }
 
-    if (promptPreviewContainer) {
-        const header = promptPreviewContainer.querySelector('h4');
+    const localPromptPreviewContainer = container.querySelector(isModal ? '#modal-preview-col' : '#prompt-preview-container');
+    if (localPromptPreviewContainer && !isModal) {
+        const header = localPromptPreviewContainer.querySelector('h4');
         if (header) {
             header.insertAdjacentHTML('afterbegin', '<span class="expand-icon"></span>');
-            promptPreviewContainer.classList.add('collapsed');
+            localPromptPreviewContainer.classList.add('collapsed');
             header.addEventListener('click', () => {
-                promptPreviewContainer.classList.toggle('collapsed');
+                localPromptPreviewContainer.classList.toggle('collapsed');
             });
         }
     }
 
-    document.querySelectorAll('.settings-group-header').forEach(header => {
+    form.querySelectorAll('.settings-group-header').forEach(header => {
         header.addEventListener('click', () => {
             const group = header.closest('.settings-group');
-            if (group) {
-                group.classList.toggle('collapsed');
-            }
+            if (group) group.classList.toggle('collapsed');
         });
     });
     
-    
-    addContextRuleBtn?.addEventListener('click', () => {
-        addContextRuleRow('', '', true);
+    const localContextRulesContainer = form.querySelector(isModal ? '#modal-settings-tab #context-file-rules-container' : '#context-file-rules-container');
+    form.querySelector(isModal ? '#modal-settings-tab #add-context-rule-btn' : '#add-context-rule-btn')?.addEventListener('click', () => {
+        addContextRuleRow('', '', true, localContextRulesContainer, updateCallback);
     });
 
-    addMeetingNameTemplateBtn?.addEventListener('click', () => {
+    const localMeetingNameTemplatesContainer = form.querySelector(isModal ? '#modal-settings-tab #meeting-name-templates-container' : '#meeting-name-templates-container');
+    form.querySelector(isModal ? '#modal-settings-tab #add-meeting-name-template-btn' : '#add-meeting-name-template-btn')?.addEventListener('click', () => {
         const newId = `template-${Date.now()}`;
         const newTemplate = { id: newId, template: '' };
-        const newRow = createMeetingNameTemplateRow(newTemplate, null, true);
-        meetingNameTemplatesContainer.appendChild(newRow);
+        const newRow = createMeetingNameTemplateRow(newTemplate, null, true); // onUpdate is handled by event delegation in modal
+        localMeetingNameTemplatesContainer.appendChild(newRow);
         newRow.querySelector('.meeting-name-template-input').focus();
     });
-
-    settingsForm.addEventListener('submit', (e) => e.preventDefault());
 }
 
 export async function getSettings() {
