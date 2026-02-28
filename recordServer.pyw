@@ -94,7 +94,7 @@ def update_tray_menu():
         return Menu(
             item('Начать запись', start_recording_from_tray, enabled=False),
             item('Приостановить запись', pause_recording_from_tray, enabled=True),
-            item('Остановить запись', stop_recording_from_tray, enabled=True),
+            item('Остановить запись', lambda: stop_recording_from_tray(), enabled=True),
             Menu.SEPARATOR,
             item('Веб-интерфейс', lambda: open_web_interface(), enabled=server_is_on),
             item('Настройки', lambda: open_main_window(restart_server_cb=restart_server)),
@@ -107,7 +107,7 @@ def update_tray_menu():
         return Menu(
             item('Начать запись', start_recording_from_tray, enabled=False),
             item('Возобновить запись', resume_recording_from_tray, enabled=True),
-            item('Остановить запись', stop_recording_from_tray, enabled=True),
+            item('Остановить запись', lambda: stop_recording_from_tray(), enabled=True),
             Menu.SEPARATOR,
             item('Веб-интерфейс', lambda: open_web_interface(), enabled=server_is_on),
             item('Настройки', lambda: open_main_window(restart_server_cb=restart_server)),
@@ -120,7 +120,7 @@ def update_tray_menu():
         return Menu(
             item('Начать запись', start_recording_from_tray, enabled=True),
             item('Приостановить запись', pause_recording_from_tray, enabled=False),
-            item('Остановить запись', stop_recording_from_tray, enabled=False),
+            item('Остановить запись', lambda: stop_recording_from_tray(), enabled=False),
             Menu.SEPARATOR,
             item('Веб-интерфейс', lambda: open_web_interface(), enabled=server_is_on),
             item('Настройки', lambda: open_main_window(restart_server_cb=restart_server)),
@@ -246,6 +246,11 @@ if __name__ == '__main__':
     _suppress_subprocess_window()
     setup_logging()
     load_settings()
+
+    # Устанавливаем уровень логирования для Werkzeug, чтобы убрать INFO сообщения о запросах
+    import logging
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.WARNING)
     
     app = create_app()
     app.secret_key = settings.get("secret_key")
