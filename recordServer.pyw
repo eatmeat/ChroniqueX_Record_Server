@@ -10,7 +10,7 @@ import numpy as np
 try:
     import pyaudiowpatch as pyaudio
 except ImportError:
-    import pyaudio
+    pyaudio = None
 
 # Для проверки одного экземпляра приложения
 try:
