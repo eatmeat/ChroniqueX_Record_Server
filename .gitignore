@@ -1,3 +1,4 @@
+venv/
 rec/
 dist/recordServer/_internal/rec
 build/
