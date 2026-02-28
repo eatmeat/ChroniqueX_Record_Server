@@ -163,7 +163,10 @@ h1, h2, h3, h4 {
 .legend-item.protocol-bg .legend-color {
     background-color: rgba(46, 204, 113, 0.4); /* Зеленый, как фон протокола */
 }
-
+/* Стили для фона записи */
+.legend-item.recording-bg .legend-color {
+    background-color: rgba(192, 57, 43, 0.4); /* Красный, как фон записи */
+}
 /* --- Адаптация для мобильных устройств --- */
 @media (max-width: 1000px) {
     header {
