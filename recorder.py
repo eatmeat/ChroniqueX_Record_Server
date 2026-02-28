@@ -279,13 +279,13 @@ def start_recording_from_tray(icon=None, item=None):
     logging.info("Starting background thread `_start`.")
     Thread(target=_start, daemon=True).start()
 
-def stop_recording_from_tray(icon=None, item=None):
+def stop_recording_from_tray(icon=None, item=None, request_settings=None):
     logging.info("stop_recording_from_tray called.")
     if not app_state.is_recording: return
 
     try:
-        stop_recording(None)
-        print("Запись остановлена.")
+        stop_recording(request_settings)
+        logging.info("Recording stopped successfully.")
     except Exception as e:
         print(f"Ошибка при остановке записи: {e}")
         app_state.is_recording = False

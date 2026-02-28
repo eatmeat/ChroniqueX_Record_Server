@@ -25,7 +25,7 @@ def stop():
     # Получаем настройки из запроса, если они есть
     request_settings = request.get_json() if request.is_json else None
     # Запускаем в потоке, передавая настройки
-    Thread(target=stop_recording_from_tray, args=(None, None, request_settings), daemon=True).start() # pragma: no cover
+    Thread(target=stop_recording_from_tray, kwargs={'request_settings': request_settings}, daemon=True).start() # pragma: no cover
     return jsonify({"status": "ok", "message": "Stop command sent."})
 
 @control_bp.route('/pause')
