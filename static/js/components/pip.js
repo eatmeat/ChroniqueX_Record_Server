@@ -90,17 +90,17 @@ async function togglePiP() {
         if (volumeChart) pipBody.append(volumeChart);
         pipBody.append(controlsContainer);
         pipBtn.classList.add('active');
-
-        pipWindow.addEventListener('resize', () => {
-            const pipDoc = pipWindow.document;
+        
+        const adjustPiPLayout = (win) => {
+            const pipDoc = win.document;
             if (!pipDoc) return;
-
+        
             const controlsEl = pipDoc.querySelector('.controls');
             const statusEl = pipDoc.querySelector('.status-wrapper');
             const canvasEl = pipDoc.getElementById('audio-chart');
-
+        
             if (!controlsEl || !canvasEl) return;
-
+        
             const controlsHeight = controlsEl.offsetHeight;
             const statusHeight = statusEl ? statusEl.offsetHeight : 0;
             const controlsPadding = 0;
@@ -108,13 +108,28 @@ async function togglePiP() {
             
             const totalNonCanvasHeight = controlsHeight + statusHeight + canvasBorder + controlsPadding;
             const availableHeight = pipDoc.documentElement.clientHeight - totalNonCanvasHeight;
-
+        
             canvasEl.style.height = `${Math.max(20, availableHeight)}px`;
             setupCanvas(canvasEl);
-        });
+        };
 
+        // Запускаем интервал для корректировки макета в течение первой секунды.
+        // Это надежно решает проблему "сжатого" вида при повторном открытии окна.
+        let adjustInterval = pipWindow.setInterval(() => {
+            adjustPiPLayout(pipWindow);
+        }, 50); // Корректируем каждые 50 мс
+
+        // Через 50 мс отключаем интервал, так как окно уже должно было стабилизироваться.
+        pipWindow.setTimeout(() => {
+            pipWindow.clearInterval(adjustInterval);
+        }, 50);
+
+        pipWindow.addEventListener('resize', () => adjustPiPLayout(pipWindow));
         pipWindow.addEventListener('pagehide', () => {
+            // Сбрасываем стили, которые были применены к элементам в PiP-окне,
+            // чтобы при следующем открытии они не влияли на расчеты.
             if (statusWrapper) statusWrapper.style.display = '';
+            controlsContainer.style.margin = '';
             
             if (legendEl) legendEl.style.display = '';
             if (chartPlaceholder && chartPlaceholder.parentNode) {
@@ -131,7 +146,6 @@ async function togglePiP() {
             if (canvasEl) canvasEl.style.height = '';
             setupCanvas(audioChartCanvas);
             controlsContainer.style.padding = '';
-            controlsContainer.style.margin = '';
             const mainControlsExtensions = document.querySelector('.main-controls-extensions');
             if (mainControlsExtensions) mainControlsExtensions.insertAdjacentElement('beforebegin', controlsContainer);
             if (controlsPlaceholder && controlsPlaceholder.parentNode) {
