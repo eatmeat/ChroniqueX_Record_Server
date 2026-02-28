@@ -1,6 +1,7 @@
 rec/
 dist/recordServer/_internal/rec
 build/
+__pycache__/
 .env
 record_server_settings.json
 pushall.bat
@@ -8,3 +9,4 @@ contacts.json
 =recordServer.pyw.lnk
 =deploy.bat
 contacts.json
+

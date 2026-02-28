@@ -45,13 +45,18 @@ function generateRandomPlaceholder() {
     return `${finalSurname} ${name} ${finalPatronymic} — ${getRandomItem(positions)}`;
 }
 
-function updateSelectedContactsCount() {
-    const countElement = document.getElementById('selected-contacts-count');
+function updateSelectedContactsCount(container = document) {
+    const isModal = container !== document;
+    const countElement = container.querySelector(isModal ? '#modal-selected-contacts-count' : '#selected-contacts-count');
+    
     if (countElement) {
-        const count = selectedContactIds.length;
+        const count = isModal
+            ? getSettingsFromDOM(container).selected_contacts.length
+            : selectedContactIds.length;
+
         countElement.textContent = count > 0 ? `(${count})` : '';
-        countElement.style.color = '#3498db';
-        countElement.style.fontWeight = 'normal';
+        countElement.style.color = isModal ? '' : '#3498db';
+        countElement.style.fontWeight = isModal ? '' : 'normal';
     }
 }
 
@@ -120,13 +125,13 @@ async function deleteGroup(name) {
     }
 }
 
-function renderContacts(forceFullRedraw = false, container = document) {
+function renderContacts(forceFullRedraw = false, container = document, overrideSelectedIds = null) {
     const isModal = container !== document;
     const listContainer = container.querySelector(isModal ? '#modal-contacts-content-wrapper #contacts-list-container' : '#contacts-list-container');
     if (!listContainer) return;
 
     function createGroupHeader(group) {
-         const groupHeaderEl = document.createElement('div');
+        const groupHeaderEl = document.createElement('div');
         groupHeaderEl.className = 'contact-group-header';
         
         const groupHeaderLabel = document.createElement('label');
@@ -149,11 +154,11 @@ function renderContacts(forceFullRedraw = false, container = document) {
         groupCheckbox.title = 'Выбрать/снять всех в группе';
 
         const contactIdsInGroup = group.contacts.map(c => c.id);
-        // При рендеринге используем глобальный selectedContactIds, т.к. он отражает сохраненное состояние
-        // Локальное состояние чекбоксов будет установлено ниже
-        const selectedCount = contactIdsInGroup.filter(id => (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds).includes(id)).length;
+        // Используем переданные ID, если они есть, иначе глобальные
+        const currentSelection = overrideSelectedIds ?? (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds);
+        const selectedCount = contactIdsInGroup.filter(id => currentSelection.includes(id)).length;
 
-        
+
         const groupCounterEl = document.createElement('span');
         groupCounterEl.className = 'group-counter';
         groupCounterEl.textContent = `${selectedCount} / ${contactIdsInGroup.length}`;
@@ -264,7 +269,9 @@ function renderContacts(forceFullRedraw = false, container = document) {
             const checkbox = document.createElement('input');
             checkbox.type = 'checkbox';
             checkbox.value = contact.id;
-            checkbox.checked = (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds).includes(contact.id);
+            // Используем переданные ID, если они есть, иначе глобальные
+            const currentSelection = overrideSelectedIds ?? (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds);
+            checkbox.checked = currentSelection.includes(contact.id);
             labelEl.appendChild(checkbox);
             
             const nameSpan = document.createElement('span');
@@ -380,9 +387,9 @@ function renderContacts(forceFullRedraw = false, container = document) {
 
         // If group already exists, update its content and re-bind events
         if (groupEl) {
-            // Rebuild the contact list within the existing group element
+            // Rebuild the contact list within the existing group element, passing the correct selection
             // This will re-attach event listeners for individual contacts
-            const listEl = createContactList(group);
+            const listEl = createContactList(group, overrideSelectedIds);
 
             // Re-find existing header elements to re-bind events
             const groupHeaderEl = groupEl.querySelector('.contact-group-header');
@@ -414,7 +421,7 @@ function renderContacts(forceFullRedraw = false, container = document) {
             groupEl.appendChild(groupHeaderEl);
             bindGroupNameEditing(group, groupHeaderEl, groupNameEl, groupCounterEl, groupHeaderEl.querySelector('.contact-group-header-label'));
 
-            const listEl = createContactList(group);
+            const listEl = createContactList(group, overrideSelectedIds);
             groupEl.appendChild(listEl);
             listContainer.appendChild(groupEl);
 
@@ -425,7 +432,7 @@ function renderContacts(forceFullRedraw = false, container = document) {
 
     function bindGroupEvents(groupEl, groupHeaderEl, groupCheckbox, expandIconWrapper, groupCounterEl, contactIdsInGroup, listEl) {
         const updateGroupCheckboxState = () => {
-            const currentSelection = (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds);
+            const currentSelection = overrideSelectedIds ?? (isModal ? getSettingsFromDOM(modal).selected_contacts : selectedContactIds);
             const checkedInGroup = contactIdsInGroup.filter(id => currentSelection.includes(id));
             groupCheckbox.checked = checkedInGroup.length === contactIdsInGroup.length && contactIdsInGroup.length > 0;
             groupCheckbox.indeterminate = checkedInGroup.length > 0 && checkedInGroup.length < contactIdsInGroup.length;
@@ -480,7 +487,7 @@ function handleGroupCheckboxChange(isChecked, contactIdsInGroup, container = doc
         } else {
             updateLocalSelectionState();
             updateGroupStates();
-            saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview());
+            saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document));
         }
     }
 }
@@ -498,23 +505,26 @@ async function loadContactsAndSettings() {
     selectedContactIds = settings.selected_contacts || [];
     if (contactsContentWrapper) renderContacts(true, document); // Принудительная полная перерисовка при первой загрузке
     updateSelectedContactsCount();
-    updatePromptPreview();
+    updatePromptPreview(document);
 }
 
-export function initContacts(container = document, onUpdate = null) {
+export function initContacts(container = document, onUpdate = null, initialSettings = null) {
     const isModal = container !== document;
     const listContainer = container.querySelector(isModal ? '#modal-contacts-content-wrapper #contacts-list-container' : '#contacts-list-container');
     if(!listContainer) return;
 
-    const updateCallback = onUpdate || (() => saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview()));
+    const updateCallback = onUpdate || (() => saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document)));
 
-    if (!isModal) {
+    if (!isModal) { // Основная страница
         setRandomGroupPlaceholder();
         loadContactsAndSettings();
+    } else if (initialSettings) { // Модальное окно с настройками из метаданных
+        // Передаем ID выбранных контактов из метаданных напрямую в renderContacts, не трогая глобальную переменную
+        renderContacts(true, container, initialSettings.selected_contacts || []);
+        updateGroupStates(container);
     } else {
-        // Для модального окна нужно перерисовать контакты с текущими настройками
-        // и привязать события.
-        renderContacts(true, container);
+        // Для модального окна (остановка записи) используем текущие глобальные настройки
+        renderContacts(true, container, selectedContactIds);
         updateGroupStates(container);
     }
 
@@ -556,8 +566,9 @@ export function initContacts(container = document, onUpdate = null) {
             }
             updateGroupStates(container);
             if (!isModal) {
-                saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview());
+                saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document));
             }
         }
     });
 }
+export { generateRandomPlaceholder, loadContactsAndSettings, updateSelectedContactsCount };

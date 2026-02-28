@@ -257,10 +257,10 @@ if __name__ == '__main__':
     generate_favicons()
 
     stop_icon = create_icon('square', 'gray')
-    main_icon = Icon('recordServer', stop_icon, 'recordServer', menu=update_tray_menu())
+    main_icon = Icon('ChroniqueX Record Server', stop_icon, 'ChroniqueX Record Server', menu=Menu(lambda: update_tray_menu().items))
 
     # Start server and update menu for the first time
-    start_server() # This will start the flask thread
+    start_server()  # This will start the flask thread
 
     update_thread = Thread(target=update_icon_and_menu, args=(main_icon,), daemon=True)
     update_thread.start()

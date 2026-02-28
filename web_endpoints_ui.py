@@ -71,22 +71,28 @@ def preview_prompt_addition():
     from datetime import datetime
     from pathlib import Path
     try:
-        # Получаем настройки из тела запроса
         current_settings_from_request = request.get_json()
         if not current_settings_from_request:
             return jsonify({"error": "No settings provided"}), 400
 
         # Создаем временную копию глобальных настроек и обновляем ее данными из запроса
-        # Это гарантирует, что предпросмотр будет сгенерирован на основе самых актуальных данных,
-        # даже если они еще не были сохранены в файл.
-        original_settings = settings.copy()
-        temp_settings_for_preview = original_settings.copy()
+        temp_settings_for_preview = settings.copy()
         temp_settings_for_preview.update(current_settings_from_request)
 
+        # Определяем дату для предпросмотра на основе настроек из запроса
+        # Это важно для корректной работы опции "Дата из папки" vs "Текущая дата"
+        date_source = temp_settings_for_preview.get("meeting_date_source", "current")
+        recording_date_str = current_settings_from_request.get('recording_date')
+
+        if date_source == 'folder' and recording_date_str:
+            date_for_preview = datetime.strptime(recording_date_str, '%Y-%m-%d')
+        else:
+            # Используем текущую дату, если выбрано "current" или если это не пересоздание
+            date_for_preview = datetime.now()
+
         # Передаем временные настройки в функцию построения промпта
-        # Это ключевое изменение: build_final_prompt_addition теперь будет работать с актуальными данными
-        preview_path = Path(os.path.join(get_application_path(), 'rec', datetime.now().strftime('%Y-%m-%d')))
-        final_prompt_text = build_final_prompt_addition(base_path=preview_path, recording_date=datetime.now(), is_preview=True, override_settings=temp_settings_for_preview)
+        preview_path = Path(os.path.join(get_application_path(), 'rec', date_for_preview.strftime('%Y-%m-%d'))) # is_preview=True, so path doesn't have to exist
+        final_prompt_text = build_final_prompt_addition(base_path=preview_path, recording_date=date_for_preview, is_preview=True, override_settings=temp_settings_for_preview)
         
         return jsonify({"prompt_text": final_prompt_text})
     except Exception as e:

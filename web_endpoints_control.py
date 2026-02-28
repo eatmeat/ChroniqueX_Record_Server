@@ -1,5 +1,5 @@
-from flask import Blueprint, jsonify, Response
-from threading import Thread
+from flask import Blueprint, jsonify, request
+from threading import Thread, current_thread
 import time
 import os
 import queue
@@ -16,12 +16,16 @@ control_bp = Blueprint('control', __name__)
 
 @control_bp.route('/rec')
 def rec():
-    Thread(target=start_recording_from_tray, daemon=True).start()
+    # Запускаем в потоке, чтобы не блокировать ответ
+    Thread(target=start_recording_from_tray, daemon=True).start() # pragma: no cover
     return jsonify({"status": "ok", "message": "Recording command sent."})
 
-@control_bp.route('/stop')
+@control_bp.route('/stop', methods=['GET', 'POST'])
 def stop():
-    Thread(target=stop_recording_from_tray, daemon=True).start()
+    # Получаем настройки из запроса, если они есть
+    request_settings = request.get_json() if request.is_json else None
+    # Запускаем в потоке, передавая настройки
+    Thread(target=stop_recording_from_tray, args=(None, None, request_settings), daemon=True).start() # pragma: no cover
     return jsonify({"status": "ok", "message": "Stop command sent."})
 
 @control_bp.route('/pause')

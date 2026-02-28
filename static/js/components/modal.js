@@ -1,7 +1,7 @@
-import { modal, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
+import { modal, modalTitle, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
 import { getSettingsFromDOM } from '../utils/helpers.js';
-import { initSettings } from './settings.js';
-import { initContacts } from './contacts.js';
+import { initSettings, loadSettings, updatePromptPreview } from './settings.js';
+import { initContacts, loadContactsAndSettings, updateSelectedContactsCount } from './contacts.js';
 
 let onConfirmCallback = null;
 let modalPausedRecording = false;
@@ -28,41 +28,42 @@ function rebindModalEventListeners(modal, saveAndPreviewFromModal) {
     });
 }
 
-async function saveModalSettings() {
-    const settingsFromModal = getSettingsFromDOM(modal);
-    await fetch('/save_web_settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(settingsFromModal)
-    });
-}
-
-function hideConfirmationModal() {
-    // Не вызываем saveModalSettings() здесь, так как оно уже вызывается
-    // в обработчиках кнопок Confirm и Cancel.
-    // Просто перезагружаем страницу, чтобы отразить сохраненные изменения.
-    if(window.location) window.location.reload();
-
+async function hideConfirmationModal() {
     modal.style.display = 'none';
     document.body.style.overflow = '';
 
-    if (modalPausedRecording && onConfirmCallback) {
-         fetch('/resume');
-    }
+    // После закрытия модального окна, перезагружаем глобальные настройки на основной странице,
+    // чтобы сбросить любые случайные изменения, которые могли быть сделаны в DOM, но не сохранены.
+    loadSettings();
 
     onConfirmCallback = null;
     modalPausedRecording = false;
 }
 
-export function showConfirmationModal(onConfirm, newTemplateData = null) {
+export function showConfirmationModal(onConfirm, recordingInfo = null) {
     onConfirmCallback = onConfirm;
+    // Если нет recordingInfo, значит это остановка записи, а не пересоздание.
+    const isRecreateAction = recordingInfo && recordingInfo.date && recordingInfo.filename;
+
+    if (modalTitle) {
+        modalTitle.textContent = isRecreateAction
+            ? 'Подтверждение настроек для пересоздания'
+            : 'Подтверждение настроек для новой записи';
+    }
 
     const saveAndPreviewFromModal = async () => {
         const settingsFromModal = getSettingsFromDOM(modal);
+        const requestBody = {
+            ...settingsFromModal
+        };
+        // Если это пересоздание, добавляем дату записи в запрос для корректного предпросмотра
+        if (isRecreateAction && recordingInfo && recordingInfo.date) {
+            requestBody.recording_date = recordingInfo.date;
+        }
         const response = await fetch('/preview_prompt_addition', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(settingsFromModal),
+            body: JSON.stringify(requestBody),
         });
         const data = await response.json();
         const modalPreviewContent = modal.querySelector('#prompt-preview-content');
@@ -70,11 +71,7 @@ export function showConfirmationModal(onConfirm, newTemplateData = null) {
             modalPreviewContent.textContent = data.prompt_text || '';
         }
 
-        const modalCountElement = modal.querySelector('#modal-selected-contacts-count');
-        if (modalCountElement) {
-            const count = settingsFromModal.selected_contacts.length;
-            modalCountElement.textContent = count > 0 ? `(${count})` : '';
-        }
+        updateSelectedContactsCount(modal);
     };
 
     const settingsContent = document.getElementById('settings-tab').cloneNode(true);
@@ -102,23 +99,54 @@ export function showConfirmationModal(onConfirm, newTemplateData = null) {
     document.body.style.overflow = 'hidden';
 
     rebindModalEventListeners(modal, saveAndPreviewFromModal);
+    
+    // Убираем группу "Поведение" из модального окна
+    const behaviorGroup = modal.querySelector('.behavior-settings-group');
+    if (behaviorGroup) {
+        behaviorGroup.remove();
+    }
 
-    // Переинициализируем логику компонентов внутри модального окна
-    initSettings(modal, saveAndPreviewFromModal);
-    initContacts(modal, saveAndPreviewFromModal);
+    const initializeComponents = async () => {
+        let settingsToLoad = null;
+        if (isRecreateAction) {
+            // Загружаем настройки из метаданных конкретной записи
+            const { date, filename } = recordingInfo;
+            const response = await fetch(`/get_metadata/${date}/${filename}`);
+            const metadata = await response.json();
+            settingsToLoad = metadata.settings || {}; // Используем настройки из метаданных
+        }
+
+        // Переинициализируем логику компонентов внутри модального окна
+        // Передаем загруженные настройки, если они есть
+        initSettings(modal, saveAndPreviewFromModal, settingsToLoad);
+        initContacts(modal, saveAndPreviewFromModal, settingsToLoad);
+
+        // Если это пересоздание, нужно явно применить настройки к DOM
+        // или если это остановка, то загружаем глобальные настройки
+        if (isRecreateAction && settingsToLoad) {
+            await loadSettings(settingsToLoad, modal);
+        } else if (!isRecreateAction) {
+            await loadSettings(null, modal); // Загружаем глобальные настройки в модальное окно
+        }
+    };
+
+    initializeComponents();
 }
 
 export function initModal() {
     if (!modal) return;
 
     modalConfirmBtn.addEventListener('click', async () => {
-        await saveModalSettings(); // Сначала сохраняем
-        if (onConfirmCallback) onConfirmCallback(); // Затем выполняем действие
-        hideConfirmationModal(); // Затем скрываем и перезагружаем
+        if (onConfirmCallback) {
+            // Для любого действия (стоп или пересоздание) передаем настройки из модального окна в колбэк.
+            // Колбэк сам решит, что с ними делать.
+            const settingsFromModal = getSettingsFromDOM(modal);
+            onConfirmCallback(settingsFromModal);
+        }
+        hideConfirmationModal();
     });
 
-    modalCancelBtn.addEventListener('click', async () => {
-        await saveModalSettings(); // Сохраняем изменения даже при отмене
+    modalCancelBtn.addEventListener('click', () => {
         hideConfirmationModal();
     });
 

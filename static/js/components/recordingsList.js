@@ -168,20 +168,26 @@ async function checkForRecordingUpdates() {
     }
 }
 
-async function handleAction(action, { date, filename }) {
+async function handleAction(taskType, { date, filename }) {
     const settings = await (await fetch('/get_web_settings')).json();
 
-    const performFetch = async () => {
-        await fetch(`/${action}/${date}/${filename}`, {
-            method: 'POST'
+    const performAction = async (settingsFromModal = null) => {
+        const endpoint = settingsFromModal
+            ? `/update_metadata_and_recreate/${taskType}/${date}/${filename}`
+            : `/recreate_${taskType}/${date}/${filename}`;
+
+        await fetch(endpoint, {
+            method: 'POST',
+            headers: settingsFromModal ? { 'Content-Type': 'application/json' } : {},
+            body: settingsFromModal ? JSON.stringify(settingsFromModal) : null
         });
     };
 
     if (settings.confirm_prompt_on_action) {
         // Показываем большое модальное окно для подтверждения и изменения настроек
-        showConfirmationModal(performFetch);
+        showConfirmationModal(performAction, { date, filename });
     } else {
-        performFetch();
+        performAction();
     }
 }
 
@@ -255,9 +261,9 @@ function handleRecordingsListClick(e) {
     }
 
     if (target.classList.contains('recreate-transcription-btn')) {
-        handleAction('recreate_transcription', target.dataset);
+        handleAction('transcription', target.dataset);
     } else if (target.classList.contains('recreate-protocol-btn')) {
-        handleAction('recreate_protocol', target.dataset);
+        handleAction('protocol', target.dataset);
     }
 
     const groupHeader = e.target.closest('.date-group > h3');

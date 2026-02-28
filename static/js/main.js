@@ -35,7 +35,12 @@ document.addEventListener('DOMContentLoaded', function () {
         const response = await fetch('/get_web_settings');
         const settings = await response.json();
         if (settings.confirm_prompt_on_action) {
-            showConfirmationModal(() => fetch('/stop'));
+            // Показываем модальное окно. При подтверждении, настройки из окна
+            // будут переданы в этот колбэк.
+            showConfirmationModal((settingsFromModal) => {
+                // Отправляем настройки на сервер вместе с командой stop
+                fetch('/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsFromModal) });
+            });
         } else {
             fetch('/stop');
         }

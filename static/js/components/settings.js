@@ -56,10 +56,16 @@ function renderContextFileRules(rules = []) {
     }
 }
 
-async function updatePromptPreview() {
-    if (!promptPreviewContainer) return;
+async function updatePromptPreview(container = document) {
+    const isModal = container !== document;
+    const localPromptPreviewContainer = container.querySelector(isModal ? '#modal-preview-col' : '#prompt-preview-container');
+    const localPromptPreviewContent = container.querySelector('#prompt-preview-content'); // ID is unique within the cloned structure
+
+    if (!localPromptPreviewContainer || !localPromptPreviewContent) return;
+
     try {
-        const response = await fetch('/preview_prompt_addition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(getSettingsFromDOM(document)) });
+        const settings = getSettingsFromDOM(container);
+        const response = await fetch('/preview_prompt_addition', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -67,10 +73,10 @@ async function updatePromptPreview() {
 
         const data = await response.json();
         if (data.prompt_text) {
-            promptPreviewContent.textContent = data.prompt_text;
-            promptPreviewContainer.style.display = 'block';
+            localPromptPreviewContent.textContent = data.prompt_text;
+            localPromptPreviewContainer.style.display = 'block';
         } else {
-            promptPreviewContainer.style.display = 'none';
+            localPromptPreviewContainer.style.display = 'none';
         }
     } catch (error) { console.error('Error fetching prompt preview:', error); }
 }
@@ -97,17 +103,17 @@ function createMeetingNameTemplateRow(template, activeId, isEditable) {
         const input = label.querySelector('input');
         const removeBtn = label.querySelector('button');
 
-        input.addEventListener('input', () => { saveSettings(['meeting_name_templates']).then(updatePromptPreview); });
+        input.addEventListener('input', () => { saveSettings(['meeting_name_templates']).then(() => updatePromptPreview()); });
         removeBtn.addEventListener('click', (e) => {
             e.preventDefault();
             item.remove();
-            saveSettings(['meeting_name_templates']).then(updatePromptPreview);
+            saveSettings(['meeting_name_templates']).then(() => updatePromptPreview());
         });
     } else {
         label.textContent = template.template;
     }
 
-    item.querySelector('input[type="radio"]').addEventListener('change', () => { saveSettings(['active_meeting_name_template_id']).then(updatePromptPreview); });
+    item.querySelector('input[type="radio"]').addEventListener('change', () => { saveSettings(['active_meeting_name_template_id']).then(() => updatePromptPreview()); });
 
     return item;
 }
@@ -161,51 +167,63 @@ function toggleMeetingDateSourceVisibility() {
     }
 }
 
-export async function loadSettings() {
-    const response = await fetch('/get_web_settings');
-    settings = await response.json();
+export async function loadSettings(settingsObj = null, container = document) {
+    if (!settingsObj) {
+        const response = await fetch('/get_web_settings');
+        settings = await response.json();
+    } else {
+        settings = settingsObj;
+    }
     
-    const useCustomPrompt = document.getElementById('use-custom-prompt');
+    const useCustomPrompt = container.querySelector('#use-custom-prompt');
     if(useCustomPrompt) useCustomPrompt.checked = settings.use_custom_prompt;
 
-    const promptAddition = document.getElementById('prompt-addition');
+    const promptAddition = container.querySelector('#prompt-addition');
     if(promptAddition) promptAddition.value = settings.prompt_addition;
 
-    if(addMeetingDateCheckbox) addMeetingDateCheckbox.checked = settings.add_meeting_date;
+    const localAddMeetingDateCheckbox = container.querySelector('#add-meeting-date');
+    if(localAddMeetingDateCheckbox) localAddMeetingDateCheckbox.checked = settings.add_meeting_date;
 
-    const dateSourceRadio = document.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
+    const dateSourceRadio = container.querySelector(`input[name="meeting_date_source"][value="${settings.meeting_date_source}"]`);
     if (dateSourceRadio) dateSourceRadio.checked = true;
 
-    if(confirmPromptOnActionCheckbox) confirmPromptOnActionCheckbox.checked = settings.confirm_prompt_on_action;
+    const localConfirmCheckbox = container.querySelector('#confirm-prompt-on-action');
+    if(localConfirmCheckbox) localConfirmCheckbox.checked = settings.confirm_prompt_on_action;
 
-    renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id);
-    toggleMeetingDateSourceVisibility();
-    renderContextFileRules(settings.context_file_rules);
-    updatePromptPreview();
+    renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id, container);
+    toggleMeetingDateSourceVisibility(); // Эта функция работает с глобальными DOM-элементами, но это ОК для инициализации
+    renderContextFileRules(settings.context_file_rules, container);
+    updatePromptPreview(container);
 }
 
-export function initSettings(container = document, onUpdate = null) {
+export function initSettings(container = document, onUpdate = null, initialSettings = null) {
     const isModal = container !== document;
     const form = container.querySelector(isModal ? '#modal-settings-tab' : '#settings-form');
     if (!form) return;
 
-    const updateCallback = onUpdate || (() => saveSettings().then(updatePromptPreview));
+    const updateCallback = onUpdate || (() => saveSettings().then(() => updatePromptPreview()));
 
     if (!isModal) {
-        loadSettings();
+        // Загружаем глобальные настройки для основной страницы
+        loadSettings(null, document);
 
-        form.querySelector('#use-custom-prompt')?.addEventListener('change', () => { saveSettings(['use_custom_prompt']).then(updatePromptPreview); });
-        form.querySelector('#prompt-addition')?.addEventListener('input', () => { saveSettings(['prompt_addition']).then(updatePromptPreview); });
+        form.querySelector('#use-custom-prompt')?.addEventListener('change', () => { saveSettings(['use_custom_prompt']).then(() => updatePromptPreview()); });
+        form.querySelector('#prompt-addition')?.addEventListener('input', () => { saveSettings(['prompt_addition']).then(() => updatePromptPreview()); });
         form.querySelector('#add-meeting-date')?.addEventListener('change', () => {
             toggleMeetingDateSourceVisibility();
-            saveSettings(['add_meeting_date']).then(updatePromptPreview);
+            saveSettings(['add_meeting_date']).then(() => updatePromptPreview());
         });
         form.querySelectorAll('input[name="meeting_date_source"]').forEach(radio => {
-            radio.addEventListener('change', () => { saveSettings(['meeting_date_source']).then(updatePromptPreview); });
+            radio.addEventListener('change', () => { saveSettings(['meeting_date_source']).then(() => updatePromptPreview()); });
         });
-        form.querySelector('#confirm-prompt-on-action')?.addEventListener('change', () => { saveSettings(['confirm_prompt_on_action']).then(updatePromptPreview); });
+        form.querySelector('#confirm-prompt-on-action')?.addEventListener('change', () => { saveSettings(['confirm_prompt_on_action']).then(() => updatePromptPreview()); });
 
         form.addEventListener('submit', (e) => e.preventDefault());
+    } else if (initialSettings) {
+        // Если переданы начальные настройки для модального окна, применяем их
+        // (Рендеринг и применение значений произойдет во внешнем вызове loadSettings(initialSettings, container))
+    } else {
+        loadSettings(null, container); // Загружаем глобальные настройки в модальное окно, если нет специфичных
     }
 
     const localPromptPreviewContainer = container.querySelector(isModal ? '#modal-preview-col' : '#prompt-preview-container');
@@ -251,4 +269,4 @@ export async function getSettings() {
     return await response.json();
 }
 
-export { updatePromptPreview };
+export { updatePromptPreview, renderMeetingNameTemplates, renderContextFileRules };

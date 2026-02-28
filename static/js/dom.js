@@ -26,6 +26,7 @@ export const contactsListContainer = contactsContentWrapper.querySelector('#cont
 export const newGroupNameInput = document.getElementById('new-group-name');
 export const addGroupBtn = document.getElementById('add-group-btn');
 export const modal = document.getElementById('confirmation-modal');
+export const modalTitle = document.getElementById('modal-title');
 export const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 export const modalCancelBtn = document.getElementById('modal-cancel-btn');
 export const modalSettingsCol = document.getElementById('modal-settings-col');
