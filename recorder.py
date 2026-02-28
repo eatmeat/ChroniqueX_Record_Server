@@ -12,7 +12,10 @@ from pathlib import Path
 
 import sounddevice as sd
 import numpy as np
-import pyaudiowpatch as pyaudio
+try:
+    import pyaudiowpatch as pyaudio  # type: ignore[import-untyped]
+except ImportError:
+    pyaudio = None  # type: ignore[assignment]
 from pydub import AudioSegment
 from tkinter import messagebox
 
@@ -49,6 +52,8 @@ def recorder_mic(device_index, stop_event, audio_queue):
         print(f"Mic recording process finished for device {device_index}.")
 
 def recorder_sys(stop_event, audio_queue):
+    if pyaudio is None:
+        return
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
@@ -321,6 +326,8 @@ def monitor_mic(stop_event):
         audio_levels["mic"] = -1
 
 def monitor_sys(stop_event):
+    if pyaudio is None:
+        return
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
