@@ -25,17 +25,10 @@ async function togglePiP() {
         const pipDocument = pipWindow.document;
         const pipBody = pipDocument.body;
         pipDocument.title = "ChroniqueX Record Server";
-
-        [...document.styleSheets].forEach(styleSheet => {
-            try {
-                const cssRules = [...styleSheet.cssRules].map(rule => rule.cssText).join('');
-                const style = pipDocument.createElement('style');
-                style.textContent = cssRules;
-                pipBody.appendChild(style);
-            } catch (e) {
-                console.warn('Не удалось скопировать стили для PiP окна:', e);
-            }
-        });
+ 
+        // Копируем все теги <link> и <style> из основного документа в PiP окно
+        // Это более надежный способ, который избегает ошибок с CORS
+        document.head.querySelectorAll('link[rel="stylesheet"], style').forEach(node => pipDocument.head.appendChild(node.cloneNode(true)));
 
         const controlsContainer = document.querySelector('.controls');
         const volumeChart = document.querySelector('.volume-chart');
