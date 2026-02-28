@@ -41,19 +41,17 @@ export function getSettingsFromDOM(container = document) {
         return templates;
     };
 
-    // Определяем, работаем ли мы в модальном окне, по наличию элемента с префиксом
-    const isModal = container.id === 'confirmation-modal';
-    const idPrefix = isModal ? '#modal-' : '#';
-
     return {
-        use_custom_prompt: getChecked(`${idPrefix}use-custom-prompt`),
-        prompt_addition: getVal(`${idPrefix}prompt-addition`),
-        add_meeting_date: getChecked(`${idPrefix}add-meeting-date`),
+        // Для элементов с ID, которые могут дублироваться, используем getChecked/getVal,
+        // которые уже работают в контексте переданного `container`.
+        use_custom_prompt: getChecked('#use-custom-prompt'),
+        prompt_addition: getVal('#prompt-addition'),
+        add_meeting_date: getChecked('#add-meeting-date'),
         meeting_date_source: getVal('input[name="meeting_date_source"]:checked'), // name уникален, префикс не нужен
         active_meeting_name_template_id: getVal('input[name="active_meeting_name_template"]:checked'), // name уникален
         selected_contacts: [...container.querySelectorAll('.contact-group-list input[type="checkbox"]:checked')].map(cb => cb.value).filter(Boolean),
         context_file_rules: getContextFileRulesFromDOM(container),
         meeting_name_templates: getMeetingNameTemplatesFromDOM(container),
-        confirm_prompt_on_action: getChecked(`${idPrefix}confirm-prompt-on-action`),
+        confirm_prompt_on_action: getChecked('#confirm-prompt-on-action'),
     };
 }

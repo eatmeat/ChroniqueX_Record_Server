@@ -82,12 +82,12 @@ def preview_prompt_addition():
         # Определяем дату для предпросмотра на основе настроек из запроса
         # Это важно для корректной работы опции "Дата из папки" vs "Текущая дата"
         date_source = temp_settings_for_preview.get("meeting_date_source", "current")
-        recording_date_str = current_settings_from_request.get('recording_date')
+        recording_date_str = current_settings_from_request.get('recording_date') # YYYY-MM-DD
 
         if date_source == 'folder' and recording_date_str:
             date_for_preview = datetime.strptime(recording_date_str, '%Y-%m-%d')
         else:
-            # Используем текущую дату, если выбрано "current" или если это не пересоздание
+            # Используем текущую дату, если выбрано "current" или если дата не была передана
             date_for_preview = datetime.now()
 
         # Передаем временные настройки в функцию построения промпта

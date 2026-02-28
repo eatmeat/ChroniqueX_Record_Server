@@ -118,16 +118,17 @@ function createMeetingNameTemplateRow(template, activeId, isEditable) {
     return item;
 }
 
-function renderMeetingNameTemplates(templates = [], activeId = null) {
-    if (!meetingNameTemplatesContainer) return;
-    meetingNameTemplatesContainer.innerHTML = '';
+function renderMeetingNameTemplates(templates = [], activeId = null, container = document) {
+    const localContainer = container.querySelector('#meeting-name-templates-container');
+    if (!localContainer) return;
+    localContainer.innerHTML = '';
 
     const noneOption = createMeetingNameTemplateRow({ id: 'null', template: 'Не добавлять' }, activeId, false);
-    meetingNameTemplatesContainer.appendChild(noneOption);
+    localContainer.appendChild(noneOption);
 
     templates.forEach(template => {
         const templateRow = createMeetingNameTemplateRow(template, activeId, true);
-        meetingNameTemplatesContainer.appendChild(templateRow);
+        localContainer.appendChild(templateRow);
     });
 }
 
@@ -151,12 +152,15 @@ async function saveSettings(keysToSave = null) {
     });
 }
 
-function toggleMeetingDateSourceVisibility() { 
-    if (meetingDateSourceGroup) {
-        const isEnabled = addMeetingDateCheckbox.checked;
-        const radios = meetingDateSourceGroup.querySelectorAll('input[name="meeting_date_source"]');
-        const labels = meetingDateSourceGroup.querySelectorAll('label');
+export function toggleMeetingDateSourceVisibility(checkbox = addMeetingDateCheckbox, group = meetingDateSourceGroup) { 
+    if (group) {
+        const isEnabled = checkbox.checked;
+        const radios = group.querySelectorAll('input[name="meeting_date_source"]');
+        const labels = group.querySelectorAll('label');
 
+        // Убедимся, что у нас есть элементы для работы
+        if (!radios.length || !labels.length) return;
+        
         radios.forEach(radio => {
             radio.disabled = !isEnabled;
         });
@@ -191,7 +195,7 @@ export async function loadSettings(settingsObj = null, container = document) {
     if(localConfirmCheckbox) localConfirmCheckbox.checked = settings.confirm_prompt_on_action;
 
     renderMeetingNameTemplates(settings.meeting_name_templates, settings.active_meeting_name_template_id, container);
-    toggleMeetingDateSourceVisibility(); // Эта функция работает с глобальными DOM-элементами, но это ОК для инициализации
+    toggleMeetingDateSourceVisibility(localAddMeetingDateCheckbox, container.querySelector('#meeting-date-source-group'));
     renderContextFileRules(settings.context_file_rules, container);
     updatePromptPreview(container);
 }

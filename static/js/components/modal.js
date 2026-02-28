@@ -1,6 +1,6 @@
 import { modal, modalTitle, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
 import { getSettingsFromDOM } from '../utils/helpers.js';
-import { initSettings, loadSettings, updatePromptPreview } from './settings.js';
+import { initSettings, loadSettings, toggleMeetingDateSourceVisibility } from './settings.js';
 import { initContacts, loadContactsAndSettings, updateSelectedContactsCount } from './contacts.js';
 
 let onConfirmCallback = null;
@@ -24,7 +24,20 @@ function rebindModalEventListeners(modal, saveAndPreviewFromModal) {
         if (e.target.matches('input, textarea')) saveAndPreviewFromModal();
     });
     modal.addEventListener('change', (e) => {
-        if (e.target.matches('input')) saveAndPreviewFromModal();
+        // Общий обработчик для большинства input-элементов
+        if (e.target.matches('input[type="radio"], input[type="checkbox"]')) {
+            // Специальная логика для чекбокса даты
+            if (e.target.id === 'add-meeting-date') {
+                // Нам нужно найти контейнер группы радио-кнопок внутри модального окна
+                const dateSourceGroup = modal.querySelector('#meeting-date-source-group');
+                if (dateSourceGroup) {
+                    // Вызываем функцию для обновления состояния радио-кнопок
+                    toggleMeetingDateSourceVisibility(e.target, dateSourceGroup);
+                }
+            }
+            // В любом случае, обновляем предпросмотр
+            saveAndPreviewFromModal();
+        }
     });
 }
 
@@ -56,9 +69,13 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
         const requestBody = {
             ...settingsFromModal
         };
-        // Если это пересоздание, добавляем дату записи в запрос для корректного предпросмотра
+        // Добавляем дату в запрос для корректного предпросмотра
         if (isRecreateAction && recordingInfo && recordingInfo.date) {
+            // Для пересоздания используем дату конкретной записи
             requestBody.recording_date = recordingInfo.date;
+        } else if (!isRecreateAction) {
+            // Для новой записи используем текущую дату (важно для предпросмотра "даты из папки")
+            requestBody.recording_date = new Date().toISOString().split('T')[0];
         }
         const response = await fetch('/preview_prompt_addition', {
             method: 'POST',
@@ -103,7 +120,7 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
     // Убираем группу "Поведение" из модального окна
     const behaviorGroup = modal.querySelector('.behavior-settings-group');
     if (behaviorGroup) {
-        behaviorGroup.remove();
+        behaviorGroup.style.display = 'none';
     }
 
     const initializeComponents = async () => {
@@ -128,6 +145,9 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
         } else if (!isRecreateAction) {
             await loadSettings(null, modal); // Загружаем глобальные настройки в модальное окно
         }
+        
+        // Вызываем предпросмотр после инициализации всех настроек
+        await saveAndPreviewFromModal();
     };
 
     initializeComponents();
