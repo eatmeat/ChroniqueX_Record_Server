@@ -32,7 +32,6 @@ async function togglePiP() {
 
         const controlsContainer = document.querySelector('.controls');
         const volumeChart = document.querySelector('.volume-chart');
-        const statusWrapper = document.querySelector('.status-wrapper');
 
         if (controlsContainer) {
             const computedStyle = window.getComputedStyle(controlsContainer);
@@ -77,16 +76,10 @@ async function togglePiP() {
         pipBody.style.padding = '0';
         pipBody.style.overflow = 'hidden';
         pipBody.style.margin = '0';
-        if (statusWrapper) statusWrapper.style.alignItems = 'center';
-        if (statusWrapper) statusWrapper.style.display = 'none';
         if (volumeChart) volumeChart.style.margin = '0';
         if (volumeChart) volumeChart.style.width = '100%';
         controlsContainer.style.padding = '10px 0';
-        const pipStatusWrapper = statusWrapper ? statusWrapper.cloneNode(true) : null;
-        if (pipStatusWrapper) pipStatusWrapper.style.display = 'flex';
-        if (pipStatusWrapper) pipStatusWrapper.style.padding = '0 10px';
         controlsContainer.style.margin = '0';
-        if (pipStatusWrapper) pipBody.append(pipStatusWrapper);
         if (volumeChart) pipBody.append(volumeChart);
         pipBody.append(controlsContainer);
         pipBtn.classList.add('active');
@@ -128,7 +121,6 @@ async function togglePiP() {
         pipWindow.addEventListener('pagehide', () => {
             // Сбрасываем стили, которые были применены к элементам в PiP-окне,
             // чтобы при следующем открытии они не влияли на расчеты.
-            if (statusWrapper) statusWrapper.style.display = '';
             controlsContainer.style.margin = '';
             
             if (legendEl) legendEl.style.display = '';
@@ -136,7 +128,6 @@ async function togglePiP() {
                 chartPlaceholder.parentNode.replaceChild(volumeMetersContainer, chartPlaceholder);
             }
             chartPlaceholder = null;
-            if (statusWrapper) statusWrapper.style.alignItems = '';
             if (volumeMetersContainer && volumeChart) {
                 volumeMetersContainer.prepend(volumeChart);
             }
