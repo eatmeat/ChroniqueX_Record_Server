@@ -68,7 +68,7 @@
 }
 
 /* Адаптация модального окна для мобильных */
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
     .modal-overlay {
         align-items: flex-start; /* Выравниваем модальное окно по верху, а не по центру */
     }

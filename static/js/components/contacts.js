@@ -50,10 +50,11 @@ function updateSelectedContactsCount(container = document) {
     const countElement = container.querySelector(isModal ? '#modal-selected-contacts-count' : '#selected-contacts-count');
     
     if (countElement) {
-        const count = isModal
-            ? getSettingsFromDOM(container).selected_contacts.length
-            : selectedContactIds.length;
-
+        const selectedIds = isModal
+            ? getSettingsFromDOM(container).selected_contacts
+            : selectedContactIds;
+        // Используем Set для подсчета только уникальных ID
+        const count = new Set(selectedIds).size;
         countElement.textContent = count > 0 ? `(${count})` : '';
         countElement.style.color = isModal ? '' : '#3498db';
         countElement.style.fontWeight = isModal ? '' : 'normal';
@@ -87,12 +88,14 @@ async function saveSelectionToServer(ids) {
 }
 
 function updateGroupStates(container = document) {
+    const isModal = container !== document;
     container.querySelectorAll('.contact-group').forEach(groupEl => {
         const groupNameEl = groupEl.querySelector('.contact-group-name');
         if (!groupNameEl) return;
         // contactsData - глобальная переменная, она всегда актуальна
         const group = contactsData.groups.find(g => g.name === groupNameEl.textContent);
         if (!group) return;
+        const currentSelection = isModal ? getSettingsFromDOM(container).selected_contacts : selectedContactIds;
 
         const groupCheckbox = groupEl.querySelector('.contact-group-header input[type="checkbox"]');
         const groupCounterEl = groupEl.querySelector('.group-counter');
@@ -100,8 +103,7 @@ function updateGroupStates(container = document) {
 
         const contactIdsInGroup = group.contacts.map(c => c.id);
         const selectedInGroup = container.querySelectorAll(`.contact-group-list li input[type="checkbox"][value]:checked`);
-        const selectedCount = [...selectedInGroup].filter(cb => contactIdsInGroup.includes(cb.value)).length;
-        
+        const selectedCount = contactIdsInGroup.filter(id => currentSelection.includes(id)).length;
         groupCounterEl.textContent = `${selectedCount} / ${contactIdsInGroup.length}`;
         
         groupCheckbox.checked = selectedCount === contactIdsInGroup.length && contactIdsInGroup.length > 0;
@@ -385,27 +387,18 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
     sortedGroups.forEach(group => {
         let groupEl = [...listContainer.querySelectorAll('.contact-group-name')].find(el => el.textContent === group.name)?.closest('.contact-group');
 
-        // If group already exists, update its content and re-bind events
         if (groupEl) {
-            // Rebuild the contact list within the existing group element, passing the correct selection
-            // This will re-attach event listeners for individual contacts
-            const listEl = createContactList(group, overrideSelectedIds);
-
-            // Re-find existing header elements to re-bind events
-            const groupHeaderEl = groupEl.querySelector('.contact-group-header');
-            const groupNameEl = groupEl.querySelector('.contact-group-name');
-            const groupCounterEl = groupEl.querySelector('.group-counter');
-            const groupCheckbox = groupEl.querySelector('.contact-group-header input[type="checkbox"]');
-            const expandIconWrapper = groupEl.querySelector('.expand-icon-wrapper');
-
-            // Update group name text if needed (though group.name should be stable here)
-            if (groupNameEl) groupNameEl.textContent = group.name;
-            // updateGroupStates will handle the counter and checkbox state
-
-            // Replace the contact list and re-bind events
+            // Если группа уже существует, обновляем только список контактов внутри нее.
+            // Обработчики на заголовке и иконках остаются нетронутыми.
+            const listEl = createContactList(group, overrideSelectedIds); // Создаем новый список контактов
+            const isCollapsed = groupEl.classList.contains('collapsed');
+            
+            // Заменяем старый список новым
             groupEl.querySelector('.contact-group-list')?.remove();
             groupEl.appendChild(listEl);
-            if (isCollapsed) listEl.style.display = 'none'; // Сохраняем состояние
+            
+            // Восстанавливаем состояние "свернутости", если оно было
+            if (isCollapsed) listEl.style.display = 'none';
 
         } else { // Иначе создаем новую
             groupEl = document.createElement('div');
@@ -518,13 +511,7 @@ async function loadContactsAndSettings(container = document) {
     }
 }
 
-export function initContacts(container = document, onUpdate = null, initialSettings = null) {
-    const isModal = container !== document;
-    const listContainer = container.querySelector(isModal ? '#modal-contacts-content-wrapper #contacts-list-container' : '#contacts-list-container');
-    if(!listContainer) return;
-
-    const updateCallback = onUpdate || (() => saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document)));
-
+function bindContainerEvents(container, isModal, listContainer, onUpdate, initialSettings) {
     if (!isModal) { // Основная страница
         setRandomGroupPlaceholder();
         loadContactsAndSettings(document);
@@ -538,6 +525,7 @@ export function initContacts(container = document, onUpdate = null, initialSetti
         updateGroupStates(container);
     }
 
+    // --- Обработчики добавления группы ---
     container.querySelector(isModal ? '#modal-contacts-content-wrapper #add-group-btn' : '#add-group-btn')?.addEventListener('click', async () => {
          const groupNameInput = container.querySelector(isModal ? '#modal-contacts-content-wrapper #new-group-name' : '#new-group-name');
          const groupName = groupNameInput.value.trim();
@@ -568,17 +556,38 @@ export function initContacts(container = document, onUpdate = null, initialSetti
         if (e.key === 'Enter') container.querySelector(isModal ? '#modal-contacts-content-wrapper #add-group-btn' : '#add-group-btn').click();
     });
 
-    // Единый обработчик на контейнер для всех чекбоксов
-    listContainer.addEventListener('change', (e) => {
+    // --- Единый обработчик на контейнер для всех чекбоксов ---
+    // Удаляем предыдущий обработчик, если он был, чтобы избежать дублирования
+    const handlerKey = isModal ? '_modalHandler' : '_mainHandler';
+    if (listContainer[handlerKey]) {
+        listContainer.removeEventListener('change', listContainer[handlerKey]);
+    }
+    // Создаем и сохраняем новый обработчик
+    listContainer[handlerKey] = (e) => {
         if (e.target.matches('.contact-group-list input[type="checkbox"]') || e.target.matches('.contact-group-header input[type="checkbox"]')) {
             if (!isModal) {
                 updateLocalSelectionState();
             }
             updateGroupStates(container);
             if (!isModal) {
-                saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document));
+                const updateCallback = onUpdate || (() => saveSelectionToServer(selectedContactIds).then(() => updatePromptPreview(document)));
+                updateCallback();
             }
         }
-    });
+    };
+    listContainer.addEventListener('change', listContainer[handlerKey]);
+}
+
+export function initContacts(container = document, onUpdate = null, initialSettings = null) {
+    const isModal = container !== document;
+    const listContainer = container.querySelector(isModal ? '#modal-contacts-content-wrapper #contacts-list-container' : '#contacts-list-container');
+    if(!listContainer) return;
+
+    if (!isModal) {
+        // Принудительно перепривязываем события для основной страницы,
+        // т.к. они могли быть удалены при открытии модального окна.
+        listContainer._mainHandler = null;
+    }
+    bindContainerEvents(container, isModal, listContainer, onUpdate, initialSettings);
 }
 export { generateRandomPlaceholder, loadContactsAndSettings, updateSelectedContactsCount };

@@ -158,7 +158,7 @@ h1, h2, h3, h4 {
 
 
 /* --- Адаптация для мобильных устройств --- */
-@media (max-width: 768px) {
+@media (max-width: 1000px) {
     header {
         flex-wrap: wrap; /* Разрешаем перенос элементов */
         justify-content: center; /* Центрируем, когда элементы перенеслись */

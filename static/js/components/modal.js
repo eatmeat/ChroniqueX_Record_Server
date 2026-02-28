@@ -6,49 +6,15 @@ import { initContacts, loadContactsAndSettings, updateSelectedContactsCount } fr
 let onConfirmCallback = null;
 let modalPausedRecording = false;
 
-function rebindModalEventListeners(modal, saveAndPreviewFromModal) {
-    // Используем делегирование событий, чтобы обработчики работали для динамически добавленных элементов
-    // Этот обработчик ТОЛЬКО для групп настроек и предпросмотра. Группы контактов имеют свою логику.
-    modal.addEventListener('click', (e) => {
-        const settingsHeader = e.target.closest('.settings-group-header');
-        const previewHeader = e.target.closest('#modal-preview-col h4');
-        if (settingsHeader) {
-            settingsHeader.closest('.settings-group')?.classList.toggle('collapsed');
-        } else if (previewHeader) {
-            previewHeader.parentElement.classList.toggle('collapsed');
-        }
-    });
-
-    // Делегирование для всех input/change событий в модальном окне
-    modal.addEventListener('input', (e) => {
-        if (e.target.matches('input, textarea')) saveAndPreviewFromModal();
-    });
-    modal.addEventListener('change', (e) => {
-        // Общий обработчик для большинства input-элементов
-        if (e.target.matches('input[type="radio"], input[type="checkbox"]')) {
-            // Специальная логика для чекбокса даты
-            if (e.target.id === 'add-meeting-date') {
-                // Нам нужно найти контейнер группы радио-кнопок внутри модального окна
-                const dateSourceGroup = modal.querySelector('#meeting-date-source-group');
-                if (dateSourceGroup) {
-                    // Вызываем функцию для обновления состояния радио-кнопок
-                    toggleMeetingDateSourceVisibility(e.target, dateSourceGroup);
-                }
-            }
-            // В любом случае, обновляем предпросмотр
-            saveAndPreviewFromModal();
-        }
-    });
-}
-
 async function hideConfirmationModal() {
     modal.style.display = 'none';
     document.body.style.overflow = '';
 
     // После закрытия модального окна, перезагружаем глобальные настройки на основной странице,
     // чтобы сбросить любые случайные изменения, которые могли быть сделаны в DOM, но не сохранены.
-    loadSettings();
-
+    loadSettings(); // Сбрасывает настройки
+    // loadContactsAndSettings(); // Сбрасывает состояние контактов. Убрано, т.к. вызывало баг с дублированием обработчиков.
+    
     onConfirmCallback = null;
     modalPausedRecording = false;
 }
@@ -91,6 +57,14 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
         updateSelectedContactsCount(modal);
     };
 
+    // Перед клонированием "отвязываем" обработчики событий от оригинальных элементов,
+    // чтобы они не дублировались и не переносились в модальное окно.
+    const contactsContainer = document.getElementById('contacts-list-container');
+    if (contactsContainer && contactsContainer._mainHandler) {
+        contactsContainer.removeEventListener('change', contactsContainer._mainHandler);
+        delete contactsContainer._mainHandler; // Удаляем свойство, чтобы избежать утечек
+    }
+
     const settingsContent = document.getElementById('settings-tab').cloneNode(true);
     const contactsContent = document.getElementById('contacts-content-wrapper').cloneNode(true);
     const previewContent = document.getElementById('prompt-preview-container').cloneNode(true);
@@ -115,8 +89,6 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
     modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
 
-    rebindModalEventListeners(modal, saveAndPreviewFromModal);
-    
     // Убираем группу "Поведение" из модального окна
     const behaviorGroup = modal.querySelector('.behavior-settings-group');
     if (behaviorGroup) {
@@ -152,6 +124,9 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
             await loadSettings(null, modal); // Загружаем глобальные настройки в модальное окно
         }
         
+        // Принудительно обновляем счетчик при каждом открытии
+        updateSelectedContactsCount(modal);
+
         // Вызываем предпросмотр после инициализации всех настроек
         await saveAndPreviewFromModal();
     };
@@ -161,6 +136,44 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
 
 export function initModal() {
     if (!modal) return;
+
+    // --- Инициализация обработчиков событий модального окна (выполняется один раз) ---
+    
+    // Этот обработчик будет вызывать обновление предпросмотра при любом изменении
+    const saveAndPreviewFromModal = async () => {
+        const settingsFromModal = getSettingsFromDOM(modal);
+        const response = await fetch('/preview_prompt_addition', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...settingsFromModal }),
+        });
+        const data = await response.json();
+        const modalPreviewContent = modal.querySelector('#prompt-preview-content');
+        if (modalPreviewContent) {
+            modalPreviewContent.textContent = data.prompt_text || '';
+        }
+        updateSelectedContactsCount(modal);
+    };
+
+    // Делегирование для кликов (сворачивание/разворачивание)
+    modal.addEventListener('click', (e) => {
+        const settingsHeader = e.target.closest('.settings-group-header');
+        const previewHeader = e.target.closest('#modal-preview-col h4');
+        if (settingsHeader) {
+            settingsHeader.closest('.settings-group')?.classList.toggle('collapsed');
+        } else if (previewHeader) {
+            previewHeader.parentElement.classList.toggle('collapsed');
+        }
+    });
+
+    // Делегирование для всех input/change событий в модальном окне
+    modal.addEventListener('input', (e) => {
+        if (e.target.matches('input, textarea')) saveAndPreviewFromModal();
+    });
+    modal.addEventListener('change', (e) => {
+        if (e.target.matches('input[type="radio"], input[type="checkbox"]')) saveAndPreviewFromModal();
+    });
+    // --- Конец инициализации обработчиков ---
 
     modalConfirmBtn.addEventListener('click', async () => {
         if (onConfirmCallback) {
