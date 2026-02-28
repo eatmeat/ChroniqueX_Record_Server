@@ -35,10 +35,13 @@ async function togglePiP() {
         pipStyle.textContent = `
             .controls {
                 display: flex;
-                gap: 10px;
+                gap: 5px; /* Уменьшаем зазор между кнопками */
+                padding: 5px; /* Добавляем отступы от краев окна */
             }
             .controls .control-btn {
                 flex-grow: 1;
+                padding: 8px 10px; /* Уменьшаем вертикальные отступы для снижения высоты */
+                font-size: 0.9em; /* Немного уменьшаем шрифт */
             }
         `;
         pipDocument.head.appendChild(pipStyle);
@@ -91,7 +94,6 @@ async function togglePiP() {
         pipBody.style.margin = '0';
         if (volumeChart) volumeChart.style.margin = '0';
         if (volumeChart) volumeChart.style.width = '100%';
-        controlsContainer.style.padding = '10px 0';
         controlsContainer.style.margin = '0';
         if (volumeChart) pipBody.append(volumeChart);
         pipBody.append(controlsContainer);
