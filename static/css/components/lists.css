@@ -238,12 +238,18 @@
     display: grid;
     grid-template-columns: 80px 100px 1fr 250px;
     gap: 10px;
-    align-items: center;
+    align-items: start; /* Выравниваем по верху для многострочных заголовков */
     padding: 10px;
     min-width: 600px; /* Устанавливаем минимальную ширину, чтобы контент не сжимался */
     border-bottom: 1px solid #f0f0f0;
+    transition: grid-template-columns 0.3s ease-in-out; /* Плавный переход для ширины колонок */
 }
 
+/* Расширяем колонку с файлами в режиме редактирования */
+.recording-table-row.is-editing {
+    grid-template-columns: 80px 100px 1fr 300px;
+}
+ 
 .recording-table-header {
     background-color: #f8f9fa;
     font-weight: bold;
@@ -263,6 +269,7 @@
 .recording-cell {
     display: flex;
     align-items: center;
+    align-self: stretch; /* Растягиваем ячейку по высоте, чтобы контент был выровнен */
     gap: 8px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -289,17 +296,28 @@
     display: inline-flex;
     align-items: center;
 }
-/* По умолчанию скрываем кнопку пересоздания */
-.recreate-actions-container {
+/* По умолчанию скрываем кнопки действий */
+.recreate-actions-container, .delete-action-container {
     display: inline-flex;
     transition: opacity 0.2s ease-in-out, max-width 0.3s ease-in-out, margin-left 0.3s ease-in-out;
     opacity: 0;
     max-width: 0;
     overflow: hidden;
     margin-left: 0;
+    vertical-align: middle; /* Выравниваем по центру с другими кнопками */
 }
-/* Показываем кнопку пересоздания, когда строка находится в режиме редактирования */
-.recording-table-row.is-editing .recreate-actions-container {
+
+/* Стили для кнопки удаления */
+.delete-recording-btn {
+    border-color: #c0392b;
+    color: #c0392b;
+    font-size: 1.2em;
+    padding: 0;
+    width: 30px;
+    min-width: 30px;
+}
+/* Показываем кнопки действий, когда строка находится в режиме редактирования */
+.recording-table-row.is-editing .recreate-actions-container, .recording-table-row.is-editing .delete-action-container {
     opacity: 1;
     max-width: 50px; /* Достаточно для одной кнопки */
     margin-left: 4px; /* Добавляем отступ при появлении */

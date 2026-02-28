@@ -53,6 +53,7 @@ async function loadRecordingsForGroup(groupEl, date) {
                     <span class="file-action-pair">
                         <a href="/files/${date}/${rec.protocol_filename}" target="_blank" class="action-btn protocol-link ${rec.protocol_exists ? 'exists' : ''}">PDF</a>
                         <span class="recreate-actions-container"><button class="action-btn recreate-protocol-btn" title="Пересоздать протокол" data-date="${date}" data-filename="${rec.filename}">&#x21bb;</button></span>
+                        <span class="delete-action-container"><button class="action-btn delete-recording-btn" title="Удалить запись" data-date="${date}" data-filename="${rec.filename}">&#x1f5d1;</button></span>
                     </span>
                 </div>
             `;
@@ -270,6 +271,31 @@ function handleRecordingsListClick(e) {
         handleAction('transcription', target.dataset);
     } else if (target.classList.contains('recreate-protocol-btn')) {
         handleAction('protocol', target.dataset);
+    }
+
+    if (target.classList.contains('delete-recording-btn')) {
+        const { date, filename } = target.dataset;
+        const row = target.closest('.recording-table-row');
+        if (confirm(`Вы уверены, что хотите удалить запись и все связанные с ней файлы (${filename})? Это действие необратимо.`)) {
+            fetch(`/delete_recording/${date}/${filename}`, {
+                method: 'DELETE',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    // Проверяем, есть ли сразу после удаляемой строки блок с доп. информацией
+                    const nextSibling = row.nextElementSibling;
+                    if (nextSibling && nextSibling.classList.contains('prompt-display-row')) {
+                        nextSibling.remove();
+                    }
+                    // Удаляем саму строку записи
+                    row.remove();
+                } else {
+                    alert(`Ошибка при удалении: ${data.message}`);
+                }
+            })
+            .catch(error => alert(`Произошла ошибка: ${error}`));
+        }
     }
 
     const groupHeader = e.target.closest('.date-group > h3');

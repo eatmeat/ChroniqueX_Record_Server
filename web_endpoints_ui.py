@@ -3,6 +3,7 @@ import re
 import uuid
 import json
 from threading import Thread
+import logging
 from pathlib import Path
 
 from pydub import AudioSegment
@@ -298,6 +299,47 @@ def recreate_protocol(date, filename):
     if not os.path.exists(txt_file_path): return jsonify({"status": "error", "message": "Файл транскрипции (.txt) не найден."}), 404
     Thread(target=process_protocol_task, args=(txt_file_path,), daemon=True).start()
     return jsonify({"status": "ok", "message": "Задача пересоздания протокола запущена."})
+
+@ui_bp.route('/delete_recording/<date>/<filename>', methods=['DELETE'])
+def delete_recording(date, filename):
+    logging.info(f"Запрос на удаление записи: date='{date}', filename='{filename}'")
+    if not re.match(r'^\d{4}-\d{2}-\d{2}$', date):
+        logging.warning(f"Неверный формат даты при удалении: '{date}'")
+        return jsonify({"status": "error", "message": "Неверный формат даты"}), 400
+
+    base_app_path = Path(get_application_path())
+    rec_dir = base_app_path / 'rec' / date
+    base_name = Path(filename).stem
+    logging.info(f"Папка с записями: '{rec_dir}', базовое имя файла: '{base_name}'")
+
+    # Проверка, чтобы избежать выхода за пределы папки с записями
+    if not rec_dir.resolve().is_relative_to(base_app_path / 'rec'):
+        logging.error(f"Попытка доступа за пределы папки 'rec': '{rec_dir}'")
+        return jsonify({"status": "error", "message": "Доступ запрещен"}), 403
+
+    # Собираем все возможные файлы для удаления
+    # 1. Основные файлы (аудио, json, txt)
+    pattern1 = f"{base_name}.*"
+    files_to_delete = list(rec_dir.glob(pattern1))
+    logging.info(f"Поиск по шаблону '{pattern1}'. Найдено файлов: {len(files_to_delete)}. Файлы: {[str(f) for f in files_to_delete]}")
+
+    # 2. Файл протокола (имеет суффикс _protocol)
+    pattern2 = f"{base_name}_protocol.*"
+    protocol_files = list(rec_dir.glob(pattern2))
+    logging.info(f"Поиск по шаблону '{pattern2}'. Найдено файлов: {len(protocol_files)}. Файлы: {[str(f) for f in protocol_files]}")
+    files_to_delete.extend(protocol_files)
+
+    deleted_count = 0
+    # Используем set для удаления дубликатов, если они вдруг появятся
+    for file_path in set(files_to_delete):
+        try:
+            os.remove(file_path)
+            logging.info(f"Успешно удален файл: {file_path}")
+            deleted_count += 1
+        except OSError as e:
+            logging.error(f"Ошибка при удалении файла {file_path}: {e}")
+            return jsonify({"status": "error", "message": f"Ошибка при удалении файла {file_path.name}: {e}"}), 500
+    return jsonify({"status": "ok", "message": f"Удалено {deleted_count} файлов."})
 
 @ui_bp.route('/compress_to_mp3/<date>/<filename>', methods=['POST'])
 def compress_to_mp3(date, filename):
