@@ -7,7 +7,10 @@ from threading import Thread, Event
 
 import sounddevice as sd
 import numpy as np
-import pyaudiowpatch as pyaudio
+try:
+    import pyaudiowpatch as pyaudio
+except ImportError:
+    import pyaudio
 
 # Для проверки одного экземпляра приложения
 try:
@@ -274,7 +277,7 @@ if __name__ == '__main__':
     mic_monitor_thread = Thread(target=monitor_mic, args=(monitoring_stop_event,), daemon=True)
     mic_monitor_thread.start()
 
-    if platform.system() == "Windows":
+    if platform.system() == "Windows" and pyaudio:
         sys_monitor_thread = Thread(target=monitor_sys, args=(monitoring_stop_event,), daemon=True)
         sys_monitor_thread.start()
     
