@@ -1,8 +1,8 @@
 import { audioChartCanvas } from '../dom.js';
-import { getCurrentStatus } from './status.js';
+import { getCurrentStatus, getPostProcessingStatus } from './status.js';
 
-let micHistory, sysHistory, recHistory;
-const chartHistorySize = 6000;
+let micHistory, sysHistory, recHistory, postProcessingHistory;
+const chartHistorySize = 6000; // ~5 минут истории при 20 fps (50ms интервал)
 let frameCount = 0;
 const scrollInterval = 1;
 let currentBgR = 244, currentBgG = 247, currentBgB = 249;
@@ -57,6 +57,23 @@ function redrawMovingChart() {
     bgGradient.addColorStop(1, '#f7f9fa');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, width, chartHeight);
+
+    // Отрисовка фона для постобработки
+    const postProcessingSlice = postProcessingHistory.slice(postProcessingHistory.length - Math.ceil(width));
+    for (let i = 0; i < postProcessingSlice.length; i++) {
+        const value = postProcessingSlice[i];
+        if (value !== 0) {
+            if (value === 1) { // Транскрибация
+                ctx.fillStyle = 'rgba(241, 196, 15, 0.2)'; // Желтый
+            } else if (value === 2) { // Протокол
+                ctx.fillStyle = 'rgba(46, 204, 113, 0.2)'; // Зеленый
+            }
+            const x = width - postProcessingSlice.length + i;
+            ctx.fillRect(x, 0, 1, chartHeight);
+        }
+    }
+
+
 
     const recSlice = recHistory.slice(recHistory.length - Math.ceil(width));
     ctx.fillStyle = 'rgba(192, 57, 43, 0.2)';
@@ -193,14 +210,26 @@ async function updateAudioLevels() {
 
         const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
         const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
+        
+        // Определяем значение для истории записи
         const recValue = (getCurrentStatus() === 'rec') ? 1 : 0;
+
+        // Определяем значение для истории постобработки
+        const postProcessingStatus = getPostProcessingStatus();
+        let postProcessingValue = 0; // 0 - нет, 1 - транскрибация, 2 - протокол
+        if (postProcessingStatus.active) {
+            if (postProcessingStatus.info.toLowerCase().includes('транскрибация')) postProcessingValue = 1;
+            else if (postProcessingStatus.info.toLowerCase().includes('протокол')) postProcessingValue = 2;
+        }
 
         micHistory.push(amplifiedMic);
         sysHistory.push(amplifiedSys);
         recHistory.push(recValue);
+        postProcessingHistory.push(postProcessingValue);
         if (micHistory.length > chartHistorySize) micHistory.shift();
         if (sysHistory.length > chartHistorySize) sysHistory.shift();
         if (recHistory.length > chartHistorySize) recHistory.shift();
+        if (postProcessingHistory.length > chartHistorySize) postProcessingHistory.shift();
 
         if (frameCount % scrollInterval === 0) {
             redrawMovingChart();
@@ -217,6 +246,7 @@ export function initChart() {
     micHistory = new Array(chartHistorySize).fill(0);
     sysHistory = new Array(chartHistorySize).fill(0);
     recHistory = new Array(chartHistorySize).fill(0);
+    postProcessingHistory = new Array(chartHistorySize).fill(0);
 
     let currentCanvasWidth = 0;
     let currentCanvasHeight = 0;

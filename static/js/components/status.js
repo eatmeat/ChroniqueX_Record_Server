@@ -11,6 +11,7 @@ import {
 } from '../dom.js';
 
 let currentStatus = 'stop';
+let currentPostProcessingStatus = { active: false, info: '' };
 
 export async function updateStatus() {
     try {
@@ -24,6 +25,7 @@ export async function updateStatus() {
         const data = await response.json();
 
         currentStatus = data.status;
+        currentPostProcessingStatus = data.post_processing || { active: false, info: '' };
         statusTime.textContent = `(${data.time})`;
 
         // Update status indicator and text
@@ -57,8 +59,8 @@ export async function updateStatus() {
 
         // Update post-processing status
         if (postProcessStatus) {
-            if (data.post_processing.active) {
-                postProcessStatus.textContent = data.post_processing.info; // Показываем текст
+            if (currentPostProcessingStatus.active) {
+                postProcessStatus.textContent = currentPostProcessingStatus.info; // Показываем текст
             } else {
                 postProcessStatus.innerHTML = '&nbsp;'; // Вставляем неразрывный пробел для сохранения высоты
             }
@@ -73,4 +75,8 @@ export async function updateStatus() {
 
 export function getCurrentStatus() {
     return currentStatus;
+}
+
+export function getPostProcessingStatus() {
+    return currentPostProcessingStatus;
 }

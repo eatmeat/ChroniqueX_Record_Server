@@ -64,3 +64,12 @@
 .legend-item.sys .legend-color {
     background-color: #3498db;
 }
+
+/* Новые стили для легенды постобработки */
+.legend-item.transcription .legend-color {
+    background-color: rgba(241, 196, 15, 0.7); /* Полупрозрачный желтый */
+}
+
+.legend-item.protocol .legend-color {
+    background-color: rgba(46, 204, 113, 0.7); /* Полупрозрачный зеленый */
+}
