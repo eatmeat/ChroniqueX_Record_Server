@@ -109,19 +109,19 @@ function updateGroupStates(container = document) {
     });
 }
 
-async function deleteContact(id, name) {
+async function deleteContact(id, name, container = document) {
     if (!confirm(`Вы уверены, что хотите удалить участника "${name}"?`)) return;
     const response = await fetch(`/contacts/delete/${id}`, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
     if (await handleFetchResponse(response)) {
-        await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+        await loadContactsAndSettings(container); // Перезагружаем данные и перерисовываем список
     }
 }
 
-async function deleteGroup(name) {
+async function deleteGroup(name, container = document) {
     if (!confirm(`Вы уверены, что хотите удалить группу "${name}" и всех ее участников?`)) return;
     const response = await fetch(`/groups/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, body: JSON.stringify({ name }) });
     if (await handleFetchResponse(response)) {
-        await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+        await loadContactsAndSettings(container); // Перезагружаем данные и перерисовываем список
     }
 }
 
@@ -189,7 +189,7 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
             deleteGroupBtn.className = 'action-btn delete-btn';
             deleteGroupBtn.onmousedown = (e) => {
                 e.preventDefault();
-                deleteGroup(oldName);
+                deleteGroup(oldName, container);
             };
             groupHeaderEl.appendChild(deleteGroupBtn);
 
@@ -210,7 +210,7 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
 
                 const handledResponse = await handleFetchResponse(response);
                 if (handledResponse && handledResponse.ok) {
-                    await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+                    await loadContactsAndSettings(container); // Перезагружаем данные и перерисовываем список
                 } else {
                     alert(`Ошибка: ${(await response.json()).message}`);
                     groupHeaderLabel.replaceChild(groupNameEl, input);
@@ -254,7 +254,7 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
             });
             if (await handleFetchResponse(response)) {
                 addInput.value = '';
-                await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+                await loadContactsAndSettings(container); // Перезагружаем данные и перерисовываем список
             }
         };
         addInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') addBtn.click(); });
@@ -308,7 +308,7 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
                 deleteBtn.className = 'action-btn delete-btn';
                 deleteBtn.onmousedown = (e) => {
                     e.preventDefault();
-                    deleteContact(contact.id, contact.name);
+                    deleteContact(contact.id, contact.name, container);
                 };
                 buttonsContainer.appendChild(deleteBtn);
 
@@ -332,7 +332,7 @@ function renderContacts(forceFullRedraw = false, container = document, overrideS
                     if (await handleFetchResponse(response)) {
                         nameSpan.textContent = newName;
                         labelEl.replaceChild(nameSpan, input);
-                        await loadContactsAndSettings();
+                        await loadContactsAndSettings(container);
                     }
                 };
                 input.addEventListener('blur', saveChanges);
@@ -492,7 +492,9 @@ function handleGroupCheckboxChange(isChecked, contactIdsInGroup, container = doc
     }
 }
 
-async function loadContactsAndSettings() {
+async function loadContactsAndSettings(container = document) {
+    const isModal = container !== document;
+
     const [contactsRes, settingsRes] = await Promise.all([
         fetch('/get_contacts', { headers: { 'X-Requested-With': 'XMLHttpRequest' } }),
         fetch('/get_web_settings', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -502,10 +504,18 @@ async function loadContactsAndSettings() {
 
     contactsData = await contactsRes.json();
     const settings = await settingsRes.json();
-    selectedContactIds = settings.selected_contacts || [];
-    if (contactsContentWrapper) renderContacts(true, document); // Принудительная полная перерисовка при первой загрузке
-    updateSelectedContactsCount();
-    updatePromptPreview(document);
+
+    if (isModal) {
+        // В модальном окне мы не меняем глобальные selectedContactIds,
+        // а просто перерисовываем его содержимое с новыми данными о контактах.
+        // Выбранные контакты возьмутся из DOM самого модального окна.
+        renderContacts(true, container);
+    } else {
+        selectedContactIds = settings.selected_contacts || [];
+        if (contactsContentWrapper) renderContacts(true, document); // Принудительная полная перерисовка
+        updateSelectedContactsCount();
+        updatePromptPreview(document);
+    }
 }
 
 export function initContacts(container = document, onUpdate = null, initialSettings = null) {
@@ -517,7 +527,7 @@ export function initContacts(container = document, onUpdate = null, initialSetti
 
     if (!isModal) { // Основная страница
         setRandomGroupPlaceholder();
-        loadContactsAndSettings();
+        loadContactsAndSettings(document);
     } else if (initialSettings) { // Модальное окно с настройками из метаданных
         // Передаем ID выбранных контактов из метаданных напрямую в renderContacts, не трогая глобальную переменную
         renderContacts(true, container, initialSettings.selected_contacts || []);
@@ -546,7 +556,7 @@ export function initContacts(container = document, onUpdate = null, initialSetti
              console.log('[Contacts] Группа успешно добавлена на сервере. Обновляем список.');
              groupNameInput.value = '';
              if (!isModal) setRandomGroupPlaceholder();
-             await loadContactsAndSettings(); // Перезагружаем данные и перерисовываем список
+             await loadContactsAndSettings(container); // Перезагружаем данные и перерисовываем список
          } else {
              const error = await response.json();
              console.error(`[Contacts] Ошибка при добавлении группы: ${error.message}`);

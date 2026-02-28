@@ -1,6 +1,6 @@
 import { modal, modalTitle, modalConfirmBtn, modalCancelBtn, modalSettingsCol, modalContactsCol, modalPreviewCol } from '../dom.js';
 import { getSettingsFromDOM } from '../utils/helpers.js';
-import { initSettings, loadSettings, toggleMeetingDateSourceVisibility } from './settings.js';
+import { initSettings, loadSettings, toggleMeetingDateSourceVisibility, updatePromptPreview } from './settings.js';
 import { initContacts, loadContactsAndSettings, updateSelectedContactsCount } from './contacts.js';
 
 let onConfirmCallback = null;
@@ -136,7 +136,13 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
         // Переинициализируем логику компонентов внутри модального окна
         // Передаем загруженные настройки, если они есть
         initSettings(modal, saveAndPreviewFromModal, settingsToLoad);
-        initContacts(modal, saveAndPreviewFromModal, settingsToLoad);
+
+        // Создаем специальный колбэк для контактов, который будет обновлять и предпросмотр, и счетчик
+        const contactsUpdateCallback = () => {
+            updatePromptPreview(modal);
+            updateSelectedContactsCount(modal);
+        };
+        initContacts(modal, contactsUpdateCallback, settingsToLoad);
 
         // Если это пересоздание, нужно явно применить настройки к DOM
         // или если это остановка, то загружаем глобальные настройки
