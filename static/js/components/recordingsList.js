@@ -199,6 +199,9 @@ function handleRecordingsListClick(e) {
         const currentTitle = target.textContent;
         const row = target.closest('.recording-table-row');
 
+        // Показываем кнопки пересоздания
+        row.classList.add('is-editing');
+
         const input = document.createElement('input');
         input.type = 'text';
         input.value = currentTitle;
@@ -225,6 +228,7 @@ function handleRecordingsListClick(e) {
 
             if (!isClickInsideRow && !isClickInsidePrompt) {
                 saveTitle();
+                row.classList.remove('is-editing'); // Скрываем кнопки
                 document.removeEventListener('mousedown', handleOutsideClick);
             }
         };
@@ -245,6 +249,7 @@ function handleRecordingsListClick(e) {
             }
             input.replaceWith(target);
             if (promptRow) promptRow.remove();
+            row.classList.remove('is-editing'); // Скрываем кнопки
             document.removeEventListener('mousedown', handleOutsideClick);
         };
 
@@ -255,6 +260,7 @@ function handleRecordingsListClick(e) {
                 target.textContent = currentTitle;
                 if (promptRow) promptRow.remove();
                 document.removeEventListener('mousedown', handleOutsideClick);
+                row.classList.remove('is-editing'); // Скрываем кнопки
                 input.replaceWith(target);
             }
         });

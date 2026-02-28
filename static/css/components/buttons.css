@@ -70,5 +70,12 @@
 
 .recreate-transcription-btn, .recreate-protocol-btn {
     border-color: #e67e22;
-    font-size: 0.8em; /* Делаем символ пересоздания крупнее */
+    font-size: 1.2em; /* Увеличиваем символ пересоздания */
+    /* Делаем кнопку квадратной, как .delete-btn */
+    padding: 0;
+    width: 30px;
+    min-width: 30px; /* Убираем минимальную ширину от .cell-files .action-btn */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

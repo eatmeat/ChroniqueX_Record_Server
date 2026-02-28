@@ -279,7 +279,7 @@
 }
 
 .cell-files .action-btn {
-    min-width: 45px; /* Фиксированная ширина для кнопок */
+    min-width: 30px; /* Фиксированная ширина для кнопок */
     text-align: center;
     justify-content: center;
     flex-shrink: 0; /* Запрещаем кнопкам сжиматься */
@@ -298,8 +298,8 @@
     overflow: hidden;
     margin-left: 0;
 }
-/* Показываем кнопку пересоздания при наведении на пару */
-.file-action-pair:hover .recreate-actions-container {
+/* Показываем кнопку пересоздания, когда строка находится в режиме редактирования */
+.recording-table-row.is-editing .recreate-actions-container {
     opacity: 1;
     max-width: 50px; /* Достаточно для одной кнопки */
     margin-left: 4px; /* Добавляем отступ при появлении */
