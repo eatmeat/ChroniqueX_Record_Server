@@ -96,7 +96,7 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
     const previewContent = document.getElementById('prompt-preview-container').cloneNode(true);
 
     modalSettingsCol.innerHTML = '<h4>Настройки</h4>';
-    modalContactsCol.innerHTML = '<h4>Участники <span id="modal-selected-contacts-count" class="selected-count"></span></h4>';
+    modalContactsCol.innerHTML = '<h4>Голоса <span id="modal-selected-contacts-count" class="selected-count"></span></h4>';
     modalPreviewCol.innerHTML = '<h4>Предпросмотр</h4>';
 
     modalSettingsCol.appendChild(settingsContent);

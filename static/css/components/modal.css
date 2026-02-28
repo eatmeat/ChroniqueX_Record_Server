@@ -68,17 +68,35 @@
 }
 
 /* Адаптация модального окна для мобильных */
-@media (max-width: 900px) {
+@media (max-width: 768px) {
+    .modal-overlay {
+        align-items: flex-start; /* Выравниваем модальное окно по верху, а не по центру */
+    }
     .modal-body {
         grid-template-columns: 1fr; /* Одна колонка */
+        padding-left: 10px; /* Уменьшаем левый отступ */
+        padding-right: 10px; /* Устанавливаем правый отступ */
     }
     .modal-content {
         width: 95%;
-        max-height: 95vh;
+        max-height: none; /* Убираем ограничение по высоте, чтобы фон растягивался */
+        margin-top: 20px; /* Добавляем отступ сверху */
+        margin-bottom: 20px; /* Добавляем отступ снизу для удобства прокрутки */
     }
     .modal-header {
         flex-direction: column;
         gap: 10px;
+    }
+    /* Убираем внутреннюю прокрутку у колонок и тела модального окна */
+    .modal-body, .modal-column {
+        overflow-y: visible;
+        /* padding-right: 0; - Это правило теперь перенесено и изменено выше */
+    }
+    .modal-column{
+        padding-right: 0;    
+    }
+    .modal-column h4{
+        font-size: 1em;    
     }
 }
 

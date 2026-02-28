@@ -31,3 +31,11 @@
     font-weight: normal;
     margin-left: 5px;
 }
+
+/* --- Адаптация для мобильных устройств --- */
+@media (max-width: 768px) {
+    .tab-link {
+        /* Уменьшаем шрифт заголовков вкладок на мобильных */
+        font-size: 0.9em; 
+    }
+}
