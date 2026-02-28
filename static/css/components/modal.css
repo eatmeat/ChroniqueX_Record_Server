@@ -84,21 +84,26 @@
         margin-bottom: 20px; /* Добавляем отступ снизу для удобства прокрутки */
     }
     .modal-header {
-        flex-direction: column;
+        order: 2; /* Перемещаем весь блок заголовка вниз */
+        border-top: 1px solid #e0e0e0; /* Добавляем верхнюю границу вместо нижней */
+        border-bottom: none; /* Убираем нижнюю границу */
+        padding-top: 15px; /* Добавляем отступ сверху */
+        margin-top: 15px; /* Добавляем отступ от контента */
         gap: 10px;
+        justify-content: flex-end; /* Прижимаем содержимое (кнопки) вправо */
     }
-    /* Убираем внутреннюю прокрутку у колонок и тела модального окна */
     .modal-body, .modal-column {
         overflow-y: visible;
-        /* padding-right: 0; - Это правило теперь перенесено и изменено выше */
     }
     .modal-column{
-        padding-right: 0;    
+        padding-right: 0;
     }
-    .modal-column h4{
-        font-size: 1em;    
+    #modal-title {
+        display: none; /* Скрываем заголовок на мобильных устройствах */
     }
 }
+
+
 
 /* --- Стили для модального окна: убираем линии под заголовками колонок --- */
 .modal-column h4 {
