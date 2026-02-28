@@ -20,6 +20,9 @@
 .pip-btn { background-color: #2980b9; font-size: 1.2em; padding: 8px 15px; }
 .pip-btn:not(:disabled):hover { background-color: #3498db; }
 .pip-btn.active { background-color: #3498db; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+.add-file-btn { background-color: #27ae60; }
+.add-file-btn:not(:disabled):hover { background-color: #2ecc71; }
+
 
 .action-btn {
     margin-left: 2px;

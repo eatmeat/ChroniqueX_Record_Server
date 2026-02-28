@@ -1,4 +1,4 @@
-import { recBtn, pauseBtn, stopBtn } from './dom.js';
+import { recBtn, pauseBtn, stopBtn, addFileBtn, fileUploadInput } from './dom.js';
 import { initTabs } from './components/tabs.js';
 import { updateStatus, getCurrentStatus } from './components/status.js';
 import { initChart } from './components/chart.js';
@@ -44,6 +44,35 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             fetch('/stop');
         }
+    });
+
+    addFileBtn?.addEventListener('click', () => {
+        fileUploadInput.click();
+    });
+
+    fileUploadInput?.addEventListener('change', async (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const uploadFile = (settings) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('settings', JSON.stringify(settings));
+
+            fetch('/add_file', { method: 'POST', body: formData })
+                .then(res => res.json())
+                .then(data => alert(data.message || 'Файл обработан.'))
+                .catch(err => alert(`Ошибка загрузки: ${err}`));
+        };
+
+        const response = await fetch('/get_web_settings');
+        const settings = await response.json();
+        if (settings.confirm_prompt_on_action) {
+            showConfirmationModal(uploadFile);
+        } else {
+            uploadFile(settings);
+        }
+        event.target.value = ''; // Сбрасываем значение, чтобы можно было выбрать тот же файл снова
     });
 
     // Global fetch error handler

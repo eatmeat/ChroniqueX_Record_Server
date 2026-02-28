@@ -3,13 +3,16 @@ import re
 import uuid
 import json
 from threading import Thread
+from pathlib import Path
 
+from pydub import AudioSegment
 from flask import (
     Blueprint, render_template, jsonify, request, send_file, Response,
     session, redirect, url_for
 )
 from werkzeug.security import check_password_hash
-from pydub import AudioSegment
+from werkzeug.utils import secure_filename
+from datetime import datetime, timedelta
 
 from app_state import get_application_path, settings, contacts_data
 from config_manager import save_settings, save_contacts
@@ -315,3 +318,49 @@ def favicon():
     elif is_recording and is_paused: icon_bytes = FAVICON_PAUSE_BYTES
     else: icon_bytes = FAVICON_STOP_BYTES
     return Response(icon_bytes, mimetype='image/vnd.microsoft.icon')
+
+@ui_bp.route('/add_file', methods=['POST'])
+def add_file():
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "message": "Файл не найден в запросе"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"status": "error", "message": "Файл не выбран"}), 400
+
+    try:
+        request_settings = json.loads(request.form.get('settings', '{}'))
+
+        # 1. Сохраняем файл
+        now = datetime.now()
+        date_str = now.strftime('%Y-%m-%d')
+        rec_dir = Path(get_application_path()) / 'rec' / date_str
+        os.makedirs(rec_dir, exist_ok=True)
+
+        # Используем уникальное имя, чтобы избежать конфликтов
+        base_filename = os.path.splitext(secure_filename(file.filename))[0]
+        timestamp = now.strftime("%H-%M-%S")
+        unique_filename = f"{timestamp}_{base_filename}.{file.filename.rsplit('.', 1)[1].lower()}"
+        file_path = os.path.join(rec_dir, unique_filename)
+        file.save(file_path)
+
+        # 2. Создаем метаданные
+        audio = AudioSegment.from_file(file_path)
+        duration_seconds = len(audio) / 1000.0
+
+        metadata = {
+            "startTime": now.isoformat(),
+            "endTime": (now + timedelta(seconds=duration_seconds)).isoformat(),
+            "duration": duration_seconds,
+            "title": base_filename.replace('_', ' ').replace('-', ' '),
+            "settings": request_settings,
+            "promptAddition": build_final_prompt_addition(base_path=rec_dir, recording_date=now, override_settings=request_settings)
+        }
+        json_path = os.path.splitext(file_path)[0] + '.json'
+        with open(json_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=4, ensure_ascii=False)
+
+        # 3. Запускаем обработку
+        Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
+        return jsonify({"status": "ok", "message": f"Файл '{unique_filename}' принят и поставлен в очередь на обработку."})
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Ошибка при обработке файла: {e}"}), 500
