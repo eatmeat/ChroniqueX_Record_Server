@@ -42,7 +42,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 fetch('/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settingsFromModal) });
             });
         } else {
-            fetch('/stop');
+            fetch('/stop', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(settings) });
         }
     });
 
@@ -60,9 +60,22 @@ document.addEventListener('DOMContentLoaded', function () {
             formData.append('settings', JSON.stringify(settings));
 
             fetch('/add_file', { method: 'POST', body: formData })
-                .then(res => res.json())
-                .then(data => alert(data.message || 'Файл обработан.'))
-                .catch(err => alert(`Ошибка загрузки: ${err}`));
+                .then(res => {
+                    // Проверяем, не вернул ли сервер ошибку (например, 500)
+                    if (!res.ok) {
+                        // Если есть ошибка, пытаемся извлечь сообщение и пробросить его дальше
+                        return res.json().then(errData => { throw new Error(errData.message || 'Ошибка сервера'); });
+                    }
+                    return res.json();
+                })
+                .then(data => {
+                    // Показываем alert, только если в ответе от сервера есть статус "error"
+                    if (data.status === 'error') {
+                        alert(data.message || 'Произошла ошибка при обработке файла.');
+                    }
+                    // Если статус "ok", ничего не делаем.
+                })
+                .catch(err => alert(`Ошибка загрузки: ${err.message || err}`));
         };
 
         const response = await fetch('/get_web_settings');

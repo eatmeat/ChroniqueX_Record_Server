@@ -67,13 +67,12 @@ function updateLocalSelectionState() {
 }
 
 async function handleFetchResponse(response) {
-    if (response.status === 401) {
-        console.error("Сессия истекла. Перезагрузка страницы.");
-        alert("Ваша сессия истекла. Страница будет перезагружена.");
-        window.location.reload();
-        return null; // Возвращаем null, чтобы прервать дальнейшую обработку
+    if (!response.ok) {
+        // Диспетчеризуем глобальное событие об ошибке, чтобы его поймал main.js
+        document.dispatchEvent(new CustomEvent('fetch-error', { detail: { status: response.status, statusText: response.statusText } }));
+        return null; // Прерываем дальнейшую обработку
     }
-    return response;
+    return response; // Возвращаем оригинальный ответ, если все в порядке
 }
 
 async function saveSelectionToServer(ids) {

@@ -319,6 +319,17 @@ def favicon():
     else: icon_bytes = FAVICON_STOP_BYTES
     return Response(icon_bytes, mimetype='image/vnd.microsoft.icon')
 
+def process_uploaded_file_task(audio_file_path):
+    """
+    Последовательно выполняет задачи транскрибации и создания протокола для загруженного файла.
+    """
+    # 1. Выполняем транскрибацию
+    process_transcription_task(audio_file_path)
+    # 2. Проверяем, создался ли .txt файл, и запускаем создание протокола
+    txt_file_path = os.path.splitext(audio_file_path)[0] + ".txt"
+    if os.path.exists(txt_file_path):
+        process_protocol_task(txt_file_path)
+
 @ui_bp.route('/add_file', methods=['POST'])
 def add_file():
     if 'file' not in request.files:
@@ -347,11 +358,20 @@ def add_file():
         audio = AudioSegment.from_file(file_path)
         duration_seconds = len(audio) / 1000.0
 
+        # Определяем название записи
+        title = base_filename.replace('_', ' ').replace('-', ' ') # Название по умолчанию
+        active_template_id = request_settings.get("active_meeting_name_template_id")
+        if active_template_id:
+            templates = request_settings.get("meeting_name_templates", [])
+            active_template = next((t for t in templates if t.get("id") == active_template_id), None)
+            if active_template and active_template.get("template"):
+                title = active_template.get("template")
+
         metadata = {
             "startTime": now.isoformat(),
             "endTime": (now + timedelta(seconds=duration_seconds)).isoformat(),
             "duration": duration_seconds,
-            "title": base_filename.replace('_', ' ').replace('-', ' '),
+            "title": title,
             "settings": request_settings,
             "promptAddition": build_final_prompt_addition(base_path=rec_dir, recording_date=now, override_settings=request_settings)
         }
@@ -360,7 +380,7 @@ def add_file():
             json.dump(metadata, f, indent=4, ensure_ascii=False)
 
         # 3. Запускаем обработку
-        Thread(target=process_transcription_task, args=(file_path,), daemon=True).start()
+        Thread(target=process_uploaded_file_task, args=(file_path,), daemon=True).start()
         return jsonify({"status": "ok", "message": f"Файл '{unique_filename}' принят и поставлен в очередь на обработку."})
     except Exception as e:
         return jsonify({"status": "error", "message": f"Ошибка при обработке файла: {e}"}), 500
