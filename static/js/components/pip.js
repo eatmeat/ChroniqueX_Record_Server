@@ -30,6 +30,19 @@ async function togglePiP() {
         // Это более надежный способ, который избегает ошибок с CORS
         document.head.querySelectorAll('link[rel="stylesheet"], style').forEach(node => pipDocument.head.appendChild(node.cloneNode(true)));
 
+        // Добавляем стили для растягивания кнопок только в PiP-окне
+        const pipStyle = pipDocument.createElement('style');
+        pipStyle.textContent = `
+            .controls {
+                display: flex;
+                gap: 10px;
+            }
+            .controls .control-btn {
+                flex-grow: 1;
+            }
+        `;
+        pipDocument.head.appendChild(pipStyle);
+
         const controlsContainer = document.querySelector('.controls');
         const volumeChart = document.querySelector('.volume-chart');
 

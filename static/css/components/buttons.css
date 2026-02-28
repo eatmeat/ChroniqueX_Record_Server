@@ -79,3 +79,15 @@
     align-items: center;
     justify-content: center;
 }
+
+@media (max-width: 1000px) {
+    
+    .controls {
+        gap: 8px; /* Уменьшаем расстояние между кнопками */
+        flex-wrap: wrap;
+    }
+    
+    .control-btn {
+        padding: 10px 15px;
+    }
+}

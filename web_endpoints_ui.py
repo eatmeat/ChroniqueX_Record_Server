@@ -389,25 +389,38 @@ def add_file():
         rec_dir = Path(get_application_path()) / 'rec' / date_str
         os.makedirs(rec_dir, exist_ok=True)
 
-        # Используем уникальное имя, чтобы избежать конфликтов
+        # Сохраняем оригинальный файл во временное место
         base_filename = os.path.splitext(secure_filename(file.filename))[0]
         timestamp = now.strftime("%H-%M-%S")
-        unique_filename = f"{timestamp}_{base_filename}.{file.filename.rsplit('.', 1)[1].lower()}"
-        file_path = os.path.join(rec_dir, unique_filename)
-        file.save(file_path)
+        original_extension = file.filename.rsplit('.', 1)[1].lower()
+        temp_filename = f"{timestamp}_{base_filename}.{original_extension}"
+        temp_file_path = os.path.join(rec_dir, temp_filename)
+        file.save(temp_file_path)
 
-        # 2. Создаем метаданные
-        audio = AudioSegment.from_file(file_path)
+        # 2. Конвертируем в MP3
+        mp3_filename = f"{timestamp}_{base_filename}.mp3"
+        mp3_file_path = os.path.join(rec_dir, mp3_filename)
+        
+        try:
+            audio = AudioSegment.from_file(temp_file_path)
+            audio.export(mp3_file_path, format="mp3", parameters=["-y", "-loglevel", "quiet"])
+            os.remove(temp_file_path) # Удаляем временный оригинальный файл
+        except Exception as e:
+            # Если конвертация не удалась, удаляем временный файл и возвращаем ошибку
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            return jsonify({"status": "error", "message": f"Ошибка конвертации файла в MP3: {e}"}), 500
+
+        # 3. Создаем метаданные для MP3 файла
         duration_seconds = len(audio) / 1000.0
 
         # Определяем название записи
-        title = base_filename.replace('_', ' ').replace('-', ' ') # Название по умолчанию
+        title = base_filename.replace('_', ' ').replace('-', ' ')
         active_template_id = request_settings.get("active_meeting_name_template_id")
         if active_template_id:
             templates = request_settings.get("meeting_name_templates", [])
             active_template = next((t for t in templates if t.get("id") == active_template_id), None)
-            if active_template and active_template.get("template"):
-                title = active_template.get("template")
+            if active_template and active_template.get("template"): title = active_template.get("template")
 
         metadata = {
             "startTime": now.isoformat(),
@@ -415,14 +428,13 @@ def add_file():
             "duration": duration_seconds,
             "title": title,
             "settings": request_settings,
-            "promptAddition": build_final_prompt_addition(base_path=rec_dir, recording_date=now, override_settings=request_settings)
+            "promptAddition": build_final_prompt_addition(base_path=rec_dir, recording_date=now, override_settings=request_settings),
         }
-        json_path = os.path.splitext(file_path)[0] + '.json'
-        with open(json_path, 'w', encoding='utf-8') as f:
-            json.dump(metadata, f, indent=4, ensure_ascii=False)
+        json_path = os.path.splitext(mp3_file_path)[0] + '.json'
+        with open(json_path, 'w', encoding='utf-8') as f: json.dump(metadata, f, indent=4, ensure_ascii=False)
 
-        # 3. Запускаем обработку
-        Thread(target=process_uploaded_file_task, args=(file_path,), daemon=True).start()
-        return jsonify({"status": "ok", "message": f"Файл '{unique_filename}' принят и поставлен в очередь на обработку."})
+        # 4. Запускаем обработку MP3 файла
+        Thread(target=process_uploaded_file_task, args=(mp3_file_path,), daemon=True).start()
+        return jsonify({"status": "ok", "message": f"Файл '{mp3_filename}' принят и поставлен в очередь на обработку."})
     except Exception as e:
         return jsonify({"status": "error", "message": f"Ошибка при обработке файла: {e}"}), 500
