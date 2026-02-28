@@ -29,8 +29,11 @@ function redrawMovingChart() {
 
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
-    const chartHeight = height - 40;
 
+    // Определяем, находимся ли мы в PiP-окне
+    const isPiP = canvas.ownerDocument !== document && window.documentPictureInPicture.window;
+
+    const chartHeight = isPiP ? height : height - 40;
     ctx.clearRect(0, 0, width, height);
 
     const currentMicLevel = micHistory[micHistory.length - 1] || 0;
@@ -124,15 +127,23 @@ function redrawMovingChart() {
     const seconds = now.getSeconds();
     const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
 
+    // Определяем вертикальное положение для текста времени
+    const timeY1 = isPiP ? 20 : height - 22;
+    const timeY2 = isPiP ? 38 : height - 2;
+    const timeFontSize = isPiP ? 16 : 18;
+
     if (secondsUntilNextMark <= 20 && secondsUntilNextMark > 0) {
         const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
         const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         ctx.textAlign = 'right';
-        ctx.fillStyle = 'rgba(127, 140, 141, 0.5)';
-        ctx.font = '500 18px Ubuntu, sans-serif';
-        ctx.fillText(`МСК: ${mskTime}`, width - 5, height - 22);
-        ctx.fillText(`ИРК: ${irkTime}`, width - 5, height - 2);
+        // В PiP-окне делаем текст более контрастным для лучшей читаемости
+        ctx.fillStyle = isPiP ? 'rgba(0, 0, 0, 0.6)' : 'rgba(127, 140, 141, 0.5)';
+        ctx.font = `500 ${timeFontSize}px Ubuntu, sans-serif`;
+        if (isPiP) ctx.shadowColor = 'white';
+        if (isPiP) ctx.shadowBlur = 5;
+        ctx.fillText(`МСК: ${mskTime}`, width - 5, timeY1);
+        ctx.fillText(`ИРК: ${irkTime}`, width - 5, timeY2);
     }
 
     let lastMarkTime = new Date(endTime);
@@ -154,11 +165,13 @@ function redrawMovingChart() {
             const irkTime = lastMarkTime.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
             
             ctx.fillStyle = '#7f8c8d';
-            ctx.font = '500 18px Ubuntu, sans-serif';
+            ctx.font = `500 ${timeFontSize}px Ubuntu, sans-serif`;
             ctx.textAlign = 'right';
-            ctx.fillText(`МСК: ${mskTime}`, x - 5, height - 22);
-            ctx.fillText(`ИРК: ${irkTime}`, x - 5, height - 2);
-        } 
+            if (isPiP) ctx.shadowColor = 'white';
+            if (isPiP) ctx.shadowBlur = 5;
+            ctx.fillText(`МСК: ${mskTime}`, x - 5, timeY1);
+            ctx.fillText(`ИРК: ${irkTime}`, x - 5, timeY2);
+        }
         else {
             ctx.strokeStyle = '#aaaaaa';
             ctx.lineWidth = 0.5;
@@ -166,6 +179,9 @@ function redrawMovingChart() {
             ctx.moveTo(x, 0); ctx.lineTo(x, chartHeight);
             ctx.stroke();
         }
+
+        // Сбрасываем тень после отрисовки текста
+        if (isPiP) ctx.shadowBlur = 0;
 
         lastMarkTime.setSeconds(lastMarkTime.getSeconds() - 5);
     }
