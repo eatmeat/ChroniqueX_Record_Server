@@ -41,6 +41,7 @@
     justify-content: center;
     gap: 20px;
     font-size: 0.9em;
+    flex-wrap: wrap; /* Разрешаем перенос элементов, если они не помещаются */
 }
 
 .legend-item {
