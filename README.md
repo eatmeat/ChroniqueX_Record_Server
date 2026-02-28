@@ -18,15 +18,16 @@ ChroniqueX Record Server - это настольное приложение, к�
 ## Требования
 - Python 3.8+
 - Необходимые Python-пакеты (устанавливаются с помощью `pip install -r req.txt`):
-  - pyaudio
-  - pyaudiowpatch
+  - sounddevice
+  - numpy
+  - pyaudiowpatch (Windows, для WASAPI loopback)
   - requests
   - flask
   - pydub
   - pystray
   - pillow
   - python-dotenv
- - pywin32
+ - pywin32 (Windows)
 
 ## Конфигурация
 1. Создайте файл `.env` в той же директории со следующими переменными:

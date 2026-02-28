@@ -12,7 +12,13 @@ from pathlib import Path
 
 import sounddevice as sd
 import numpy as np
-import pyaudiowpatch as pyaudio
+try:
+    import pyaudiowpatch as pyaudio  # Windows loopback (WASAPI)
+except ImportError:  # pragma: no cover - depends on host OS/packages
+    try:
+        import pyaudio  # Fallback backend for non-Windows hosts
+    except ImportError:  # pragma: no cover - handled at runtime
+        pyaudio = None
 from pydub import AudioSegment
 from tkinter import messagebox
 
@@ -24,6 +30,14 @@ from app_state import (
 import app_state
 from postprocessing import process_recording_tasks
 from utils import build_final_prompt_addition
+
+
+def _can_capture_system_audio():
+    return (
+        platform.system() == "Windows"
+        and pyaudio is not None
+        and hasattr(pyaudio, "paWASAPI")
+    )
 
 def get_elapsed_record_time():
     if not app_state.start_time: return 0
@@ -49,6 +63,9 @@ def recorder_mic(device_index, stop_event, audio_queue):
         print(f"Mic recording process finished for device {device_index}.")
 
 def recorder_sys(stop_event, audio_queue):
+    if not _can_capture_system_audio():
+        logging.info("System audio capture is unavailable on this platform.")
+        return
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
@@ -111,22 +128,34 @@ def audio_mixer_and_writer(stop_event, mic_file, sys_file):
 
 def start_recording():
     logging.info("Core start_recording function called.")
-    try:
-        with pyaudio.PyAudio() as p:
-            wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
-            default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
-            app_state.RATE = int(default_speakers['defaultSampleRate'])
-            logging.info(f"System audio sample rate detected: {app_state.RATE} Hz.")
-    except Exception as e:
-        app_state.RATE = 44100
-        logging.warning(f"Could not detect system sample rate, falling back to {app_state.RATE} Hz. Error: {e}")
-
     mic_device_index = None
     try:
         mic_device_index = sd.default.device[0]
         logging.info(f"Default microphone found: {sd.query_devices(mic_device_index)['name']}")
     except (ValueError, sd.PortAudioError) as e:
         print(f"Could not find a default microphone: {e}")
+
+    if _can_capture_system_audio():
+        try:
+            with pyaudio.PyAudio() as p:
+                wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)
+                default_speakers = p.get_device_info_by_index(wasapi_info["defaultOutputDevice"])
+                app_state.RATE = int(default_speakers['defaultSampleRate'])
+                logging.info(f"System audio sample rate detected: {app_state.RATE} Hz.")
+        except Exception as e:
+            app_state.RATE = 44100
+            logging.warning(f"Could not detect system sample rate, falling back to {app_state.RATE} Hz. Error: {e}")
+    else:
+        try:
+            if mic_device_index is not None:
+                app_state.RATE = int(sd.query_devices(mic_device_index)["default_samplerate"])
+                logging.info(f"Microphone sample rate detected: {app_state.RATE} Hz.")
+            else:
+                app_state.RATE = 44100
+                logging.warning("No default microphone detected, using fallback sample rate 44100 Hz.")
+        except Exception as e:
+            app_state.RATE = 44100
+            logging.warning(f"Could not detect microphone sample rate, falling back to {app_state.RATE} Hz. Error: {e}")
 
     if mic_device_index is None and platform.system() != "Windows":
         messagebox.showerror("Ошибка записи", "Не найдено ни одного устройства для записи.")
@@ -154,7 +183,7 @@ def start_recording():
         mic_thread = Thread(target=recorder_mic, args=(mic_device_index, app_state.stop_event, app_state.mic_audio_queue))
         app_state.recording_threads.append(mic_thread)
         mic_thread.start()
-    if platform.system() == "Windows":
+    if _can_capture_system_audio():
         logging.info("...starting system audio thread.")
         sys_thread = Thread(target=recorder_sys, args=(app_state.stop_event, app_state.sys_audio_queue))
         app_state.recording_threads.append(sys_thread)
@@ -321,6 +350,9 @@ def monitor_mic(stop_event):
         audio_levels["mic"] = -1
 
 def monitor_sys(stop_event):
+    if not _can_capture_system_audio():
+        audio_levels["sys"] = 0
+        return
     try:
         with pyaudio.PyAudio() as p:
             wasapi_info = p.get_host_api_info_by_type(pyaudio.paWASAPI)

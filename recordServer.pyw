@@ -6,8 +6,6 @@ from datetime import datetime, timedelta
 from threading import Thread, Event
 
 import sounddevice as sd
-import numpy as np
-import pyaudiowpatch as pyaudio
 
 # Для проверки одного экземпляра приложения
 try:
@@ -204,7 +202,11 @@ def update_icon_and_menu(icon):
 def open_rec_folder(icon, item):
     rec_dir = os.path.join(get_application_path(), 'rec')
     os.makedirs(rec_dir, exist_ok=True)
-    os.startfile(rec_dir)
+    if platform.system() == "Windows":
+        os.startfile(rec_dir)
+    elif platform.system() == "Darwin":
+        import subprocess as _sp
+        _sp.run(['open', rec_dir])
 
 def _suppress_subprocess_window():
     """

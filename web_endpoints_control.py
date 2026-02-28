@@ -8,7 +8,7 @@ import wave
 from recorder import (
     start_recording_from_tray, stop_recording_from_tray,
     pause_recording_from_tray, resume_recording_from_tray,
-    get_elapsed_record_time
+    get_elapsed_record_time, stop_recording
 )
 import app_state
 
@@ -22,7 +22,6 @@ def rec():
 
 @control_bp.route('/stop', methods=['GET', 'POST'])
 def stop():
-    # Получаем настройки из запроса, если они есть
     request_settings = request.get_json() if request.is_json else None
     # Запускаем в потоке, передавая настройки
     Thread(target=stop_recording_from_tray, kwargs={'request_settings': request_settings}, daemon=True).start() # pragma: no cover

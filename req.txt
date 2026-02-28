@@ -1,8 +1,10 @@
-pyaudio
-pyaudiowpatch
+pyaudiowpatch; sys_platform == "win32"
+sounddevice
+numpy
 requests
 flask
 pydub
 pystray
 pillow
 python-dotenv
+pywin32; sys_platform == "win32"
