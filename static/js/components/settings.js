@@ -254,18 +254,28 @@ export function initSettings(container = document, onUpdate = null, initialSetti
     }
     
     const localContextRulesContainer = form.querySelector(isModal ? '#modal-settings-tab #context-file-rules-container' : '#context-file-rules-container');
-    form.querySelector(isModal ? '#modal-settings-tab #add-context-rule-btn' : '#add-context-rule-btn')?.addEventListener('click', () => {
+    const addRuleBtn = form.querySelector(isModal ? '#modal-settings-tab #add-context-rule-btn' : '#add-context-rule-btn');
+    const addRuleHandler = () => {
         addContextRuleRow('', '', true, localContextRulesContainer, updateCallback);
-    });
+    };
+    addRuleBtn?.addEventListener('click', addRuleHandler);
+    if (addRuleBtn && !isModal) {
+        addRuleBtn._handler = addRuleHandler; // Сохраняем ссылку на обработчик для последующего удаления
+    }
 
     const localMeetingNameTemplatesContainer = form.querySelector(isModal ? '#modal-settings-tab #meeting-name-templates-container' : '#meeting-name-templates-container');
-    form.querySelector(isModal ? '#modal-settings-tab #add-meeting-name-template-btn' : '#add-meeting-name-template-btn')?.addEventListener('click', () => {
+    const addTemplateBtn = form.querySelector(isModal ? '#modal-settings-tab #add-meeting-name-template-btn' : '#add-meeting-name-template-btn');
+    const addTemplateHandler = () => {
         const newId = `template-${Date.now()}`;
         const newTemplate = { id: newId, template: '' };
         const newRow = createMeetingNameTemplateRow(newTemplate, null, true); // onUpdate is handled by event delegation in modal
         localMeetingNameTemplatesContainer.appendChild(newRow);
         newRow.querySelector('.meeting-name-template-input').focus();
-    });
+    };
+    addTemplateBtn?.addEventListener('click', addTemplateHandler);
+    if (addTemplateBtn && !isModal) {
+        addTemplateBtn._handler = addTemplateHandler; // Сохраняем ссылку на обработчик
+    }
 }
 
 export async function getSettings() {

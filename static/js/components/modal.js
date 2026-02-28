@@ -65,6 +65,20 @@ export function showConfirmationModal(onConfirm, recordingInfo = null) {
         delete contactsContainer._mainHandler; // Удаляем свойство, чтобы избежать утечек
     }
 
+    // Аналогично "отвязываем" обработчики от кнопок добавления в настройках,
+    // чтобы избежать их дублирования и срабатывания на основной странице из модального окна.
+    const addTemplateBtn = document.getElementById('add-meeting-name-template-btn');
+    if (addTemplateBtn && addTemplateBtn._handler) {
+        addTemplateBtn.removeEventListener('click', addTemplateBtn._handler);
+        delete addTemplateBtn._handler;
+    }
+
+    const addRuleBtn = document.getElementById('add-context-rule-btn');
+    if (addRuleBtn && addRuleBtn._handler) {
+        addRuleBtn.removeEventListener('click', addRuleBtn._handler);
+        delete addRuleBtn._handler;
+    }
+
     const settingsContent = document.getElementById('settings-tab').cloneNode(true);
     const contactsContent = document.getElementById('contacts-content-wrapper').cloneNode(true);
     const previewContent = document.getElementById('prompt-preview-container').cloneNode(true);
