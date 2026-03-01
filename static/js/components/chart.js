@@ -93,7 +93,7 @@ function redrawMovingChart() {
     for (let i = 0; i < recSlice.length; i++) {
         const value = recSlice[i];
         if (value === 1) {
-            const x = width - recSlice.length + i - (scrollOffset % 1);
+            const x = width - recSlice.length + i;
             ctx.fillRect(x, 0, 1, chartHeight);
         }
     }
@@ -107,15 +107,16 @@ function redrawMovingChart() {
         const historySlice = history.slice(history.length - pointsToDraw);
 
         ctx.beginPath();
-        ctx.moveTo(width - pointsToDraw, chartHeight); 
+        ctx.moveTo(width - pointsToDraw, chartHeight); // Начинаем с левого нижнего угла
 
         for (let i = 0; i < historySlice.length; i++) {
-            const value = historySlice[i] || 0;
-            const x = width - pointsToDraw + i + 1; // +1 для компенсации сдвига
-            const y = chartHeight - Math.min(1, value * 1) * chartHeight;
-            ctx.lineTo(x, y);
+            const value = historySlice[i];
+            if (value !== null && value !== undefined) { // Рисуем линию только если есть данные
+                const x = width - pointsToDraw + i + 1;
+                const y = chartHeight - Math.min(1, value) * chartHeight;
+                ctx.lineTo(x, y);
+            }
         }
-
         ctx.lineTo(width, chartHeight);
         ctx.closePath();
 
@@ -319,13 +320,22 @@ async function updateAudioLevels() {
             else if (postProcessingStatus.info.toLowerCase().includes('протокол')) postProcessingValue = 2;
         }
     
-        // Просто заменяем последний 'null' на актуальные данные.
-        // Если 'null' нет (данные приходят вовремя), это заменит предыдущее значение,
-        // что визуально будет незаметно и корректно.
+        // Обновляем историю. Для фонов (запись, постобработка) мы заполняем все 'null'
+        // с момента последнего обновления, чтобы фон был сплошным.
+        for (let i = recHistory.length - 1; i >= 0; i--) {
+            if (recHistory[i] === null) {
+                // Заполняем все пропуски для фонов
+                recHistory[i] = recValue;
+                postProcessingHistory[i] = postProcessingValue;
+            } else {
+                break; // Останавливаемся, как только дошли до уже заполненных данных
+            }
+        }
+
+        // Для уровней звука мы заменяем только последний 'null', чтобы показать "живой" уровень,
+        // а не создавать "полки" на графике.
         micHistory[micHistory.length - 1] = amplifiedMic;
         sysHistory[sysHistory.length - 1] = amplifiedSys;
-        recHistory[recHistory.length - 1] = recValue;
-        postProcessingHistory[postProcessingHistory.length - 1] = postProcessingValue;
 
     } catch (error) {
         // console.error('Error fetching audio levels:', error);
