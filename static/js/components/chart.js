@@ -58,7 +58,7 @@ function redrawMovingChart() {
     const height = canvas.height / dpr;
 
     // Определяем, находимся ли мы в PiP-окне
-    const isPiP = canvas.ownerDocument !== document && window.documentPictureInPicture.window;
+    const isPiP = canvas.ownerDocument !== document && window.documentPictureInPicture?.window;
 
     const chartHeight = isPiP ? height : height - 40;
     ctx.clearRect(0, 0, width, height);
@@ -69,12 +69,25 @@ function redrawMovingChart() {
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, width, chartHeight);
 
+    // Находим последние известные значения для заполнения пустот
+    const findLastKnownValue = (history) => {
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i] !== null && history[i] !== undefined) {
+                return history[i];
+            }
+        }
+        return 0;
+    };
+
     // Отрисовка фона для постобработки
     // Добавляем +1 к ширине, чтобы избежать "прыжка" при прокрутке
     const pointsToDrawForBg = Math.ceil(width + 1);
     const postProcessingSlice = postProcessingHistory.slice(postProcessingHistory.length - pointsToDrawForBg);
+    const lastPostProcessingValue = findLastKnownValue(postProcessingHistory);
     for (let i = 0; i < postProcessingSlice.length; i++) {
-        const value = postProcessingSlice[i];
+        const value = postProcessingSlice[i] !== null && postProcessingSlice[i] !== undefined 
+            ? postProcessingSlice[i] 
+            : lastPostProcessingValue;
         if (value !== 0) {
             if (value === 1) { // Транскрибация
                 ctx.fillStyle = 'rgba(241, 196, 15, 0.2)'; // Желтый
@@ -86,12 +99,13 @@ function redrawMovingChart() {
         }
     }
 
-
-
     const recSlice = recHistory.slice(recHistory.length - pointsToDrawForBg);
+    const lastRecValue = findLastKnownValue(recHistory);
     ctx.fillStyle = 'rgba(192, 57, 43, 0.2)';
     for (let i = 0; i < recSlice.length; i++) {
-        const value = recSlice[i];
+        const value = recSlice[i] !== null && recSlice[i] !== undefined 
+            ? recSlice[i] 
+            : lastRecValue;
         if (value === 1) {
             const x = width - recSlice.length + i;
             ctx.fillRect(x, 0, 1, chartHeight);
@@ -199,14 +213,14 @@ function redrawMovingChart() {
 
         lastMarkTime.setSeconds(lastMarkTime.getSeconds() - 5);
     }
-    
+
     ctx.lineWidth = 1.5;
-    
+
     // Оптимизированная функция отрисовки линии
     const drawLine = (history, color) => {
         const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
         const historySlice = history.slice(history.length - pointsToDraw);
-        
+
         ctx.beginPath();
         ctx.strokeStyle = color;
 
