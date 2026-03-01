@@ -2,13 +2,13 @@ import { audioChartCanvas } from '../dom.js';
 import { getCurrentStatus, getPostProcessingStatus } from './status.js';
 
 let micHistory, sysHistory, recHistory, postProcessingHistory;
-const chartHistorySize = 6000; // ~5 минут истории при 20 Гц (50ms интервал)
+const chartHistorySize = 15000; // ~12.5 минут истории при 50 Гц (20ms интервал)
 let currentBgR = 244, currentBgG = 247, currentBgB = 249;
 const colorChangeFactor = 0.1;
 let isRedrawing = false; // Флаг для предотвращения "гонки состояний" при отрисовке
 
 let lastFrameTime = performance.now();
-const timePerPixel = 50; // 50ms per pixel, corresponds to 20Hz update rate
+const timePerPixel = 50; // 50ms per pixel (скорость прокрутки как раньше)
 let scrollOffset = 0; // Дробное смещение для плавной прокрутки
 
 function setupCanvas(canvas) {
@@ -372,7 +372,7 @@ function redrawMovingChart() {
     isRedrawing = false; // Завершили отрисовку
 }
 
-const dataFetchInterval = 50; // Интервал получения данных в мс
+const dataFetchInterval = 10; // Интервал получения данных в мс (50 Гц)
 
 function renderLoop() {
     redrawMovingChart();
