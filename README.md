@@ -45,7 +45,7 @@ CRS_PASSWORD_HASH=хэш_вашего_пароля_генерируется_ав
 
 ## Использование
 
-### Windows
+### Скачать для Windows (!!!!!!!)
 
 ![Как скачать приложение ChroniqueX Record Server](img/howToDownload.jpg)
 
