@@ -2,11 +2,14 @@ import { audioChartCanvas } from '../dom.js';
 import { getCurrentStatus, getPostProcessingStatus } from './status.js';
 
 let micHistory, sysHistory, recHistory, postProcessingHistory;
-const chartHistorySize = 6000; // ~5 минут истории при 20 fps (50ms интервал)
-let frameCount = 0;
-const scrollInterval = 1;
+const chartHistorySize = 6000; // ~5 минут истории при 20 Гц (50ms интервал)
 let currentBgR = 244, currentBgG = 247, currentBgB = 249;
 const colorChangeFactor = 0.1;
+let isRedrawing = false; // Флаг для предотвращения "гонки состояний" при отрисовке
+
+let lastFrameTime = performance.now();
+const timePerPixel = 50; // 50ms per pixel, corresponds to 20Hz update rate
+let scrollOffset = 0; // Дробное смещение для плавной прокрутки
 
 function setupCanvas(canvas) {
     const dpr = window.devicePixelRatio || 1;
@@ -23,10 +26,34 @@ function amplifyLevel(value) {
 }
 
 function redrawMovingChart() {
+    if (isRedrawing) return; // Если предыдущий кадр еще рисуется, пропускаем текущий
+    isRedrawing = true;
+
+    const now = performance.now();
+    const deltaTime = now - lastFrameTime;
+    lastFrameTime = now;
+
+    // Увеличиваем смещение на основе прошедшего времени
+    // Это делает скорость прокрутки независимой от FPS
+    scrollOffset += deltaTime / timePerPixel;
+
+    // Определяем, на сколько целых пикселей/точек данных мы прокрутили.
+    const pixelsScrolled = Math.floor(scrollOffset);
+    if (pixelsScrolled > 0) {
+        // Сдвигаем массивы данных на количество прокрученных пикселей.
+        // Если данных не хватает (например, при задержке сети), добавляем 'null', чтобы сохранить синхронизацию.
+        for (let i = 0; i < pixelsScrolled; i++) {
+            micHistory.shift(); micHistory.push(null);
+            sysHistory.shift(); sysHistory.push(null);
+            recHistory.shift(); recHistory.push(null);
+            postProcessingHistory.shift(); postProcessingHistory.push(null);
+        }
+        scrollOffset -= pixelsScrolled; // Компенсируем смещение, оставляя только дробную часть.
+    }
+
     const canvas = audioChartCanvas;
     const dpr = window.devicePixelRatio || 1;
     const ctx = canvas.getContext('2d');
-
     const width = canvas.width / dpr;
     const height = canvas.height / dpr;
 
@@ -36,25 +63,6 @@ function redrawMovingChart() {
     const chartHeight = isPiP ? height : height - 40;
     ctx.clearRect(0, 0, width, height);
 
-    const currentMicLevel = micHistory[micHistory.length - 1] || 0;
-    const currentSysLevel = sysHistory[sysHistory.length - 1] || 0;
-
-    const micEffect = Math.min(1, currentMicLevel * 2.5);
-    const sysEffect = Math.min(1, currentSysLevel * 2.5);
-
-    let targetR = 244, targetG = 247, targetB = 249;
-    targetR = targetR * (1 - micEffect) + 255 * micEffect;
-    targetG = targetG * (1 - micEffect) + 210 * micEffect;
-    targetB = targetB * (1 - micEffect) + 210 * micEffect;
-    targetR = targetR * (1 - sysEffect) + 210 * sysEffect;
-    targetG = targetG * (1 - sysEffect) + 225 * sysEffect;
-    targetB = targetB * (1 - sysEffect) + 255 * sysEffect;
-
-    currentBgR += (targetR - currentBgR) * colorChangeFactor;
-    currentBgG += (targetG - currentBgG) * colorChangeFactor;
-    currentBgB += (targetB - currentBgB) * colorChangeFactor;
-    document.body.style.backgroundColor = `rgb(${Math.round(currentBgR)},${Math.round(currentBgG)},${Math.round(currentBgB)})`;
-
     const bgGradient = ctx.createLinearGradient(0, 0, 0, chartHeight);
     bgGradient.addColorStop(0, '#ffffff');
     bgGradient.addColorStop(1, '#f7f9fa');
@@ -62,7 +70,9 @@ function redrawMovingChart() {
     ctx.fillRect(0, 0, width, chartHeight);
 
     // Отрисовка фона для постобработки
-    const postProcessingSlice = postProcessingHistory.slice(postProcessingHistory.length - Math.ceil(width));
+    // Добавляем +1 к ширине, чтобы избежать "прыжка" при прокрутке
+    const pointsToDrawForBg = Math.ceil(width + 1);
+    const postProcessingSlice = postProcessingHistory.slice(postProcessingHistory.length - pointsToDrawForBg);
     for (let i = 0; i < postProcessingSlice.length; i++) {
         const value = postProcessingSlice[i];
         if (value !== 0) {
@@ -78,18 +88,22 @@ function redrawMovingChart() {
 
 
 
-    const recSlice = recHistory.slice(recHistory.length - Math.ceil(width));
+    const recSlice = recHistory.slice(recHistory.length - pointsToDrawForBg);
     ctx.fillStyle = 'rgba(192, 57, 43, 0.2)';
     for (let i = 0; i < recSlice.length; i++) {
         const value = recSlice[i];
         if (value === 1) {
-            const x = width - recSlice.length + i;
+            const x = width - recSlice.length + i - (scrollOffset % 1);
             ctx.fillRect(x, 0, 1, chartHeight);
         }
     }
 
+    // Сдвигаем всю систему координат влево на величину смещения
+    ctx.save();
+    ctx.translate(-(scrollOffset % 1), 0);
+
     const drawWaveBackground = (history, color) => {
-        const pointsToDraw = Math.min(history.length, Math.ceil(width));
+        const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
         const historySlice = history.slice(history.length - pointsToDraw);
 
         ctx.beginPath();
@@ -97,7 +111,7 @@ function redrawMovingChart() {
 
         for (let i = 0; i < historySlice.length; i++) {
             const value = historySlice[i] || 0;
-            const x = width - pointsToDraw + i;
+            const x = width - pointsToDraw + i + 1; // +1 для компенсации сдвига
             const y = chartHeight - Math.min(1, value * 1) * chartHeight;
             ctx.lineTo(x, y);
         }
@@ -120,11 +134,10 @@ function redrawMovingChart() {
         ctx.stroke();
     }
 
-    const now = new Date();
-    const endTime = now.getTime();
-    const timePerPixel = 50;
+    const dateNow = new Date();
+    const endTime = dateNow.getTime() - (scrollOffset * timePerPixel);
     const startTime = endTime - width * timePerPixel;
-    const seconds = now.getSeconds();
+    const seconds = dateNow.getSeconds();
     const secondsUntilNextMark = seconds < 30 ? 30 - seconds : 60 - seconds;
 
     // Определяем вертикальное положение для текста времени
@@ -133,8 +146,8 @@ function redrawMovingChart() {
     const timeFontSize = isPiP ? 16 : 18;
 
     if (secondsUntilNextMark <= 20 && secondsUntilNextMark > 0) {
-        const mskTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        const irkTime = now.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const mskTime = dateNow.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const irkTime = dateNow.toLocaleTimeString('ru-RU', { timeZone: 'Asia/Irkutsk', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
         ctx.textAlign = 'right';
         // В PiP-окне делаем текст более контрастным для лучшей читаемости
@@ -142,8 +155,8 @@ function redrawMovingChart() {
         ctx.font = `500 ${timeFontSize}px Ubuntu, sans-serif`;
         if (isPiP) ctx.shadowColor = 'white';
         if (isPiP) ctx.shadowBlur = 5;
-        ctx.fillText(`МСК: ${mskTime}`, width - 5, timeY1);
-        ctx.fillText(`ИРК: ${irkTime}`, width - 5, timeY2);
+        ctx.fillText(`МСК: ${mskTime}`, width - 5 + (scrollOffset % 1), timeY1);
+        ctx.fillText(`ИРК: ${irkTime}`, width - 5 + (scrollOffset % 1), timeY2);
     }
 
     let lastMarkTime = new Date(endTime);
@@ -188,31 +201,92 @@ function redrawMovingChart() {
     
     ctx.lineWidth = 1.5;
     
-    const drawLine = (history, colorFunc) => {
-        const pointsToDraw = Math.min(history.length, Math.ceil(width));
+    // Оптимизированная функция отрисовки линии
+    const drawLine = (history, color) => {
+        const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
         const historySlice = history.slice(history.length - pointsToDraw);
+        
+        ctx.beginPath();
+        ctx.strokeStyle = color;
 
-        for (let i = 1; i < historySlice.length; i++) {
-            const prevValue = historySlice[i - 1] || 0;
-            const newValue = historySlice[i] || 0;
-
-            const x1 = width - pointsToDraw + (i - 1);
-            const x2 = width - pointsToDraw + i;
-            
-            ctx.beginPath();
-            ctx.strokeStyle = typeof colorFunc === 'function' ? colorFunc(newValue) : colorFunc;
-            ctx.moveTo(x1, chartHeight - Math.min(1, prevValue * 1) * chartHeight);
-            ctx.lineTo(x2, chartHeight - Math.min(1, newValue * 1) * chartHeight);
-            ctx.stroke();
+        // Находим первую точку для начала линии
+        let firstPointIndex = -1;
+        for (let i = 0; i < historySlice.length; i++) {
+            if (historySlice[i] !== null && historySlice[i] !== undefined) {
+                const x = width - pointsToDraw + i + 1;
+                const y = chartHeight - Math.min(1, (historySlice[i] || 0)) * chartHeight;
+                ctx.moveTo(x, y);
+                firstPointIndex = i + 1;
+                break;
+            }
         }
+
+        if (firstPointIndex === -1) return; // Нет данных для отрисовки
+
+        // Рисуем остальные сегменты
+        for (let i = firstPointIndex; i < historySlice.length; i++) {
+            const value = historySlice[i] || 0;
+            const x = width - pointsToDraw + i + 1;
+            const y = chartHeight - Math.min(1, value) * chartHeight;
+            ctx.lineTo(x, y);
+        }
+        ctx.stroke();
     };
 
-    drawLine(sysHistory, '#3498db');
-    drawLine(micHistory, value => value > 0.9 ? '#ff0000' : (value > 0.7 ? '#e74c3c' : '#c0392b'));
+    // Оптимизированная функция для линии с изменяемым цветом (группировка по цвету)
+    const drawMultiColorLine = (history, colorFunc) => {
+        const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
+        const historySlice = history.slice(history.length - pointsToDraw);
+
+        if (historySlice.length < 2) return;
+
+        let lastColor = colorFunc(historySlice[1] || 0);
+        ctx.beginPath();
+        ctx.strokeStyle = lastColor;
+
+        // Начинаем с первой точки
+        const x0 = width - pointsToDraw + 1;
+        const y0 = chartHeight - Math.min(1, (historySlice[0] || 0)) * chartHeight;
+        ctx.moveTo(x0, y0);
+
+        for (let i = 1; i < historySlice.length; i++) {
+            const value = historySlice[i] || 0;
+            const color = colorFunc(value);
+
+            if (color !== lastColor) {
+                // Завершаем текущий путь и начинаем новый с другим цветом
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                // Перемещаемся к предыдущей точке, чтобы линия была непрерывной
+                const prevX = width - pointsToDraw + i;
+                const prevY = chartHeight - Math.min(1, (historySlice[i-1] || 0)) * chartHeight;
+                ctx.moveTo(prevX, prevY);
+                lastColor = color;
+            }
+
+            const x1 = width - pointsToDraw + (i - 1) + 1; // +1 для компенсации сдвига
+            const x2 = width - pointsToDraw + i + 1;
+            const y2 = chartHeight - Math.min(1, value) * chartHeight;
+            ctx.lineTo(x2, y2);
+        }
+        // Рисуем последний оставшийся сегмент
+        ctx.stroke();
+    };
+
+    drawLine(sysHistory, '#3498db'); // Используем быструю отрисовку для системного звука
+    drawMultiColorLine(micHistory, value => value > 0.9 ? '#ff0000' : (value > 0.7 ? '#e74c3c' : '#c0392b'));
+
+    ctx.restore(); // Возвращаем систему координат в исходное состояние
+
+    isRedrawing = false; // Завершили отрисовку
 }
 
+const dataFetchInterval = 50; // Интервал получения данных в мс
+
 function renderLoop() {
-    requestAnimationFrame(renderLoop);
+    redrawMovingChart();
+    requestAnimationFrame(renderLoop); // Планируем следующий кадр
 }
 
 async function updateAudioLevels() {
@@ -223,13 +297,13 @@ async function updateAudioLevels() {
             return;
         }
         const levels = await response.json();
-
+    
         const amplifiedMic = amplifyLevel(levels.mic < 0 ? 0 : levels.mic);
         const amplifiedSys = amplifyLevel(levels.sys < 0 ? 0 : levels.sys);
-        
+    
         // Определяем значение для истории записи
         const recValue = (getCurrentStatus() === 'rec') ? 1 : 0;
-
+    
         // Определяем значение для истории постобработки
         const postProcessingStatus = getPostProcessingStatus();
         let postProcessingValue = 0; // 0 - нет, 1 - транскрибация, 2 - протокол
@@ -237,32 +311,30 @@ async function updateAudioLevels() {
             if (postProcessingStatus.info.toLowerCase().includes('транскрибация')) postProcessingValue = 1;
             else if (postProcessingStatus.info.toLowerCase().includes('протокол')) postProcessingValue = 2;
         }
+    
+        // Просто заменяем последний 'null' на актуальные данные.
+        // Если 'null' нет (данные приходят вовремя), это заменит предыдущее значение,
+        // что визуально будет незаметно и корректно.
+        micHistory[micHistory.length - 1] = amplifiedMic;
+        sysHistory[sysHistory.length - 1] = amplifiedSys;
+        recHistory[recHistory.length - 1] = recValue;
+        postProcessingHistory[postProcessingHistory.length - 1] = postProcessingValue;
 
-        micHistory.push(amplifiedMic);
-        sysHistory.push(amplifiedSys);
-        recHistory.push(recValue);
-        postProcessingHistory.push(postProcessingValue);
-        if (micHistory.length > chartHistorySize) micHistory.shift();
-        if (sysHistory.length > chartHistorySize) sysHistory.shift();
-        if (recHistory.length > chartHistorySize) recHistory.shift();
-        if (postProcessingHistory.length > chartHistorySize) postProcessingHistory.shift();
-
-        if (frameCount % scrollInterval === 0) {
-            redrawMovingChart();
-        }
-        frameCount++;
     } catch (error) {
         // console.error('Error fetching audio levels:', error);
+    } finally {
+        // Рекурсивно планируем следующее обновление, чтобы избежать наложения запросов
+        setTimeout(updateAudioLevels, dataFetchInterval);
     }
 }
 
 export function initChart() {
     if (!audioChartCanvas) return;
     
-    micHistory = new Array(chartHistorySize).fill(0);
-    sysHistory = new Array(chartHistorySize).fill(0);
-    recHistory = new Array(chartHistorySize).fill(0);
-    postProcessingHistory = new Array(chartHistorySize).fill(0);
+    micHistory = new Array(chartHistorySize).fill(null);
+    sysHistory = new Array(chartHistorySize).fill(null);
+    recHistory = new Array(chartHistorySize).fill(null);
+    postProcessingHistory = new Array(chartHistorySize).fill(null);
 
     let currentCanvasWidth = 0;
     let currentCanvasHeight = 0;
@@ -280,8 +352,8 @@ export function initChart() {
         }
     });
 
-    setInterval(updateAudioLevels, 50);
-    renderLoop();
+    updateAudioLevels(); // Запускаем первый вызов для получения данных
+    renderLoop(); // Запускаем цикл отрисовки
 }
 
 export { setupCanvas };

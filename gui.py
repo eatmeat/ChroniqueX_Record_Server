@@ -1,8 +1,10 @@
 import tkinter as tk
 from tkinter import messagebox
+from tkinter import font as tkFont
 from werkzeug.security import generate_password_hash
 import os
 import sys
+import webbrowser
 
 from app_state import get_application_path, settings
 from config_manager import save_settings, DEFAULT_SETTINGS
@@ -247,7 +249,6 @@ def _clear_text_widget(text_widget):
 def open_web_interface(icon=None, item=None):
     """Открывает веб-интерфейс в браузере по умолчанию."""
     if settings.get("server_enabled"):
-        import webbrowser
         port = settings.get("port", DEFAULT_SETTINGS["port"])
         url = f"http://127.0.0.1:{port}/"
         webbrowser.open(url)
@@ -463,6 +464,16 @@ def open_main_window(icon=None, item=None, restart_server_cb=None):
     api_key_edit.grid(row=1, column=1, sticky="ew", padx=5)
     _add_context_menu_to_text_widget(api_key_edit)
 
+    bot_link_label = tk.Label(api_settings_frame, text="Получить API-ключ в Telegram-боте", fg="blue", cursor="hand2")
+    bot_link_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0), padx=5)
+    bot_link_font = tkFont.Font(bot_link_label, bot_link_label.cget("font"))
+    bot_link_font.configure(underline=True)
+    bot_link_label.configure(font=bot_link_font)
+    def open_bot_link(event):
+        webbrowser.open("https://t.me/ChroniqueX_bot")
+    bot_link_label.bind("<Button-1>", open_bot_link)
+
+
     account_settings_frame = tk.LabelFrame(settings_container, text="Учетная запись веб-интерфейса", padx=10, pady=10)
     account_settings_frame.pack(fill="x", expand=True, pady=(10, 0))
     account_settings_frame.grid_columnconfigure(1, weight=1)
@@ -530,7 +541,6 @@ def open_main_window(icon=None, item=None, restart_server_cb=None):
             
             def make_callback(url):
                 def callback(event):
-                    import webbrowser
                     webbrowser.open(url)
                 return callback
             
@@ -600,7 +610,7 @@ def prompt_for_initial_config():
     api_key_var = tk.StringVar()
 
     if missing_creds:
-        creds_frame = tk.LabelFrame(main_frame, text="Создайте учетную запись для веб-интерфейса", padx=10, pady=10)
+        creds_frame = tk.LabelFrame(main_frame, text="Создайте учетную запись для веб-интерфейса (придумайте логин и пароль)", padx=10, pady=10)
         creds_frame.pack(fill="x", expand=True, pady=5)
         creds_frame.grid_columnconfigure(1, weight=1)
 
@@ -614,7 +624,7 @@ def prompt_for_initial_config():
         tk.Entry(creds_frame, textvariable=password_confirm_var, show="*").grid(row=2, column=1, sticky="ew", pady=2)
 
     if missing_api:
-        api_frame = tk.LabelFrame(main_frame, text="Введите данные API ChroniqueX", padx=10, pady=10)
+        api_frame = tk.LabelFrame(main_frame, text="Введите данные подключения к API ChroniqueX", padx=10, pady=10)
         api_frame.pack(fill="x", expand=True, pady=5)
         api_frame.grid_columnconfigure(1, weight=1)
 
@@ -623,6 +633,36 @@ def prompt_for_initial_config():
 
         tk.Label(api_frame, text="API Key:").grid(row=1, column=0, sticky="w", pady=2)
         tk.Entry(api_frame, textvariable=api_key_var).grid(row=1, column=1, sticky="ew", pady=2)
+
+        bot_link_label = tk.Label(api_frame, text="Получить API-ключ в Telegram-боте", fg="blue", cursor="hand2")
+        bot_link_label.grid(row=2, column=0, columnspan=2, sticky="w", pady=(5,0), padx=5)
+        bot_link_font = tkFont.Font(bot_link_label, bot_link_label.cget("font"))
+        bot_link_font.configure(underline=True)
+        bot_link_label.configure(font=bot_link_font)
+        def open_bot_link(event):
+            webbrowser.open("https://t.me/ChroniqueX_bot")
+        bot_link_label.bind("<Button-1>", open_bot_link)
+
+    # --- Лицензия ---
+    license_frame = tk.LabelFrame(main_frame, text="Лицензионное соглашение", padx=10, pady=10)
+    license_frame.pack(fill="both", expand=True, pady=(10, 5))
+    license_frame.grid_rowconfigure(0, weight=1)
+    license_frame.grid_columnconfigure(0, weight=1)
+
+    license_text_widget = tk.Text(license_frame, height=8, wrap="word", relief=tk.FLAT)
+    license_text_widget.grid(row=0, column=0, sticky="nsew")
+
+    scrollbar = tk.Scrollbar(license_frame, command=license_text_widget.yview)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    license_text_widget.config(yscrollcommand=scrollbar.set)
+
+    license_path = os.path.join(get_application_path(), 'LICENSE_RU')
+    license_text = "Файл лицензии LICENSE_RU.md не найден."
+    if os.path.exists(license_path):
+        with open(license_path, 'r', encoding='utf-8') as f:
+            license_text = f.read()
+    license_text_widget.insert(tk.END, license_text)
+    license_text_widget.config(state="disabled")
 
     def save_initial_config():
         env_data = {}
@@ -663,6 +703,9 @@ def prompt_for_initial_config():
         messagebox.showinfo("Успех", "Настройки сохранены. Приложение будет перезапущено для их применения.", parent=win)
         win.destroy()
         os.execv(sys.executable, ['python'] + sys.argv)
+
+    agreement_label = tk.Label(main_frame, text="Используя эту копию програмного обеспечения, Вы соглашаетесь с условиями лицензионного соглашения.", font=("TkDefaultFont", 8), wraplength=400, justify=tk.CENTER)
+    agreement_label.pack(pady=(5, 5))
 
     button_frame = tk.Frame(main_frame)
     button_frame.pack(pady=10)
