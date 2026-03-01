@@ -47,7 +47,11 @@ CRS_PASSWORD_HASH=хэш_вашего_пароля_генерируется_ав
 
 ### Windows
 
+![Как скачать приложение ChroniqueX Record Server](img/howToDownload.jpg)
+
 Вы можете скачать готовую сборку для Windows по [этой ссылке](/dist/ChroniqueX%20Record%20Server.exe). Просто скачайте и запустите `ChroniqueX Record Server.exe`.
+
+
 
 ### Запуск из исходного кода
 
