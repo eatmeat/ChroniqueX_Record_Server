@@ -224,11 +224,13 @@ function redrawMovingChart() {
         if (firstPointIndex === -1) return; // Нет данных для отрисовки
 
         // Рисуем остальные сегменты
-        for (let i = firstPointIndex; i < historySlice.length; i++) {
-            const value = historySlice[i] || 0;
-            const x = width - pointsToDraw + i + 1;
-            const y = chartHeight - Math.min(1, value) * chartHeight;
-            ctx.lineTo(x, y);
+        for (let i = firstPointIndex; i < historySlice.length; i++) { // Начинаем со следующей точки
+            const value = historySlice[i];
+            if (value !== null && value !== undefined) { // Рисуем линию только если есть данные
+                const x = width - pointsToDraw + i + 1;
+                const y = chartHeight - Math.min(1, value) * chartHeight;
+                ctx.lineTo(x, y);
+            }
         }
         ctx.stroke();
     };
@@ -238,40 +240,45 @@ function redrawMovingChart() {
         const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
         const historySlice = history.slice(history.length - pointsToDraw);
 
-        if (historySlice.length < 2) return;
+        let lastColor = null;
+        let pathStarted = false;
 
-        let lastColor = colorFunc(historySlice[1] || 0);
-        ctx.beginPath();
-        ctx.strokeStyle = lastColor;
+        for (let i = 0; i < historySlice.length; i++) {
+            const value = historySlice[i];
+            if (value === null || value === undefined) continue; // Пропускаем пустые значения
 
-        // Начинаем с первой точки
-        const x0 = width - pointsToDraw + 1;
-        const y0 = chartHeight - Math.min(1, (historySlice[0] || 0)) * chartHeight;
-        ctx.moveTo(x0, y0);
-
-        for (let i = 1; i < historySlice.length; i++) {
-            const value = historySlice[i] || 0;
             const color = colorFunc(value);
 
-            if (color !== lastColor) {
-                // Завершаем текущий путь и начинаем новый с другим цветом
+            if (!pathStarted) {
+                // Начинаем новый путь с первой валидной точки
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                const x = width - pointsToDraw + i + 1;
+                const y = chartHeight - Math.min(1, value) * chartHeight;
+                ctx.moveTo(x, y);
+                pathStarted = true;
+                lastColor = color;
+            } else if (color !== lastColor) {
+                // Если цвет изменился, завершаем старый путь и начинаем новый
                 ctx.stroke();
                 ctx.beginPath();
                 ctx.strokeStyle = color;
-                // Перемещаемся к предыдущей точке, чтобы линия была непрерывной
-                const prevX = width - pointsToDraw + i;
-                const prevY = chartHeight - Math.min(1, (historySlice[i-1] || 0)) * chartHeight;
-                ctx.moveTo(prevX, prevY);
+                // Перемещаемся к текущей точке, чтобы начать новый сегмент
+                const x = width - pointsToDraw + i + 1;
+                const y = chartHeight - Math.min(1, value) * chartHeight;
+                ctx.moveTo(x, y);
                 lastColor = color;
             }
 
-            const x1 = width - pointsToDraw + (i - 1) + 1; // +1 для компенсации сдвига
-            const x2 = width - pointsToDraw + i + 1;
-            const y2 = chartHeight - Math.min(1, value) * chartHeight;
-            ctx.lineTo(x2, y2);
+            // Продолжаем рисовать линию
+            const x = width - pointsToDraw + i + 1;
+            const y = chartHeight - Math.min(1, value) * chartHeight;
+            ctx.lineTo(x, y);
         }
-        // Рисуем последний оставшийся сегмент
-        ctx.stroke();
+
+        if (pathStarted) {
+            ctx.stroke(); // Завершаем последний начатый путь
+        }
     };
 
     drawLine(sysHistory, '#3498db'); // Используем быструю отрисовку для системного звука
