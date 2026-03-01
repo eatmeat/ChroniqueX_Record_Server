@@ -120,18 +120,49 @@ function redrawMovingChart() {
         const pointsToDraw = Math.min(history.length, pointsToDrawForBg);
         const historySlice = history.slice(history.length - pointsToDraw);
 
-        ctx.beginPath();
-        ctx.moveTo(width - pointsToDraw, chartHeight); // Начинаем с левого нижнего угла
-
+        // Находим первое известное значение для старта от левого края
+        let firstKnownValue = 0;
+        let firstPointIndex = -1;
         for (let i = 0; i < historySlice.length; i++) {
+            if (historySlice[i] !== null && historySlice[i] !== undefined) {
+                firstKnownValue = historySlice[i];
+                firstPointIndex = i;
+                break;
+            }
+        }
+
+        if (firstPointIndex === -1) return; // Нет данных для отрисовки
+
+        // Находим последнее известное значение для завершения у правого края
+        let lastKnownValue = firstKnownValue;
+        for (let i = historySlice.length - 1; i >= firstPointIndex; i--) {
+            if (historySlice[i] !== null && historySlice[i] !== undefined) {
+                lastKnownValue = historySlice[i];
+                break;
+            }
+        }
+
+        ctx.beginPath();
+        ctx.moveTo(0, chartHeight); // Начинаем с левого нижнего угла
+
+        // Начинаем линию от левого края с первым известным значением
+        const startY = chartHeight - Math.min(1, firstKnownValue) * chartHeight;
+        ctx.lineTo(0, startY);
+
+        for (let i = firstPointIndex; i < historySlice.length; i++) {
             const value = historySlice[i];
-            if (value !== null && value !== undefined) { // Рисуем линию только если есть данные
+            if (value !== null && value !== undefined) {
                 const x = width - pointsToDraw + i + 1;
                 const y = chartHeight - Math.min(1, value) * chartHeight;
                 ctx.lineTo(x, y);
             }
         }
-        ctx.lineTo(width, chartHeight);
+
+        // Завершаем линию до правого края с последним известным значением
+        const endY = chartHeight - Math.min(1, lastKnownValue) * chartHeight;
+        ctx.lineTo(width, endY);
+
+        ctx.lineTo(width, chartHeight); // Правый нижний угол
         ctx.closePath();
 
         ctx.fillStyle = color;
