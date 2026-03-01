@@ -237,6 +237,15 @@ function redrawMovingChart() {
 
         if (firstPointIndex === -1) return; // Нет данных для отрисовки
 
+        // Находим последнее известное значение для завершения линии у правого края
+        let lastKnownValue = firstKnownValue;
+        for (let i = historySlice.length - 1; i >= firstPointIndex; i--) {
+            if (historySlice[i] !== null && historySlice[i] !== undefined) {
+                lastKnownValue = historySlice[i];
+                break;
+            }
+        }
+
         // Начинаем линию от левого края графика (x=0) с первым известным значением
         const startY = chartHeight - Math.min(1, firstKnownValue) * chartHeight;
         ctx.moveTo(0, startY);
@@ -250,6 +259,11 @@ function redrawMovingChart() {
                 ctx.lineTo(x, y);
             }
         }
+
+        // Завершаем линию до правого края графика (x=width) с последним известным значением
+        const endY = chartHeight - Math.min(1, lastKnownValue) * chartHeight;
+        ctx.lineTo(width, endY);
+
         ctx.stroke();
     };
 
@@ -270,6 +284,15 @@ function redrawMovingChart() {
         }
 
         if (firstPointIndex === -1) return; // Нет данных для отрисовки
+
+        // Находим последнее известное значение для завершения линии у правого края
+        let lastKnownValue = firstKnownValue;
+        for (let i = historySlice.length - 1; i >= firstPointIndex; i--) {
+            if (historySlice[i] !== null && historySlice[i] !== undefined) {
+                lastKnownValue = historySlice[i];
+                break;
+            }
+        }
 
         let lastColor = colorFunc(firstKnownValue);
         let pathStarted = false;
@@ -300,6 +323,10 @@ function redrawMovingChart() {
             const y = chartHeight - Math.min(1, value) * chartHeight;
             ctx.lineTo(x, y);
         }
+
+        // Завершаем линию до правого края графика (x=width) с последним известным значением
+        const endY = chartHeight - Math.min(1, lastKnownValue) * chartHeight;
+        ctx.lineTo(width, endY);
 
         if (pathStarted) {
             ctx.stroke(); // Завершаем последний начатый путь
